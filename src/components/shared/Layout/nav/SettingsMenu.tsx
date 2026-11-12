@@ -9,7 +9,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import { useId, useRef, useState } from "react";
-import { logout } from "lib/auth.lib";
+import { logout } from "api-calls/auth/logout";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { useToggleTheme } from "providers/ThemeProvider";
 import LightThemeIcon from "@mui/icons-material/LightMode";

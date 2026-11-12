@@ -37,6 +37,12 @@ export interface LocationsSliceActions {
     locationId: string,
     location: DocumentUpdate<Location>
   ) => Promise<void>;
+  placeLocationOnMap: (
+    mapLocationId: string,
+    row: number,
+    col: number,
+    locationId: string
+  ) => Promise<void>;
   moveLocation: (
     locationId: string,
     location: LocationWithGMProperties,

@@ -1,13 +1,17 @@
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import StarterKit from "@tiptap/starter-kit";
-import { User } from "firebase/auth";
 import { getHueFromString, hslToHex } from "functions/getHueFromString";
 import { WebrtcProvider } from "y-webrtc";
 import * as Y from "yjs";
 import Document from "@tiptap/extension-document";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Extensions } from "@tiptap/react";
+
+export interface RtcPresenceUser {
+  uid: string;
+  displayName: string | null;
+}
 
 const CustomDocument = Document.extend({
   content: "heading block*",
@@ -16,7 +20,7 @@ const CustomDocument = Document.extend({
 export const rtcExtensions = (params: {
   doc?: Y.Doc;
   provider?: WebrtcProvider;
-  user?: User;
+  user?: RtcPresenceUser;
   withHeading?: boolean;
 }) => {
   const extensions: Extensions = [

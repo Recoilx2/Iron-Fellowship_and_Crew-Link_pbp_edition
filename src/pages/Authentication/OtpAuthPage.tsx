@@ -16,7 +16,7 @@ import { PageContent, PageHeader } from "components/shared/Layout";
 import { getErrorMessage } from "functions/getErrorMessage";
 import { useContinueUrl } from "hooks/useContinueUrl";
 import { getSystem } from "hooks/useGameSystem";
-import { loginWithToken } from "lib/auth.lib";
+import { loginWithToken } from "api-calls/auth/loginWithToken";
 import { Head } from "providers/HeadProvider/Head";
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";

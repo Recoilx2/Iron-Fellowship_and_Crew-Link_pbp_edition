@@ -9,7 +9,7 @@ import {
   TextField,
 } from "@mui/material";
 import { DialogTitleWithCloseButton } from "components/shared/DialogTitleWithCloseButton";
-import { deleteField } from "firebase/firestore";
+import { clearHomebrewOracleCollectionParent } from "api-calls/homebrew/oracles/collections/clearHomebrewOracleCollectionParent";
 import { useEffect, useState } from "react";
 import { useStore } from "stores/store";
 import { HomebrewOracleCollectionDocument } from "api-calls/homebrew/oracles/collections/_homebrewOracleCollection.type";
@@ -45,12 +45,12 @@ export function MoveOracleCollectionDialog(
     (store) => store.homebrew.updateOracleCollection
   );
   const handleMove = () => {
-    updateOracleCollection(
-      oracleCollectionId,
-      collectionId
-        ? { parentOracleCollectionId: collectionId }
-        : { parentOracleCollectionId: deleteField() }
-    )
+    const move = collectionId
+      ? updateOracleCollection(oracleCollectionId, {
+          parentOracleCollectionId: collectionId,
+        })
+      : clearHomebrewOracleCollectionParent({ oracleCollectionId });
+    move
       .then(() => {
         onClose();
       })

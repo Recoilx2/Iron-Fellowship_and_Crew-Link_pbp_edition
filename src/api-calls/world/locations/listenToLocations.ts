@@ -6,7 +6,7 @@ import {
   convertFromDatabase,
   getLocationCollection,
 } from "./_getRef";
-import { getImageUrl } from "lib/storage.lib";
+import { getImageUrl } from "api-calls/storage/getImageUrl";
 
 export function listenToLocations(
   worldId: string,

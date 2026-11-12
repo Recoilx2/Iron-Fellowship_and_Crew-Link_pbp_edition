@@ -1,7 +1,7 @@
 import { Button } from "@mui/material";
 import { GoogleIcon } from "assets/GoogleIcon";
 import { getErrorMessage } from "functions/getErrorMessage";
-import { loginWithGoogle } from "lib/auth.lib";
+import { loginWithGoogle } from "api-calls/auth/loginWithGoogle";
 import { useSnackbar } from "providers/SnackbarProvider/useSnackbar";
 
 export interface GoogleSignInButtonProps {

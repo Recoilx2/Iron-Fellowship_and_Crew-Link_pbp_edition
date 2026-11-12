@@ -11,7 +11,9 @@ import { updateLocationNotes } from "api-calls/world/locations/updateLocationNot
 import { uploadLocationImage } from "api-calls/world/locations/uploadLocationImage";
 import { listenToLocationNotes } from "api-calls/world/locations/listenToLocationNotes";
 import { reportApiError } from "lib/analytics.lib";
-import { Unsubscribe, arrayRemove, arrayUnion } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
+import { addLocationToMapCell } from "api-calls/world/locations/addLocationToMapCell";
+import { removeLocationFromMapCell } from "api-calls/world/locations/removeLocationFromMapCell";
 import { listenToLocationGMProperties } from "api-calls/world/locations/listenToLocationGMProperties";
 import { updateLocationCharacterBond } from "api-calls/world/locations/updateLocationCharacterBond";
 import { removeLocationImage } from "api-calls/world/locations/removeLocationImage";
@@ -19,7 +21,7 @@ import { createSpecificLocation } from "api-calls/world/locations/createSpecific
 import { MapEntry, MapEntryType } from "types/Locations.type";
 import { uploadLocationMapBackgroundImage } from "api-calls/world/locations/uploadLocationMapBackgroundImage";
 import { removeLocationMapBackgroundImage } from "api-calls/world/locations/removeLocationMapBackgroundImage";
-import { getImageUrl } from "lib/storage.lib";
+import { getImageUrl } from "api-calls/storage/getImageUrl";
 import { constructLocationImagePath } from "api-calls/world/locations/_getRef";
 
 export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
@@ -152,6 +154,8 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
     const worldId = getState().worlds.currentWorld.currentWorldId;
     const updateLocation =
       getState().worlds.currentWorld.currentWorldLocations.updateLocation;
+    const placeLocationOnMap =
+      getState().worlds.currentWorld.currentWorldLocations.placeLocationOnMap;
     if (!worldId) {
       return new Promise((res, reject) => reject("No world found"));
     }
@@ -175,8 +179,12 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
                 entry?.type === MapEntryType.Location &&
                 entry.locationIds.includes(locationId)
               ) {
-                updateLocation(oldParentId, {
-                  [`map.${row}.${col}.locationIds`]: arrayRemove(locationId),
+                removeLocationFromMapCell({
+                  worldId,
+                  mapLocationId: oldParentId,
+                  row: Number(row),
+                  col: Number(col),
+                  locationId,
                 }).catch(() => {});
               }
             });
@@ -191,10 +199,7 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
 
     if (typeof row === "number" && typeof col === "number" && parentId) {
       // Add the new location to the map
-      return updateLocation(parentId, {
-        [`map.${row}.${col}.type`]: MapEntryType.Location,
-        [`map.${row}.${col}.locationIds`]: arrayUnion(locationId),
-      });
+      return placeLocationOnMap(parentId, row, col, locationId);
     } else {
       return Promise.resolve();
     }
@@ -205,6 +210,19 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
       return new Promise((res, reject) => reject("No world found"));
     }
     return updateLocation({ worldId, locationId, location: partialLocation });
+  },
+  placeLocationOnMap: (mapLocationId, row, col, locationId) => {
+    const worldId = getState().worlds.currentWorld.currentWorldId;
+    if (!worldId) {
+      return new Promise((res, reject) => reject("No world found"));
+    }
+    return addLocationToMapCell({
+      worldId,
+      mapLocationId,
+      row,
+      col,
+      locationId,
+    });
   },
   updateLocationGMNotes: (locationId, notes, isBeacon) => {
     const worldId = getState().worlds.currentWorld.currentWorldId;

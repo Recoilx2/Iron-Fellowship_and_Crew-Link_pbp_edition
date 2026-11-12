@@ -13,7 +13,10 @@ import { DialogTitleWithCloseButton } from "components/shared/DialogTitleWithClo
 import { GameIcon } from "components/shared/GameIcons/GameIcon";
 import { IconColorSelector } from "components/shared/GameIcons/IconColorSelector";
 import { IconSelector } from "components/shared/GameIcons/IconSelector";
-import { MAX_FILE_SIZE, MAX_FILE_SIZE_LABEL } from "lib/storage.lib";
+import {
+  MAX_FILE_SIZE,
+  MAX_FILE_SIZE_LABEL,
+} from "api-calls/storage/imageLimits";
 import { useSnackbar } from "providers/SnackbarProvider";
 import { ChangeEvent, useCallback, useRef, useState } from "react";
 import { IconColors, IconDefinition } from "types/Icon.type";

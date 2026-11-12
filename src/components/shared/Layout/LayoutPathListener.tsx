@@ -1,6 +1,6 @@
 import { useContinueUrl } from "hooks/useContinueUrl";
 import { sendPageViewEvent } from "lib/analytics.lib";
-import { completeMagicLinkSignupIfPresent } from "lib/auth.lib";
+import { completeMagicLinkSignupIfPresent } from "api-calls/auth/completeMagicLinkSignupIfPresent";
 import { useSnackbar } from "providers/SnackbarProvider";
 import { useEffect, useRef } from "react";
 import { matchPath, useLocation } from "react-router-dom";

@@ -6,7 +6,7 @@ import {
   TextField,
 } from "@mui/material";
 import { DialogTitleWithCloseButton } from "components/shared/DialogTitleWithCloseButton";
-import { loginWithToken } from "lib/auth.lib";
+import { loginWithToken } from "api-calls/auth/loginWithToken";
 import { useState } from "react";
 
 export interface CustomTokenDialogProps {

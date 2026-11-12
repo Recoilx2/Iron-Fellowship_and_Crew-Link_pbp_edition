@@ -15,7 +15,10 @@ import { useStore } from "stores/store";
 import { LoreDocumentWithGMProperties } from "stores/world/currentWorld/lore/lore.slice.type";
 import { useListenToCurrentLoreDocument } from "stores/world/currentWorld/lore/useListenToCurrentLoreDocument";
 import { useWorldPermissions } from "../useWorldPermissions";
-import { MAX_FILE_SIZE, MAX_FILE_SIZE_LABEL } from "lib/storage.lib";
+import {
+  MAX_FILE_SIZE,
+  MAX_FILE_SIZE_LABEL,
+} from "api-calls/storage/imageLimits";
 import { useSnackbar } from "providers/SnackbarProvider";
 import { GuideAndPlayerHeader, GuideOnlyHeader } from "../common";
 import { mergeIcons } from "components/shared/GameIcons/mergeIcons";

@@ -23,7 +23,10 @@ import { useListenToCurrentLocation } from "stores/world/currentWorld/locations/
 import { BondsSection } from "components/features/worlds/BondsSection";
 import { LocationNPCs } from "./LocationNPCs";
 import { useWorldPermissions } from "../useWorldPermissions";
-import { MAX_FILE_SIZE, MAX_FILE_SIZE_LABEL } from "lib/storage.lib";
+import {
+  MAX_FILE_SIZE,
+  MAX_FILE_SIZE_LABEL,
+} from "api-calls/storage/imageLimits";
 import { useSnackbar } from "providers/SnackbarProvider";
 import { GuideAndPlayerHeader, GuideOnlyHeader } from "../common";
 import { useGameSystemValue } from "hooks/useGameSystemValue";

@@ -1,5 +1,5 @@
 import { Layout } from "components/shared/Layout";
-import { getUser } from "lib/auth.lib";
+import { getUser } from "api-calls/auth/getUser";
 import { BASE_ROUTES, basePaths } from "routes";
 
 import {
@@ -117,7 +117,7 @@ const router = createBrowserRouter(
             Emailed one-time codes are the primary sign-in flow. The magic
             email link flow is kept as a backup under /auth, and is where
             outstanding magic links are configured to land (see
-            sendMagicEmailLink in lib/auth.lib.ts).
+            sendMagicEmailLink in api-calls/auth/sendMagicEmailLink.ts).
           */}
           <Route path={basePaths[BASE_ROUTES.AUTH]}>
             <Route
