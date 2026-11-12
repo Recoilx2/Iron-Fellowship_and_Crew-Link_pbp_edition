@@ -1,20 +1,17 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { addDoc } from "firebase/firestore";
-import { getHomebrewImpactsCollection } from "./_getRef";
 import { HomebrewImpactCategoryDocument } from "api-calls/homebrew/rules/impacts/_homebrewImpacts.type";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
+
+const api = createHomebrewContentApi<HomebrewImpactCategoryDocument>(
+  "homebrew_impact_categories"
+);
 
 export const createHomebrewImpactCategory = createApiFunction<
-  {
-    impactCategory: HomebrewImpactCategoryDocument;
-  },
+  { impactCategory: HomebrewImpactCategoryDocument } & ClientOption,
   void
->((params) => {
-  const { impactCategory } = params;
-  return new Promise((resolve, reject) => {
-    addDoc(getHomebrewImpactsCollection(), impactCategory)
-      .then(() => {
-        resolve();
-      })
-      .catch(reject);
-  });
+>(async (params) => {
+  await api.create({ doc: params.impactCategory, client: params.client });
 }, "Failed to create impact category.");

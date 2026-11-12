@@ -1,23 +1,25 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { UpdateData, updateDoc } from "firebase/firestore";
 import { DocumentUpdate } from "api-calls/helpers.type";
 import { HomebrewOracleTableDocument } from "api-calls/homebrew/oracles/tables/_homebrewOracleTable.type";
-import { getHomebrewOracleTableDoc } from "./_getRef";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
+
+const api = createHomebrewContentApi<HomebrewOracleTableDocument>(
+  "homebrew_oracle_tables"
+);
 
 export const updateHomebrewOracleTable = createApiFunction<
   {
     oracleTableId: string;
     oracleTable: DocumentUpdate<HomebrewOracleTableDocument>;
-  },
+  } & ClientOption,
   void
->((params) => {
-  const { oracleTableId, oracleTable } = params;
-  return new Promise((resolve, reject) => {
-    updateDoc(
-      getHomebrewOracleTableDoc(oracleTableId),
-      oracleTable as UpdateData<HomebrewOracleTableDocument>
-    )
-      .then(resolve)
-      .catch(reject);
+>(async (params) => {
+  await api.update({
+    id: params.oracleTableId,
+    doc: params.oracleTable,
+    client: params.client,
   });
 }, "Failed to update oracle table.");

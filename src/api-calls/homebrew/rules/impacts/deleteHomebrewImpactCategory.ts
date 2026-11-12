@@ -1,19 +1,17 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { deleteDoc } from "firebase/firestore";
-import { getHomebrewImpactsDoc } from "./_getRef";
+import { HomebrewImpactCategoryDocument } from "api-calls/homebrew/rules/impacts/_homebrewImpacts.type";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
+
+const api = createHomebrewContentApi<HomebrewImpactCategoryDocument>(
+  "homebrew_impact_categories"
+);
 
 export const deleteHomebrewImpactCategory = createApiFunction<
-  {
-    impactCategoryId: string;
-  },
+  { impactCategoryId: string } & ClientOption,
   void
->((params) => {
-  const { impactCategoryId } = params;
-  return new Promise((resolve, reject) => {
-    deleteDoc(getHomebrewImpactsDoc(impactCategoryId))
-      .then(() => {
-        resolve();
-      })
-      .catch(reject);
-  });
+>(async (params) => {
+  await api.remove({ id: params.impactCategoryId, client: params.client });
 }, "Failed to delete impact category.");

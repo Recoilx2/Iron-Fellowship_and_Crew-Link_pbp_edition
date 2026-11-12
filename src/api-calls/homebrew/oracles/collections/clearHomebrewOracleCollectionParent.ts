@@ -1,17 +1,19 @@
-import { deleteField, updateDoc } from "firebase/firestore";
 import { createApiFunction } from "api-calls/createApiFunction";
-import { getHomebrewOracleCollectionDoc } from "./_getRef";
+import {
+  ClientOption,
+  modifyContentData,
+} from "api-calls/homebrew/_supabase";
 
 export const clearHomebrewOracleCollectionParent = createApiFunction<
-  { oracleCollectionId: string },
+  { oracleCollectionId: string } & ClientOption,
   void
->((params) => {
-  const { oracleCollectionId } = params;
-  return new Promise((resolve, reject) => {
-    updateDoc(getHomebrewOracleCollectionDoc(oracleCollectionId), {
-      parentOracleCollectionId: deleteField(),
-    })
-      .then(() => resolve())
-      .catch(reject);
-  });
+>(async (params) => {
+  await modifyContentData(
+    "homebrew_oracle_collections",
+    params.oracleCollectionId,
+    (data) => {
+      delete data.parentOracleCollectionId;
+    },
+    { client: params.client }
+  );
 }, "Failed to move oracle collection.");

@@ -1,19 +1,17 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { deleteDoc } from "firebase/firestore";
-import { getHomebrewLegacyTrackDoc } from "./_getRef";
+import { HomebrewLegacyTrackDocument } from "api-calls/homebrew/rules/legacyTracks/_homebrewLegacyTrack.type";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
+
+const api = createHomebrewContentApi<HomebrewLegacyTrackDocument>(
+  "homebrew_legacy_tracks"
+);
 
 export const deleteHomebrewLegacyTrack = createApiFunction<
-  {
-    legacyTrackId: string;
-  },
+  { legacyTrackId: string } & ClientOption,
   void
->((params) => {
-  const { legacyTrackId } = params;
-  return new Promise((resolve, reject) => {
-    deleteDoc(getHomebrewLegacyTrackDoc(legacyTrackId))
-      .then(() => {
-        resolve();
-      })
-      .catch(reject);
-  });
+>(async (params) => {
+  await api.remove({ id: params.legacyTrackId, client: params.client });
 }, "Failed to delete legacy track.");

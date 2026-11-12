@@ -1,22 +1,13 @@
-import { functions } from "config/firebase.config";
-import { httpsCallable } from "firebase/functions";
+import { removeHomebrewEditor } from "api-calls/homebrew/removeHomebrewEditor";
+import { ClientOption } from "api-calls/homebrew/_supabase";
 
+/**
+ * Gives up the caller's own editorship. Replaces the old invite-key cloud
+ * function; removing anyone else goes through removeHomebrewEditor.
+ */
 export function removeSelfAsEditor(
-  homebrewCollectionId: string
+  homebrewCollectionId: string,
+  opts?: ClientOption
 ): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    const removeEditor = httpsCallable(
-      functions,
-      "removeCurrentUserAsHomebrewCampaignEditor"
-    );
-
-    removeEditor({ homebrewCollectionId })
-      .then((wasSuccessful) => {
-        resolve(wasSuccessful.data as boolean);
-      })
-      .catch((e) => {
-        console.error(e);
-        reject(e);
-      });
-  });
+  return removeHomebrewEditor({ id: homebrewCollectionId, ...opts });
 }

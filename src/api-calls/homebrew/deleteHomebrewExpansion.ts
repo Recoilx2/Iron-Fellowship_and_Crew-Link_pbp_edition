@@ -1,56 +1,25 @@
-import {
-  arrayRemove,
-  deleteDoc,
-  getDocs,
-  query,
-  updateDoc,
-  where,
-} from "firebase/firestore";
-import { getHomebrewCollectionDoc } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
-import { getCharacterCollection } from "api-calls/character/_getRef";
-import { getCampaignCollection } from "api-calls/campaign/_getRef";
+import {
+  ClientOption,
+  resolveClient,
+} from "api-calls/homebrew/_supabase";
 
-export const deleteHomebrewExpansion = createApiFunction<{ id: string }, void>(
-  async (params) => {
-    const { id } = params;
-
-    const characterLoadPromise = getDocs(
-      query(
-        getCharacterCollection(),
-        where("expansionIds", "array-contains", id)
-      )
-    );
-
-    const campaignLoadPromise = getDocs(
-      query(
-        getCampaignCollection(),
-        where("expansionIds", "array-contains", id)
-      )
-    );
-
-    const characterSnapshot = await characterLoadPromise;
-    const campaignSnapshot = await campaignLoadPromise;
-
-    const promises: Promise<unknown>[] = [];
-
-    characterSnapshot.docs.forEach((doc) => {
-      promises.push(
-        updateDoc(doc.ref, {
-          expansionIds: arrayRemove(id),
-        })
-      );
-    });
-    campaignSnapshot.docs.forEach((doc) => {
-      promises.push(
-        updateDoc(doc.ref, {
-          expansionIds: arrayRemove(id),
-        })
-      );
-    });
-
-    await Promise.all(promises);
-    deleteDoc(getHomebrewCollectionDoc(id));
-  },
-  "Failed to delete expansion."
-);
+/**
+ * Deletes a collection and everything under it. Only the creator can delete;
+ * the access rules reject everyone else.
+ *
+ * The old implementation also detached the collection from characters and
+ * campaigns, but those tables do not exist yet: detaching belongs to the
+ * character and campaign tickets, which own those references.
+ */
+export const deleteHomebrewExpansion = createApiFunction<
+  { id: string } & ClientOption,
+  void
+>(async (params) => {
+  const client = resolveClient({ client: params.client });
+  const { error } = await client
+    .from("homebrew_collections")
+    .delete()
+    .eq("id", params.id);
+  if (error) throw error;
+}, "Failed to delete expansion.");
