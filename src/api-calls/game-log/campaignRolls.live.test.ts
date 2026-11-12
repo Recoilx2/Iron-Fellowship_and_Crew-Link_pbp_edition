@@ -82,7 +82,7 @@ describe.skipIf(!config)("campaign roll log end to end", () => {
     const campaignId = await createCampaign({
       uid: gm.userId,
       campaignName: "Roll log",
-      campaignType: CampaignType.Guided,
+      campaignType: CampaignType.Coop,
     });
     await signOut();
     await signInAs(player);
