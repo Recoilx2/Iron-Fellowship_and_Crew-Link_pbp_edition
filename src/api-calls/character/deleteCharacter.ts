@@ -11,7 +11,7 @@ import {
 import { deleteAllLogs } from "api-calls/game-log/deleteAllLogs";
 import { deleteAllProgressTracks } from "api-calls/tracks/deleteAllProgressTracks";
 import { deleteAllAssets } from "api-calls/assets/deleteAllAssets";
-import { deleteImage } from "lib/storage.lib";
+import { deleteImage } from "api-calls/storage/deleteImage";
 
 export const deleteCharacter = createApiFunction<
   {

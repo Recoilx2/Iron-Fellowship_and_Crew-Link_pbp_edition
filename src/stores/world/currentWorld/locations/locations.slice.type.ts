@@ -1,4 +1,4 @@
-import { Unsubscribe, UpdateData } from "firebase/firestore";
+import { DocumentUpdate, Unsubscribe } from "api-calls/helpers.type";
 import { GMLocation, Location } from "types/Locations.type";
 
 export enum LocationTab {
@@ -35,7 +35,13 @@ export interface LocationsSliceActions {
   deleteLocation: (locationId: string) => Promise<void>;
   updateLocation: (
     locationId: string,
-    location: UpdateData<Location>
+    location: DocumentUpdate<Location>
+  ) => Promise<void>;
+  placeLocationOnMap: (
+    mapLocationId: string,
+    row: number,
+    col: number,
+    locationId: string
   ) => Promise<void>;
   moveLocation: (
     locationId: string,

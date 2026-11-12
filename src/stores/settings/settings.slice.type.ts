@@ -1,4 +1,4 @@
-import { Unsubscribe } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { CustomTrack } from "types/CustomTrackSettings.type";
 import { StoredMove } from "types/Moves.type";
 import { StoredOracle } from "api-calls/user/custom-oracles/_custom-oracles.type";

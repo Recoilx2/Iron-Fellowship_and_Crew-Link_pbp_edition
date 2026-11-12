@@ -1,7 +1,7 @@
 import { CreateSliceType } from "stores/store.type";
 import { SettingsSlice } from "./settings.slice.type";
 import { defaultSettings } from "./settings.slice.default";
-import { Unsubscribe } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { listenToCustomMoves } from "api-calls/user/custom-moves/listenToCustomMoves";
 import { listenToCustomOracles } from "api-calls/user/custom-oracles/listenToCustomOracles";
 import { listenToSettings } from "api-calls/character-campaign-settings/listenToSettings";

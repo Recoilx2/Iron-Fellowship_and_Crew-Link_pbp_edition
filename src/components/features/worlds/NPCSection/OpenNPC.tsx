@@ -25,7 +25,10 @@ import { useGameSystemValue } from "hooks/useGameSystemValue";
 import { GAME_SYSTEMS } from "types/GameSystems.type";
 import { Difficulty } from "types/Track.type";
 import { GuideAndPlayerHeader, GuideOnlyHeader } from "../common";
-import { MAX_FILE_SIZE, MAX_FILE_SIZE_LABEL } from "lib/storage.lib";
+import {
+  MAX_FILE_SIZE,
+  MAX_FILE_SIZE_LABEL,
+} from "api-calls/storage/imageLimits";
 import { useSnackbar } from "providers/SnackbarProvider";
 import { mergeIcons } from "components/shared/GameIcons/mergeIcons";
 import { IconColors } from "types/Icon.type";

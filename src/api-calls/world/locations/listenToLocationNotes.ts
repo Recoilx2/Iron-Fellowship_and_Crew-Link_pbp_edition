@@ -1,4 +1,4 @@
-import { Unsubscribe } from "firebase/auth";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { onSnapshot } from "firebase/firestore";
 import { getPublicNotesLocationDoc } from "./_getRef";
 import { getErrorMessage } from "functions/getErrorMessage";

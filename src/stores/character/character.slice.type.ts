@@ -1,4 +1,4 @@
-import { Unsubscribe } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { AssetDocument } from "api-calls/assets/_asset.type";
 import { CurrentCharacterSlice } from "./currentCharacter/currentCharacter.slice.type";
 import {

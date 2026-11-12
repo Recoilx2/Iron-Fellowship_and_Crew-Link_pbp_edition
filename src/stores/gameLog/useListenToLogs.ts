@@ -1,4 +1,4 @@
-import { Unsubscribe } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { useEffect, useRef } from "react";
 import { useStore } from "stores/store";
 

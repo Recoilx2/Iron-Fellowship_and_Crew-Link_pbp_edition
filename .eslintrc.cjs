@@ -16,13 +16,19 @@ module.exports = {
       { allowConstantExport: true },
     ],
     "react/react-in-jsx-scope": 0,
-    // Supabase is an implementation detail of the data layer. Stores, pages,
-    // components and other app code must use app-owned types (see
-    // src/api-calls/helpers.type.ts) — the data layer converts at its edge.
+    // Firebase and Supabase are implementation details of the data layer.
+    // Stores, pages, components and other app code must use app-owned types
+    // (see src/api-calls/helpers.type.ts) — the data layer converts at its
+    // edge.
     "no-restricted-imports": [
       "error",
       {
         patterns: [
+          {
+            group: ["firebase/*"],
+            message:
+              "Firebase imports are only allowed in the data layer (src/api-calls) and src/config/firebase.config.ts. Use app-owned types instead.",
+          },
           {
             group: ["@supabase/*"],
             message:
@@ -34,7 +40,11 @@ module.exports = {
   },
   overrides: [
     {
-      files: ["src/api-calls/**/*", "src/config/supabase.config.ts"],
+      files: [
+        "src/api-calls/**/*",
+        "src/config/firebase.config.ts",
+        "src/config/supabase.config.ts",
+      ],
       rules: { "no-restricted-imports": "off" },
     },
   ],

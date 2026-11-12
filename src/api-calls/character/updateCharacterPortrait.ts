@@ -1,5 +1,5 @@
 import { updateDoc } from "firebase/firestore";
-import { replaceImage } from "lib/storage.lib";
+import { replaceImage } from "api-calls/storage/replaceImage";
 import {
   constructCharacterPortraitFolderPath,
   getCharacterDoc,
