@@ -1,0 +1,52 @@
+# Starts both Supabase copies from the template and runs the smoke test.
+# The sandbox has no Docker, so this runs in GitHub Actions on every pull request.
+name: supabase-smoke
+
+on:
+  pull_request:
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node --test "supabase/tests/*.test.mjs"
+
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: supabase
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate per-copy env files
+        run: |
+          python3 bin/gen-env.py --copy ironsworn --port 8000 --out .env.ironsworn
+          python3 bin/gen-env.py --copy starforged --port 8001 --out .env.starforged
+
+      - name: Validate the template renders
+        run: |
+          ENV_FILE=.env.ironsworn docker compose -p ironsworn --env-file .env.ironsworn -f docker-compose.yml config --quiet
+          ENV_FILE=.env.starforged docker compose -p starforged --env-file .env.starforged -f docker-compose.yml config --quiet
+
+      - name: Run the smoke test (both copies side by side)
+        run: CLEANUP=0 tests/smoke.sh
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: |
+          for copy in ironsworn starforged; do
+            echo "===== $copy ====="
+            ENV_FILE=.env.$copy docker compose -p $copy --env-file .env.$copy -f docker-compose.yml logs --tail 200
+          done
+
+      - name: Bring both copies down
+        if: always()
+        run: |
+          ENV_FILE=.env.ironsworn docker compose -p ironsworn --env-file .env.ironsworn -f docker-compose.yml down -v
+          ENV_FILE=.env.starforged docker compose -p starforged --env-file .env.starforged -f docker-compose.yml down -v
