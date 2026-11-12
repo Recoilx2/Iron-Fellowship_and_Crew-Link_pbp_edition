@@ -12,6 +12,10 @@ To pick a ticket:
 - Never pick up issues labelled `spec` or `wayfinder:*`. Specs are parents, and wayfinder tickets are decisions for the human.
 - Before starting, read the ticket's parent spec, `GLOSSARY.md` and `docs/adr/`.
 
+## Testing
+
+The agent sandbox has no Docker. Run the plain tests (`npm test`), lint and the type-check locally. Tests that need the local Supabase stack run in GitHub Actions on every pull request: push your branch, open the PR, and check its CI result before handing off. Don't try to install or start Docker in the sandbox.
+
 ## Agent skills
 
 ### Issue tracker
