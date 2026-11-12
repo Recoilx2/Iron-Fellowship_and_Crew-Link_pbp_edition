@@ -110,6 +110,7 @@ check_copy() {
   wait_for "$project auth" -H "apikey: $key" "$gw/auth/v1/health"
   wait_for "$project rest" -H "apikey: $key" "$gw/rest/v1/"
   wait_for "$project storage" "$gw/storage/v1/status"
+  wait_for "$project hocuspocus" "$gw/hocuspocus/"
   poll_for "$project realtime" realtime_healthy "$project" "$env_file" "$key"
   poll_for "$project functions" functions_placeholder_ok "$gw" "$key"
   poll_for "$project migrations" migrate_done "$project" "$env_file"

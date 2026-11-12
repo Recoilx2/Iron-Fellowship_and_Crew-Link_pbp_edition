@@ -75,6 +75,17 @@ half-migrated database. Upgrading is pulling and restarting. Name files
 `<UTC timestamp>_<short-name>.sql` and never edit one that has already run;
 see `migrations/README.md`.
 
+## Shared note editing
+
+One Hocuspocus container per copy (`hocuspocus/`, reached through the
+gateway at `/hocuspocus/`) holds the live Yjs documents for shared notes.
+Each document is one content row beside its note; the server reads the row
+on first connect and writes it back within seconds, so solo edits survive
+restarts. Connections carry the person's Supabase access token and are
+checked against that note; unsharing (or deleting) a note closes the
+connections of everyone who just lost access. See `hocuspocus/README.md`.
+Memory is capped with `HOCUSPOCUS_MEMORY_LIMIT` (default 256m).
+
 ## Backup and restore
 
 Back up one copy at a time (example: Ironsworn):

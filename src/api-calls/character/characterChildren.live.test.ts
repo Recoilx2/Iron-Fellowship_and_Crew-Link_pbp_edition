@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { HocuspocusProvider } from "@hocuspocus/provider";
+import * as Y from "yjs";
 
 import { getSupabaseClient } from "config/supabase.config";
 import { createCharacter } from "api-calls/character/createCharacter";
@@ -37,7 +39,9 @@ import {
   deletePerson,
   ensureCampaign,
   grantMembership,
+  hocuspocusUrl,
   liveStackConfig,
+  personToken,
   randomCampaignId,
   waitFor,
   type LivePerson,
@@ -204,7 +208,7 @@ describe.skipIf(!config)("character children end to end", () => {
     expect(removed[0][0]).toBe(trackId);
   });
 
-  it("saves notes and streams their contents live", { timeout: 90000 }, async () => {
+  it("saves notes and streams their contents live", { timeout: 120000 }, async () => {
     const owner = await createPerson(cfg, "owner");
     people.push(owner);
     const characterId = await createSoloCharacter(owner);
@@ -214,7 +218,6 @@ describe.skipIf(!config)("character children end to end", () => {
       listenToNotes(
         undefined,
         characterId,
-        false,
         (_source, notes) => seen.push(notes),
         (error) => {
           throw error;
@@ -240,22 +243,40 @@ describe.skipIf(!config)("character children end to end", () => {
         }
       )
     );
+    // Titles travel through the data layer; the bytes travel through the
+    // note server, which persists them to the note's content row.
     await updateNote({
       campaignId: undefined,
       characterId,
       noteId,
       title: "Session prep",
-      content: new Uint8Array([1, 2, 3, 250]),
     });
-    const updated = await waitFor(() =>
-      contents.some((content) => content?.length === 4) ? contents : null
-    );
-    expect(updated.at(-1)).toEqual(new Uint8Array([1, 2, 3, 250]));
     await waitFor(() =>
       seen.at(-1)?.some((note) => note.title === "Session prep")
         ? seen
         : null
     );
+
+    const doc = new Y.Doc();
+    const provider = new HocuspocusProvider({
+      url: hocuspocusUrl(cfg),
+      name: `character-notes/${noteId}`,
+      document: doc,
+      token: await personToken(owner),
+    });
+    unsubscribes.push(() => provider.destroy());
+    await waitFor(() =>
+      provider.synced ? true : null
+    );
+    doc.getText("body").insert(0, "Session prep notes");
+    const updated = await waitFor(() =>
+      contents.some((content) => content && content.length > 0)
+        ? contents
+        : null
+    );
+    const fresh = new Y.Doc();
+    Y.applyUpdate(fresh, updated.at(-1) as Uint8Array);
+    expect(fresh.getText("body").toString()).toBe("Session prep notes");
 
     await updateNoteShared({
       campaignId: undefined,
@@ -450,7 +471,6 @@ describe.skipIf(!config)("character children end to end", () => {
       listenToNotes(
         undefined,
         characterId,
-        false,
         (_source, notes) => seen.push(notes),
         () => {}
       )

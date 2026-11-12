@@ -28,7 +28,7 @@ describe("smoke test", () => {
 
   it("checks health through both gateways and cleans up", () => {
     const text = read(smoke);
-    for (const endpoint of ["auth/v1/health", "rest/v1/", "storage/v1/", "functions/v1/"]) {
+    for (const endpoint of ["auth/v1/health", "rest/v1/", "storage/v1/", "functions/v1/", "hocuspocus/"]) {
       assert.ok(text.includes(endpoint), `no check for ${endpoint}`);
     }
     assert.ok(/realtime.*health|health.*realtime/i.test(text), "no realtime health check");

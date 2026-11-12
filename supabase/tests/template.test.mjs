@@ -44,12 +44,26 @@ describe("supabase compose template", () => {
 
   it("keeps exactly the trimmed service set", () => {
     const text = compose();
-    for (const s of ["db", "auth", "rest", "realtime", "storage", "api-gw", "functions", "migrate", "site"]) {
+    for (const s of ["db", "auth", "rest", "realtime", "storage", "api-gw", "functions", "hocuspocus", "migrate", "site"]) {
       serviceBlock(text, s);
-    }
+    };
     for (const s of ["studio", "meta", "imgproxy", "supavisor", "analytics", "vector", "pooler", "kong"]) {
       assert.ok(!new RegExp(`^  ${s}:\\s*$`, "m").test(text), `dropped service ${s} present`);
     }
+  });
+
+  it("builds the note server from the repo with a memory cap and no published ports", () => {
+    const text = code(compose());
+    const m = text.match(/^  hocuspocus:\s*$/m);
+    assert.ok(m, "service hocuspocus missing");
+    const after = text.slice(m.index + m[0].length);
+    const next = after.search(/^  [a-z][a-z-]*:\s*$/m);
+    const block = next === -1 ? after : after.slice(0, next);
+    assert.ok(block.includes("./hocuspocus"), "hocuspocus is not built from supabase/hocuspocus");
+    assert.ok(/mem_limit\s*:\s*\S+/.test(block), "hocuspocus has no memory cap");
+    assert.ok(/JWT_SECRET/.test(block), "hocuspocus does not get the token secret");
+    assert.ok(/POSTGRES_PASSWORD/.test(block), "hocuspocus does not get the database password");
+    assert.ok(!/ports\s*:/.test(block), "hocuspocus publishes a host port instead of hiding behind the gateway");
   });
 
   it("has no fixed container names and no fixed project name", () => {
@@ -163,11 +177,30 @@ describe("supabase compose template", () => {
 describe("trimmed envoy config", () => {
   it("has no meta or studio clusters", () => {
     const cds = read("envoy/cds.yaml");
-    for (const c of ["auth", "rest", "realtime", "storage", "functions"]) {
+    for (const c of ["auth", "rest", "realtime", "storage", "functions", "hocuspocus"]) {
       assert.ok(new RegExp(`name:\\s*${c}\\b`).test(cds), `cluster ${c} missing`);
     }
     assert.ok(!/name:\s*(meta|studio)\b/.test(cds), "meta/studio cluster still present");
     assert.ok(!/address:\s*(meta|studio)\b/.test(cds), "meta/studio address still present");
+  });
+
+  it("has a route to the note server, unprotected at the gateway", () => {
+    const lds = read("envoy/lds.template.yaml");
+    assert.ok(/cluster:\s*hocuspocus\b/.test(lds), "no route to the hocuspocus cluster");
+    assert.ok(/prefix:\s*\/hocuspocus/.test(lds), "no /hocuspocus route prefix");
+    // Authentication is the Supabase token inside the Hocuspocus protocol,
+    // checked per note by the server: the gateway must not demand an API key.
+    const names = [...lds.matchAll(/- name:\s*(\S+)/g)]
+      .map((m) => m[1])
+      .filter((n) => n.includes("hocuspocus"));
+    assert.ok(names.length > 0, "hocuspocus route has no name");
+    const protectedBlock = lds.slice(lds.indexOf("PROTECTED_ROUTES"));
+    for (const n of names) {
+      assert.ok(
+        !protectedBlock.includes(`"${n}"`) && !protectedBlock.includes(`['${n}']`),
+        `hocuspocus route ${n} demands an API key`
+      );
+    }
   });
 
   it("has no routes to dropped services", () => {
@@ -176,7 +209,7 @@ describe("trimmed envoy config", () => {
     assert.ok(!/- name: pg-protected/.test(lds), "pg-protected route still present");
     assert.ok(!/prefix: \/api\/mcp/.test(lds), "/api/mcp route still present");
     assert.ok(!/prefix: \/mcp\b/.test(lds), "/mcp route still present");
-    for (const c of ["auth", "rest", "realtime", "storage", "functions"]) {
+    for (const c of ["auth", "rest", "realtime", "storage", "functions", "hocuspocus"]) {
       assert.ok(new RegExp(`cluster:\\s*${c}\\b`).test(lds), `route to ${c} missing`);
     }
   });

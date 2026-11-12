@@ -1,10 +1,5 @@
-import { deleteDoc } from "firebase/firestore";
 import { getSupabaseClient } from "config/supabase.config";
-import {
-  getCampaignNoteContentDocument,
-  getCampaignNoteDocument,
-  CHARACTER_NOTES_TABLE,
-} from "./_getRef";
+import { CHARACTER_NOTES_TABLE, CAMPAIGN_NOTES_TABLE } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
 
 export const removeNote = createApiFunction<
@@ -18,25 +13,20 @@ export const removeNote = createApiFunction<
   const { campaignId, characterId, noteId } = params;
 
   if (!campaignId && !characterId) {
-    throw new Error("Either character or campaign ID must be defined.");
+    throw new Error("Either campaign or character ID must be defined.");
   }
 
-  // Campaign notes stay on Firebase until the notes ticket ports them.
-  if (!characterId) {
-    await deleteDoc(
-      getCampaignNoteDocument(campaignId as string, noteId)
-    );
-    await deleteDoc(
-      getCampaignNoteContentDocument(campaignId as string, noteId)
-    );
-    return;
-  }
-  // The note content row follows through ON DELETE CASCADE.
+  // The note content row follows through ON DELETE CASCADE. Deleting fires
+  // the database's access-revoked notification, so the note server closes
+  // the deleted note's connected editors too.
+  const table = characterId ? CHARACTER_NOTES_TABLE : CAMPAIGN_NOTES_TABLE;
+  const parentColumn = characterId ? "character_id" : "campaign_id";
+  const parentId = (characterId ?? campaignId) as string;
   const { data, error } = await getSupabaseClient()
-    .from(CHARACTER_NOTES_TABLE)
+    .from(table)
     .delete()
     .eq("id", noteId)
-    .eq("character_id", characterId)
+    .eq(parentColumn, parentId)
     .select("id");
   if (error || !data || data.length === 0) {
     throw error ?? new Error("Note not found");

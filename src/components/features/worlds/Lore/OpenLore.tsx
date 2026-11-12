@@ -193,8 +193,7 @@ export function OpenLore(props: OpenLoreProps) {
                 <Grid item xs={12}>
                   <RtcRichTextEditor
                     id={loreId}
-                    roomPrefix={`iron-fellowship-${worldId}-lore-gmnotes-`}
-                    documentPassword={worldId}
+                    documentName={`iron-fellowship-${worldId}-lore-gmnotes-${loreId}`}
                     onSave={updateLoreGMNotes}
                     initialValue={lore.gmProperties?.gmNotes}
                   />
@@ -220,8 +219,7 @@ export function OpenLore(props: OpenLoreProps) {
                   {(lore.notes || lore.notes === null) && (
                     <RtcRichTextEditor
                       id={loreId}
-                      roomPrefix={`iron-fellowship-${worldId}-lore-`}
-                      documentPassword={worldId}
+                      documentName={`iron-fellowship-${worldId}-lore-${loreId}`}
                       onSave={updateLoreNotes}
                       initialValue={lore.notes || undefined}
                     />

@@ -1,20 +1,18 @@
-import { addDoc } from "firebase/firestore";
 import { getSupabaseClient } from "config/supabase.config";
-import {
-  getCampaignNoteCollection,
-  CHARACTER_NOTES_TABLE,
-} from "./_getRef";
+import { CHARACTER_NOTES_TABLE, CAMPAIGN_NOTES_TABLE } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
 
 async function addSupabaseNote(
-  characterId: string,
+  table: string,
+  parentColumn: string,
+  parentId: string,
   order: number,
   shared?: boolean
 ): Promise<string> {
   const { data, error } = await getSupabaseClient()
-    .from(CHARACTER_NOTES_TABLE)
+    .from(table)
     .insert({
-      character_id: characterId,
+      [parentColumn]: parentId,
       sort_order: order,
       title: "New Page",
       shared: shared ?? false,
@@ -42,14 +40,20 @@ export const addNote = createApiFunction<
     throw new Error("Either character or campaign ID must be defined");
   }
 
-  // Campaign notes stay on Firebase until the notes ticket ports them.
-  if (!characterId) {
-    const doc = await addDoc(getCampaignNoteCollection(campaignId as string), {
+  if (characterId) {
+    return addSupabaseNote(
+      CHARACTER_NOTES_TABLE,
+      "character_id",
+      characterId,
       order,
-      title: "New Page",
-      shared: shared ?? false,
-    });
-    return doc.id;
+      shared
+    );
   }
-  return addSupabaseNote(characterId, order, shared);
+  return addSupabaseNote(
+    CAMPAIGN_NOTES_TABLE,
+    "campaign_id",
+    campaignId as string,
+    order,
+    shared
+  );
 }, "Failed to add note.");

@@ -335,6 +335,30 @@ services:
         "/home/deno/functions/main"
       ]
 
+  # Note server: one Hocuspocus v4 process per copy holding the live Yjs
+  # documents for shared note editing. Each document is one content row
+  # (see migration 20261112135000_campaign_notes.sql). Browsers reach it
+  # only through the gateway at /hocuspocus/; the port stays internal.
+  hocuspocus:
+    build:
+      context: ./hocuspocus
+    restart: unless-stopped
+    mem_limit: ${HOCUSPOCUS_MEMORY_LIMIT:-256m}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      PORT: 1234
+      JWT_SECRET: ${JWT_SECRET}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
   # Site: serves the built site for this copy's game system. Built from the
   # repo with the copy's GAME_SYSTEM (branding and theme baked in) and the
   # gateway URL and anon key the browser uses. One copy serves one system.

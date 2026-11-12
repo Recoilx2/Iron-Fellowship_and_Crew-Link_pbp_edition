@@ -1,5 +1,5 @@
 import { useEditor } from "@tiptap/react";
-import { WebrtcProvider } from "y-webrtc";
+import { HocuspocusProvider } from "@hocuspocus/provider";
 import * as Y from "yjs";
 import { Editor } from "./Editor";
 import { textboxAttributes } from "./textboxAttributes";
@@ -10,7 +10,7 @@ import { rtcExtensions } from "./rtcExtensions";
 const NOTE_TEXT_LABEL = "Note text";
 
 export interface RtcRichTextEditorProps {
-  provider: WebrtcProvider;
+  provider: HocuspocusProvider;
   doc: Y.Doc;
   saving: boolean;
   withHeading?: boolean;
