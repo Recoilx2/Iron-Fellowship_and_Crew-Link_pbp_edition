@@ -1,4 +1,4 @@
-import { Unsubscribe } from "firebase/auth";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { onSnapshot, query, where } from "firebase/firestore";
 import { Location } from "types/Locations.type";
 import {

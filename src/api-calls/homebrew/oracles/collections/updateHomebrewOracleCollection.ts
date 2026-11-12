@@ -1,12 +1,13 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { PartialWithFieldValue, updateDoc } from "firebase/firestore";
+import { UpdateData, updateDoc } from "firebase/firestore";
+import { DocumentUpdate } from "api-calls/helpers.type";
 import { HomebrewOracleCollectionDocument } from "api-calls/homebrew/oracles/collections/_homebrewOracleCollection.type";
 import { getHomebrewOracleCollectionDoc } from "./_getRef";
 
 export const updateHomebrewOracleCollection = createApiFunction<
   {
     oracleCollectionId: string;
-    oracleCollection: PartialWithFieldValue<HomebrewOracleCollectionDocument>;
+    oracleCollection: DocumentUpdate<HomebrewOracleCollectionDocument>;
   },
   void
 >((params) => {
@@ -14,7 +15,7 @@ export const updateHomebrewOracleCollection = createApiFunction<
   return new Promise((resolve, reject) => {
     updateDoc(
       getHomebrewOracleCollectionDoc(oracleCollectionId),
-      oracleCollection
+      oracleCollection as UpdateData<HomebrewOracleCollectionDocument>
     )
       .then(() => resolve())
       .catch(reject);

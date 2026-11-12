@@ -1,4 +1,4 @@
-import { Unsubscribe } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { AccessibilitySettingsDocument } from "api-calls/user/settings/_settings.type";
 
 export interface AccessibilitySettingsSliceData {

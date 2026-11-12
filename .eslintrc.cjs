@@ -16,7 +16,28 @@ module.exports = {
       { allowConstantExport: true },
     ],
     "react/react-in-jsx-scope": 0,
+    // Firebase is an implementation detail of the data layer. Stores, pages,
+    // components and other app code must use app-owned types (see
+    // src/api-calls/helpers.type.ts) — the data layer converts at its edge.
+    "no-restricted-imports": [
+      "error",
+      {
+        patterns: [
+          {
+            group: ["firebase/*"],
+            message:
+              "Firebase imports are only allowed in the data layer (src/api-calls) and src/config/firebase.config.ts. Use app-owned types instead.",
+          },
+        ],
+      },
+    ],
   },
+  overrides: [
+    {
+      files: ["src/api-calls/**/*", "src/config/firebase.config.ts"],
+      rules: { "no-restricted-imports": "off" },
+    },
+  ],
   settings: {
     react: {
       version: "detect",

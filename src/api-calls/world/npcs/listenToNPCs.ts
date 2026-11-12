@@ -1,4 +1,4 @@
-import { Unsubscribe } from "firebase/auth";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { onSnapshot, query, where } from "firebase/firestore";
 import { NPC } from "types/NPCs.type";
 import {

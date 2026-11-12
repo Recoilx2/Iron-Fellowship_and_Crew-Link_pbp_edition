@@ -1,5 +1,5 @@
 import { CharacterDocument } from "api-calls/character/_character.type";
-import { Unsubscribe } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { AssetDocument } from "api-calls/assets/_asset.type";
 import {
   Clock,

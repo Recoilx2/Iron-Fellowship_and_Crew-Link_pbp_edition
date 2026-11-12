@@ -5,7 +5,7 @@ import HealthIcon from "@mui/icons-material/Favorite";
 import SpiritIcon from "@mui/icons-material/Whatshot";
 import { useEffect, useRef, useState } from "react";
 import { Roll } from "types/DieRolls.type";
-import { Unsubscribe } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { listenToMostRecentCharacterLog } from "api-calls/game-log/listenToMostRecentCharacterLog";
 import { RollCard } from "./components/RollCard";
 import { useSearchParams } from "react-router-dom";

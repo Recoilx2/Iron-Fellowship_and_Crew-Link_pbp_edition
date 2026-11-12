@@ -11,7 +11,7 @@ import { updateLoreNotes } from "api-calls/world/lore/updateLoreNotes";
 import { uploadLoreImage } from "api-calls/world/lore/uploadLoreImage";
 import { listenToLoreNotes } from "api-calls/world/lore/listenToLoreNotes";
 import { reportApiError } from "lib/analytics.lib";
-import { Unsubscribe } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { listenToLoreGMProperties } from "api-calls/world/lore/listenToLoreGMProperties";
 import { removeLoreImage } from "api-calls/world/lore/removeLoreImage";
 

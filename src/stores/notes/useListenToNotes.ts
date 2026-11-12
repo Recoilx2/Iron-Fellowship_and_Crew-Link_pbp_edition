@@ -1,4 +1,4 @@
-import { Unsubscribe } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { useEffect } from "react";
 import { useStore } from "stores/store";
 import { ROLL_LOG_ID } from "./notes.slice.type";
