@@ -22,10 +22,9 @@ export interface RtcRichTextEditorProps {
   initialValue?: Uint8Array;
   showTitle?: boolean;
   /**
-   * The note server owns the document bytes (character and campaign notes):
-   * saves only carry the title, and closing the tab needs no beacon save.
-   * World notes persist through onSave snapshots instead until their ticket
-   * ports them onto the server.
+   * The note server owns the document bytes (character, campaign and world
+   * notes, plus world descriptions): saves only carry the title, and closing
+   * the tab needs no beacon save.
    */
   serverPersisted?: boolean;
   extraEditorActions?: ReactNode;

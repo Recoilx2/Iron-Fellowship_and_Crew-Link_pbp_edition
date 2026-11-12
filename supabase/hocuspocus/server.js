@@ -3,12 +3,12 @@
  * documents for shared note editing.
  *
  * Each persistent document is one Postgres content row
- * (`character_note_contents` / `campaign_note_contents`, base64 bytes beside
- * each note). The server reads the row on first connect and writes it back
- * on a short debounce, so a lone editor is persisted within seconds and
- * reloads survive restarts. World rooms (which the worlds ticket ports) are
- * transient: they sync live between connected browsers but never touch the
- * database.
+ * (`character_note_contents` / `campaign_note_contents` /
+ * `world_note_contents`, base64 bytes beside each note; the world
+ * description rides the `worlds.description` column in the
+ * world-descriptions scope). The server reads the row on first connect and
+ * writes it back on a short debounce, so a lone editor is persisted within
+ * seconds and reloads survive restarts.
  *
  * Authentication and access, per connection:
  * - the client sends its Supabase access token; it is verified as HS256

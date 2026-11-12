@@ -66,13 +66,15 @@ const documentFieldToColumn: Record<string, string> = {
   settingKey: "setting_key",
   name: "name",
   newTruths: "new_truths",
-  ownerIds: "owner_ids",
 };
 
 /**
  * Converts an app-level world update into row columns. The description has
  * its own function (updateWorldDescription) because it is a Yjs document on
- * the note server; guides go through add/remove_world_guide RPCs.
+ * the note server; owner_ids is intentionally absent -- ownership changes go
+ * only through the owners-only add/remove_world_guide RPCs, so a direct row
+ * update can never carry it (the database rejects owner_ids changes from
+ * non-owners too).
  */
 export function worldUpdateToColumns(
   update: Partial<World>

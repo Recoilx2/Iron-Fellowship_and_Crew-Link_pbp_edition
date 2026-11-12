@@ -182,6 +182,28 @@ describe("worlds migration", () => {
     );
   });
 
+  it("keeps ownership with current owners: GMs cannot mint themselves owners", () => {
+    const sql = text();
+    assert.ok(
+      /reject_world_owner_change/i.test(sql),
+      "no owner-change guard function on worlds"
+    );
+    assert.ok(
+      /BEFORE UPDATE OF owner_ids[\s\S]*?ON public\.worlds/i.test(sql),
+      "owner_ids changes on worlds are not guarded by a trigger"
+    );
+    assert.ok(
+      /OLD\.owner_ids/i.test(sql),
+      "the owner guard does not check the row's current owners"
+    );
+    const ownerGates = sql.match(/only world owners manage guides/gi) ?? [];
+    assert.equal(
+      ownerGates.length,
+      2,
+      "add/remove_world_guide are not both owners-only"
+    );
+  });
+
   it("links campaigns and characters to their world with safe deletes", () => {
     const sql = text();
     assert.ok(

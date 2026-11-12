@@ -53,6 +53,12 @@ describe("world row mapping", () => {
     ).toEqual({ name: "Renamed", setting_key: "the_forge" });
   });
 
+  it("never maps ownership into row columns", () => {
+    expect(worldUpdateToColumns({ name: "Renamed", ownerIds: ["user-2"] })).toEqual({
+      name: "Renamed",
+    });
+  });
+
   it("opens private channels per person and per world", () => {
     expect(constructUserWorldsChannelName("user-1")).toBe(
       "user-worlds:user-1"

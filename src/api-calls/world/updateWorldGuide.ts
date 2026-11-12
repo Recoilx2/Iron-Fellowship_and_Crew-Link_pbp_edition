@@ -2,7 +2,7 @@ import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
 
 /**
- * Adds or removes a world guide (an extra owner). Only existing world GMs
+ * Adds or removes a world guide (an extra owner). Only existing world owners
  * manage the list; the database enforces it, and refuses to remove the
  * last owner. Campaign GMs need no guide entry: they manage linked worlds
  * through the access rules (decision #12).

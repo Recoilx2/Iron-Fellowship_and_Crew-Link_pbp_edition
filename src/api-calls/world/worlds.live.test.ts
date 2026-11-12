@@ -17,6 +17,8 @@ import { CampaignType } from "api-calls/campaign/_campaign.type";
 import { createCharacter } from "api-calls/character/createCharacter";
 import { createWorld } from "api-calls/world/createWorld";
 import { deleteWorld } from "api-calls/world/deleteWorld";
+import { updateWorld } from "api-calls/world/updateWorld";
+import { updateWorldGuide } from "api-calls/world/updateWorldGuide";
 import { getWorldForExport } from "api-calls/world/getWorldForExport";
 import { listenToUsersWorlds } from "api-calls/world/listenToUsersWorlds";
 import { listenToWorld } from "api-calls/world/listenToWorld";
@@ -289,6 +291,86 @@ describe.skipIf(!config)("worlds end to end", () => {
       .eq("world_id", worldId);
     expect(outsiderNotes.error).toBeNull();
     expect(outsiderNotes.data ?? []).toEqual([]);
+  });
+
+  it("keeps ownership with owners: campaign GMs cannot self-promote or delete", { timeout: 90000 }, async () => {
+    const { owner, campaignGM, player } = await setUpQuartet();
+    const { worldId } = await setUpLinkedWorld({ owner, campaignGM, player });
+
+    // A hostile campaign GM tries every path to ownership. The direct row
+    // write hits the owner-change trigger and the guide RPC is owners-only,
+    // so both fail and the owners list never changes.
+    await signInAs(campaignGM);
+    const hostile = await campaignGM.client
+      .from("worlds")
+      .update({ owner_ids: [campaignGM.userId] })
+      .eq("id", worldId);
+    expect(hostile.error).toBeTruthy();
+    await expect(
+      updateWorldGuide({ worldId, guideId: campaignGM.userId })
+    ).rejects.toBeTruthy();
+    const ownersAfter = await owner.client
+      .from("worlds")
+      .select("owner_ids")
+      .eq("id", worldId)
+      .single();
+    expect(ownersAfter.error).toBeNull();
+    expect(
+      (ownersAfter.data as { owner_ids: string[] }).owner_ids
+    ).not.toContain(campaignGM.userId);
+
+    // The GM still edits everything else, but cannot delete the world: the
+    // owner-only delete policy matches no row for them, so the delete is a
+    // silent no-op and the world survives with its owners intact.
+    await updateWorld({ worldId, partialWorld: { name: "GM rename" } });
+    await deleteWorld(worldId).catch(() => undefined);
+    const survived = await owner.client
+      .from("worlds")
+      .select("id, name, owner_ids")
+      .eq("id", worldId)
+      .single();
+    expect(survived.error).toBeNull();
+    expect(
+      (survived.data as { name: string; owner_ids: string[] }).name
+    ).toBe("GM rename");
+    expect(
+      (survived.data as { name: string; owner_ids: string[] }).owner_ids
+    ).not.toContain(campaignGM.userId);
+
+    // The owner still manages guides end to end and can delete.
+    await signOut();
+    await signInAs(owner);
+    await updateWorldGuide({ worldId, guideId: campaignGM.userId });
+    const promoted = await owner.client
+      .from("worlds")
+      .select("owner_ids")
+      .eq("id", worldId)
+      .single();
+    expect(promoted.error).toBeNull();
+    expect(
+      (promoted.data as { owner_ids: string[] }).owner_ids
+    ).toContain(campaignGM.userId);
+    await updateWorldGuide({
+      worldId,
+      guideId: campaignGM.userId,
+      shouldRemove: true,
+    });
+    const demoted = await owner.client
+      .from("worlds")
+      .select("owner_ids")
+      .eq("id", worldId)
+      .single();
+    expect(demoted.error).toBeNull();
+    expect(
+      (demoted.data as { owner_ids: string[] }).owner_ids
+    ).not.toContain(campaignGM.userId);
+    await deleteWorld(worldId);
+    const gone = await owner.client
+      .from("worlds")
+      .select("id")
+      .eq("id", worldId);
+    expect(gone.error).toBeNull();
+    expect(gone.data ?? []).toEqual([]);
   });
 
   it("streams sharing changes live: share appears, unshare disappears", { timeout: 120000 }, async () => {

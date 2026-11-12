@@ -114,7 +114,9 @@ CREATE POLICY "worlds_insert_own" ON public.worlds
   );
 
 -- Owners and campaign GMs edit the world itself (decision #12); only owners
--- delete it.
+-- delete it. owner_ids changes additionally require a current owner (see
+-- the guard below): the policy's WITH CHECK sees the new row, so without it
+-- a campaign GM could self-add and then satisfy the owner-only delete.
 DROP POLICY IF EXISTS "worlds_update_gm" ON public.worlds;
 CREATE POLICY "worlds_update_gm" ON public.worlds
   FOR UPDATE TO authenticated
@@ -147,6 +149,31 @@ DROP TRIGGER IF EXISTS worlds_updated_at ON public.worlds;
 CREATE TRIGGER worlds_updated_at
   BEFORE UPDATE ON public.worlds
   FOR EACH ROW EXECUTE FUNCTION public.handle_world_updated_at();
+
+-- Only a current owner changes who owns a world. The update policy above
+-- lets campaign GMs edit world rows (decision #12), and WITH CHECK sees
+-- the new row, so without this a campaign GM could add themselves to
+-- owner_ids and then satisfy the owner-only delete policy. GMs keep every
+-- other world edit; only owner_ids changes from a non-owner fail here.
+CREATE OR REPLACE FUNCTION private.reject_world_owner_change()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF NEW.owner_ids IS DISTINCT FROM OLD.owner_ids
+    AND NOT ((select auth.uid()) = ANY (OLD.owner_ids)) THEN
+    RAISE EXCEPTION 'only world owners change world owners' USING ERRCODE = '42501';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS worlds_owner_change_guard ON public.worlds;
+CREATE TRIGGER worlds_owner_change_guard
+  BEFORE UPDATE OF owner_ids ON public.worlds
+  FOR EACH ROW EXECUTE FUNCTION private.reject_world_owner_change();
 
 -- The campaigns and characters links promised by their migrations: pointing
 -- a campaign or a character at a world never deletes anything when the
@@ -692,17 +719,24 @@ $$;
 
 -- World guides are extra owners: GMs of the campaigns using the world
 -- already manage it through is_world_gm, while guides manage every world
--- they are added to. Only existing world GMs change the list, and the last
--- owner cannot remove themselves.
+-- they are added to. Only existing world owners change the list -- gating
+-- on is_world_gm here would let a linked campaign GM mint themselves an
+-- owner -- and the last owner cannot remove themselves.
 CREATE OR REPLACE FUNCTION public.add_world_guide(wid uuid, guide_id uuid)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
 AS $$
+DECLARE
+  current_owners uuid[];
 BEGIN
-  IF NOT private.is_world_gm(wid) THEN
-    RAISE EXCEPTION 'only world GMs manage guides' USING ERRCODE = '42501';
+  SELECT owner_ids INTO current_owners FROM public.worlds WHERE id = wid;
+  IF current_owners IS NULL THEN
+    RAISE EXCEPTION 'world not found';
+  END IF;
+  IF NOT ((select auth.uid()) = ANY (current_owners)) THEN
+    RAISE EXCEPTION 'only world owners manage guides' USING ERRCODE = '42501';
   END IF;
   UPDATE public.worlds
   SET owner_ids = CASE WHEN guide_id = ANY (owner_ids) THEN owner_ids ELSE owner_ids || guide_id END
@@ -719,12 +753,12 @@ AS $$
 DECLARE
   current_owners uuid[];
 BEGIN
-  IF NOT private.is_world_gm(wid) THEN
-    RAISE EXCEPTION 'only world GMs manage guides' USING ERRCODE = '42501';
-  END IF;
   SELECT owner_ids INTO current_owners FROM public.worlds WHERE id = wid;
   IF current_owners IS NULL THEN
     RAISE EXCEPTION 'world not found';
+  END IF;
+  IF NOT ((select auth.uid()) = ANY (current_owners)) THEN
+    RAISE EXCEPTION 'only world owners manage guides' USING ERRCODE = '42501';
   END IF;
   IF array_length(current_owners, 1) = 1 AND current_owners[1] = guide_id THEN
     RAISE EXCEPTION 'cannot remove the last owner';
