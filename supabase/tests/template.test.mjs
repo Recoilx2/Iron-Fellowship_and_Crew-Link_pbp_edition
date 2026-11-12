@@ -122,13 +122,35 @@ describe("supabase compose template", () => {
     const text = code(compose());
     serviceBlock(text, "migrate");
     assert.ok(/service_completed_successfully/.test(text), "nothing waits for migrate");
-    for (const s of ["rest", "realtime", "storage"]) {
+    // Storage brings its own schema (storage.buckets) at boot, and the
+    // portrait and homebrew migrations need it, so storage boots before
+    // migrate runs instead of waiting for it. PostgREST tolerates an empty
+    // schema and reloads as migrate applies, so rest boots early too.
+    for (const s of ["rest", "storage"]) {
+      const m = text.match(new RegExp(`^  ${s}:\\s*$`, "m"));
+      assert.ok(m, `service ${s} missing`);
+      const after = text.slice(m.index + m[0].length);
+      const next = after.search(/^  [a-z][a-z-]*:\s*$/m);
+      const block = next === -1 ? after : after.slice(0, next);
+      assert.ok(!block.includes("migrate"), `${s} must not wait for migrate`);
+    }
+    for (const s of ["realtime"]) {
       const m = text.match(new RegExp(`^  ${s}:\\s*$`, "m"));
       assert.ok(m, `service ${s} missing`);
       const after = text.slice(m.index + m[0].length);
       const next = after.search(/^  [a-z][a-z-]*:\s*$/m);
       const block = next === -1 ? after : after.slice(0, next);
       assert.ok(block.includes("migrate"), `${s} does not wait for migrate`);
+    }
+    // Migrate runs after storage is healthy so the bucket migrations land
+    // on a storage schema that already exists.
+    {
+      const m = text.match(/^  migrate:\s*$/m);
+      assert.ok(m, "service migrate missing");
+      const after = text.slice(m.index + m[0].length);
+      const next = after.search(/^  [a-z][a-z-]*:\s*$/m);
+      const block = next === -1 ? after : after.slice(0, next);
+      assert.ok(block.includes("storage"), "migrate does not wait for storage");
     }
   });
 
