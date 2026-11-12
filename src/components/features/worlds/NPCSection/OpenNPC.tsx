@@ -12,6 +12,7 @@ import {
 } from "@mui/material";
 import { NPC, DefaultNPCSpecies } from "types/NPCs.type";
 import { DebouncedOracleInput } from "components/shared/DebouncedOracleInput";
+import { getWorldNoteDocumentName } from "config/hocuspocus.config";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { useConfirm } from "material-ui-confirm";
 import { RtcRichTextEditor } from "components/shared/RichTextEditor/RtcRichTextEditor";
@@ -113,7 +114,7 @@ const nameOracles: { [key in DefaultNPCSpecies]: string | string[] } = {
 };
 
 export function OpenNPC(props: OpenNPCProps) {
-  const { worldId, npcId, locations, npc, closeNPC, hideBorder } = props;
+  const { npcId, locations, npc, closeNPC, hideBorder } = props;
   const confirm = useConfirm();
 
   const { showGMFields, showGMTips, isGuidedGame } = useWorldPermissions();
@@ -541,12 +542,15 @@ export function OpenNPC(props: OpenNPCProps) {
                   />
                 )}
                 <Grid item xs={12}>
-                  <RtcRichTextEditor
-                    id={npcId}
-                    documentName={`iron-fellowship-${worldId}-npc-gmnotes-${npcId}`}
-                    onSave={updateNPCGMNotes}
-                    initialValue={npc.gmProperties?.gmNotes}
-                  />
+                  {npc.gmNoteId && (
+                    <RtcRichTextEditor
+                      id={npcId}
+                      documentName={getWorldNoteDocumentName(npc.gmNoteId)}
+                      onSave={updateNPCGMNotes}
+                      initialValue={npc.gmProperties?.gmNotes}
+                      serverPersisted
+                    />
+                  )}
                 </Grid>
               </>
             )}
@@ -613,12 +617,13 @@ export function OpenNPC(props: OpenNPCProps) {
                   </Grid>
                 )}
                 <Grid item xs={12}>
-                  {(npc.notes || npc.notes === null) && (
+                  {(npc.notes || npc.notes === null) && npc.publicNoteId && (
                     <RtcRichTextEditor
                       id={npcId}
-                      documentName={`iron-fellowship-${worldId}-npc-${npcId}`}
+                      documentName={getWorldNoteDocumentName(npc.publicNoteId)}
                       onSave={updateNPCNotes}
                       initialValue={npc.notes || undefined}
+                      serverPersisted
                     />
                   )}
                 </Grid>

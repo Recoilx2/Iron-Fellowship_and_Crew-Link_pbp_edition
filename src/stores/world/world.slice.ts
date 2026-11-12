@@ -11,7 +11,7 @@ import { getSystem } from "hooks/useGameSystem";
 import { GAME_SYSTEMS } from "types/GameSystems.type";
 
 export const createWorldSlice: CreateSliceType<WorldSlice> = (...params) => {
-  const [set, getState] = params;
+  const [set] = params;
   return {
     ...defaultWorldSlice,
     currentWorld: createCurrentWorldSlice(...params),
@@ -87,13 +87,11 @@ export const createWorldSlice: CreateSliceType<WorldSlice> = (...params) => {
       };
     },
     createWorld: () => {
-      const uid = getState().auth.uid;
       const system = getSystem();
       const defaultSettingKey =
         system === GAME_SYSTEMS.IRONSWORN ? "ironlands" : "the_forge";
       return createWorld({
         name: "New World",
-        ownerIds: [uid],
         settingKey: defaultSettingKey,
       });
     },

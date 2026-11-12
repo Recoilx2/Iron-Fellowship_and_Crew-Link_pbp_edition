@@ -1,24 +1,31 @@
-import { addDoc, Timestamp } from "firebase/firestore";
-import { getLocationCollection } from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
+import { ensureWorldItemNotes } from "api-calls/world/worldNotes";
+import { WORLD_LOCATIONS_TABLE } from "./_getRef";
 
+/**
+ * Creates a blank location, shared with players by default. Note rows for
+ * its public and GM-only notes are created with it, so the note server
+ * finds them on first connect.
+ */
 export const createLocation = createApiFunction<
   { worldId: string; shared?: boolean },
   string
->((params) => {
+>(async (params) => {
   const { worldId } = params;
-  return new Promise((resolve, reject) => {
-    addDoc(getLocationCollection(worldId), {
+  const { data, error } = await getSupabaseClient()
+    .from(WORLD_LOCATIONS_TABLE)
+    .insert({
+      world_id: worldId,
       name: "New Location",
-      sharedWithPlayers: true,
-      updatedTimestamp: Timestamp.now(),
-      createdTimestamp: Timestamp.now(),
+      shared_with_players: true,
     })
-      .then((doc) => {
-        resolve(doc.id);
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
+    .select("id")
+    .single();
+  if (error || !data) {
+    throw error ?? new Error("Failed to create a new location.");
+  }
+  const id = (data as { id: string }).id;
+  await ensureWorldItemNotes(worldId, "location", id);
+  return id;
 }, "Failed to create a new location.");

@@ -61,7 +61,6 @@ describe("WorldExporter", () => {
       name: "World",
       settingKey: "starforged",
       ownerIds: ["user-1"],
-      campaignGuides: [],
       newTruths: { truth: { selectedTruthOptionIndex: 1 } },
       worldDescription: new Uint8Array([9]),
     });

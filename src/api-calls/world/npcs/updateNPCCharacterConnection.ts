@@ -1,7 +1,11 @@
+import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
-import { updateDoc } from "firebase/firestore";
-import { getNPCDoc } from "./_getRef";
 
+/**
+ * Toggles one character's connection to an NPC (Starforged). World GMs
+ * may set any connection; other world viewers may set only their own
+ * characters'. The database function enforces both.
+ */
 export const updateNPCCharacterConnection = createApiFunction<
   {
     worldId: string;
@@ -10,15 +14,16 @@ export const updateNPCCharacterConnection = createApiFunction<
     isConnection: boolean;
   },
   void
->((params) => {
-  const { worldId, npcId, characterId, isConnection } = params;
-
-  return new Promise((resolve, reject) => {
-    updateDoc(getNPCDoc(worldId, npcId), {
-      [`characterConnections.${characterId}`]: isConnection,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
-      .then(() => resolve())
-      .catch(reject);
+>(async (params) => {
+  const { npcId, characterId, isConnection } = params;
+  const { error } = await getSupabaseClient().rpc("set_world_item_bond", {
+    kind: "npc",
+    item_id: npcId,
+    character_id: characterId,
+    field: "character_connections",
+    value: isConnection,
   });
+  if (error) {
+    throw error;
+  }
 }, "Error updating npc connection.");

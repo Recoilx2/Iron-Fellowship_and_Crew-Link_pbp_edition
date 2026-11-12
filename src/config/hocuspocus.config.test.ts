@@ -4,6 +4,8 @@ import {
   getCampaignNoteDocumentName,
   getCharacterNoteDocumentName,
   getHocuspocusUrl,
+  getWorldDescriptionDocumentName,
+  getWorldNoteDocumentName,
 } from "config/hocuspocus.config";
 
 afterEach(() => {
@@ -39,6 +41,16 @@ describe("note document names", () => {
   it("names campaign note documents in the campaign-notes scope", () => {
     expect(getCampaignNoteDocumentName(noteId)).toBe(
       `campaign-notes/${noteId}`
+    );
+  });
+
+  it("names world note documents in the world-notes scope", () => {
+    expect(getWorldNoteDocumentName(noteId)).toBe(`world-notes/${noteId}`);
+  });
+
+  it("names world descriptions in the world-descriptions scope", () => {
+    expect(getWorldDescriptionDocumentName(noteId)).toBe(
+      `world-descriptions/${noteId}`
     );
   });
 });

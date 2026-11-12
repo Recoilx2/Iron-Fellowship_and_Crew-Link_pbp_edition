@@ -1,12 +1,7 @@
-import { deleteDoc } from "firebase/firestore";
-import {
-  constructLocationImagesPath,
-  getLocationDoc,
-  getPrivateDetailsLocationDoc,
-  getPublicNotesLocationDoc,
-} from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
-import { deleteImage } from "api-calls/storage/deleteImage";
+import { WORLD_IMAGES_BUCKET } from "api-calls/world/worldImageStorage";
+import { WORLD_LOCATIONS_TABLE } from "./_getRef";
 
 interface Params {
   worldId: string;
@@ -14,26 +9,35 @@ interface Params {
   imageFilename?: string;
 }
 
-export const deleteLocation = createApiFunction<Params, void>((params) => {
-  const { worldId, locationId, imageFilename } = params;
-
-  return new Promise((resolve, reject) => {
-    const promises: Promise<unknown>[] = [];
-    promises.push(deleteDoc(getLocationDoc(worldId, locationId)));
-    promises.push(deleteDoc(getPrivateDetailsLocationDoc(worldId, locationId)));
-    promises.push(deleteDoc(getPublicNotesLocationDoc(worldId, locationId)));
-    if (imageFilename) {
-      promises.push(
-        deleteImage(
-          constructLocationImagesPath(worldId, locationId),
-          imageFilename
-        )
+/**
+ * Deletes a location: its stored images go first (best-effort), then the
+ * row, whose GM details and notes follow through cascade deletes. Only
+ * world GMs may delete; the database enforces it.
+ */
+export const deleteLocation = createApiFunction<Params, void>(
+  async (params) => {
+    const { worldId, locationId } = params;
+    const client = getSupabaseClient();
+    try {
+      const { data: files } = await client.storage
+        .from(WORLD_IMAGES_BUCKET)
+        .list(`${worldId}/${locationId}`);
+      const paths = (files ?? []).map(
+        (file) => `${worldId}/${locationId}/${file.name}`
       );
+      if (paths.length > 0) {
+        await client.storage.from(WORLD_IMAGES_BUCKET).remove(paths);
+      }
+    } catch (e) {
+      console.error(e);
     }
-    Promise.all(promises)
-      .then(() => resolve())
-      .catch((e) => {
-        reject(e);
-      });
-  });
-}, "Failed to delete location.");
+    const { error } = await client
+      .from(WORLD_LOCATIONS_TABLE)
+      .delete()
+      .eq("id", locationId);
+    if (error) {
+      throw error;
+    }
+  },
+  "Failed to delete location."
+);

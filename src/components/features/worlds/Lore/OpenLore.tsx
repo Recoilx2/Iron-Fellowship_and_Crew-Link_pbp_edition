@@ -25,6 +25,7 @@ import { mergeIcons } from "components/shared/GameIcons/mergeIcons";
 import { IconColors } from "types/Icon.type";
 import { PageWithImage } from "../common/PageWithImage";
 import { DebouncedOracleInput } from "components/shared/DebouncedOracleInput";
+import { getWorldNoteDocumentName } from "config/hocuspocus.config";
 
 export interface OpenLoreProps {
   worldId: string;
@@ -36,7 +37,7 @@ export interface OpenLoreProps {
 }
 
 export function OpenLore(props: OpenLoreProps) {
-  const { worldId, loreId, lore, closeLore, tagList, hideBorder } = props;
+  const { loreId, lore, closeLore, tagList, hideBorder } = props;
 
   const { showGMFields, showGMTips, isGuidedGame } = useWorldPermissions();
 
@@ -191,12 +192,15 @@ export function OpenLore(props: OpenLoreProps) {
                   </Grid>
                 )}
                 <Grid item xs={12}>
-                  <RtcRichTextEditor
-                    id={loreId}
-                    documentName={`iron-fellowship-${worldId}-lore-gmnotes-${loreId}`}
-                    onSave={updateLoreGMNotes}
-                    initialValue={lore.gmProperties?.gmNotes}
-                  />
+                  {lore.gmNoteId && (
+                    <RtcRichTextEditor
+                      id={loreId}
+                      documentName={getWorldNoteDocumentName(lore.gmNoteId)}
+                      onSave={updateLoreGMNotes}
+                      initialValue={lore.gmProperties?.gmNotes}
+                      serverPersisted
+                    />
+                  )}
                 </Grid>
               </>
             )}
@@ -216,12 +220,13 @@ export function OpenLore(props: OpenLoreProps) {
                   </Grid>
                 )}
                 <Grid item xs={12}>
-                  {(lore.notes || lore.notes === null) && (
+                  {(lore.notes || lore.notes === null) && lore.publicNoteId && (
                     <RtcRichTextEditor
                       id={loreId}
-                      documentName={`iron-fellowship-${worldId}-lore-${loreId}`}
+                      documentName={getWorldNoteDocumentName(lore.publicNoteId)}
                       onSave={updateLoreNotes}
                       initialValue={lore.notes || undefined}
+                      serverPersisted
                     />
                   )}
                 </Grid>

@@ -10,22 +10,39 @@ import { updateNPCGMProperties } from "api-calls/world/npcs/updateNPCGMPropertie
 import { updateNPCNotes } from "api-calls/world/npcs/updateNPCNotes";
 import { uploadNPCImage } from "api-calls/world/npcs/uploadNPCImage";
 import { listenToNPCNotes } from "api-calls/world/npcs/listenToNPCNotes";
-import { Unsubscribe } from "api-calls/helpers.type";
+import { listenToNPCGMNotes } from "api-calls/world/npcs/listenToNPCGMNotes";
 import { listenToNPCGMProperties } from "api-calls/world/npcs/listenToNPCGMProperties";
 import { updateNPCCharacterBond } from "api-calls/world/npcs/updateNPCCharacterBond";
 import { updateNPCCharacterConnection } from "api-calls/world/npcs/updateNPCCharacterConnection";
-import { updateNPCCharacterBondProgress } from "api-calls/world/npcs/updateNPCCharacterBond copy";
+import { updateNPCCharacterBondProgress } from "api-calls/world/npcs/updateNPCCharacterBondProgress";
 import { removeNPCImage } from "api-calls/world/npcs/removeNPCImage";
+import {
+  ensureWorldItemNotes,
+  getWorldItemNoteIds,
+} from "api-calls/world/worldNotes";
+import type { GMNPC } from "types/NPCs.type";
+
+/**
+ * Merges streamed GM notes bytes into the structured GM details, keeping
+ * each side's updates. No details and no notes means no GM properties.
+ */
+function withGMNotes(
+  details: GMNPC | null | undefined,
+  notes: Uint8Array | undefined
+): GMNPC | null {
+  const { gmNotes: _dropped, ...rest } = details ?? {};
+  void _dropped;
+  if (notes) {
+    return { ...rest, gmNotes: notes };
+  }
+  return Object.keys(rest).length > 0 ? rest : null;
+}
 
 export const createNPCsSlice: CreateSliceType<NPCsSlice> = (set, getState) => ({
   ...defaultNPCsSlice,
-  subscribe: (currentWorldId: string, currentWorldOwnerIds: string[]) => {
-    const uid = getState().auth.uid;
-    const isWorldOwner = currentWorldOwnerIds.includes(uid);
-
+  subscribe: (currentWorldId: string) => {
     return listenToNPCs(
       currentWorldId,
-      isWorldOwner,
       (npcId, npc) => {
         set((store) => {
           if (
@@ -38,6 +55,8 @@ export const createNPCsSlice: CreateSliceType<NPCsSlice> = (set, getState) => ({
             store.worlds.currentWorld.currentWorldNPCs.npcMap[npcId];
           const gmProperties = existingNPC?.gmProperties;
           const notes = existingNPC?.notes;
+          const publicNoteId = existingNPC?.publicNoteId;
+          const gmNoteId = existingNPC?.gmNoteId;
           const imageUrl =
             (npc.imageFilenames?.length ?? 0) > 0
               ? existingNPC?.imageUrl
@@ -46,6 +65,8 @@ export const createNPCsSlice: CreateSliceType<NPCsSlice> = (set, getState) => ({
             ...npc,
             gmProperties,
             notes,
+            publicNoteId,
+            gmNoteId,
             imageUrl,
           };
         });
@@ -65,7 +86,8 @@ export const createNPCsSlice: CreateSliceType<NPCsSlice> = (set, getState) => ({
       },
       (error) => {
         set((store) => {
-          store.worlds.currentWorld.currentWorldNPCs.error = error;
+          store.worlds.currentWorld.currentWorldNPCs.error =
+            error instanceof Error ? error.message : String(error);
         });
       }
     );
@@ -203,14 +225,33 @@ export const createNPCsSlice: CreateSliceType<NPCsSlice> = (set, getState) => ({
   subscribeToOpenNPC: (npcId) => {
     const state = getState();
     const worldId = state.worlds.currentWorld.currentWorldId;
-    const isWorldOwner =
-      state.worlds.currentWorld.currentWorld?.ownerIds.includes(
-        state.auth.uid
-      ) ?? false;
 
     if (!worldId) {
       return () => {};
     }
+
+    // The open NPC's note ids back the live editors. Notes are created
+    // with the NPC; when they are missing (a slower create racing the
+    // open), a world GM backfills them while everyone else keeps waiting
+    // for the live rows below.
+    getWorldItemNoteIds("npc", npcId)
+      .then((ids) => {
+        if (ids.publicNoteId && ids.gmNoteId) {
+          return ids;
+        }
+        return ensureWorldItemNotes(worldId, "npc", npcId).catch(() => ids);
+      })
+      .then((ids) => {
+        set((store) => {
+          const entry = store.worlds.currentWorld.currentWorldNPCs.npcMap[npcId];
+          if (entry) {
+            entry.publicNoteId = ids.publicNoteId;
+            entry.gmNoteId = ids.gmNoteId;
+          }
+        });
+      })
+      .catch(() => {});
+
     const notesUnsubscribe = listenToNPCNotes(
       worldId,
       npcId,
@@ -227,37 +268,47 @@ export const createNPCsSlice: CreateSliceType<NPCsSlice> = (set, getState) => ({
       }
     );
 
-    let gmPropertiesUnsubscribe: Unsubscribe;
-    if (isWorldOwner) {
-      gmPropertiesUnsubscribe = listenToNPCGMProperties(
-        worldId,
-        npcId,
-        (properties) => {
-          set((store) => {
-            if (store.worlds.currentWorld.currentWorldNPCs.npcMap[npcId]) {
-              store.worlds.currentWorld.currentWorldNPCs.npcMap[
-                npcId
-              ].gmProperties = properties ?? null;
-            }
-          });
-        },
-        (error) => {
-          console.error(error);
-        }
-      );
-    } else {
-      set((store) => {
-        if (store.worlds.currentWorld.currentWorldNPCs.npcMap[npcId]) {
-          store.worlds.currentWorld.currentWorldNPCs.npcMap[
-            npcId
-          ].gmProperties = null;
-        }
-      });
-    }
+    // GM rows are always subscribed: the database filters them, so players
+    // simply receive nothing and the NPC keeps null GM properties.
+    const gmPropertiesUnsubscribe = listenToNPCGMProperties(
+      worldId,
+      npcId,
+      (properties) => {
+        set((store) => {
+          const entry =
+            store.worlds.currentWorld.currentWorldNPCs.npcMap[npcId];
+          if (entry) {
+            const gmNotes = entry.gmProperties?.gmNotes;
+            entry.gmProperties = withGMNotes(properties ?? undefined, gmNotes);
+          }
+        });
+      },
+      (error) => {
+        console.error(error);
+      }
+    );
+
+    const gmNotesUnsubscribe = listenToNPCGMNotes(
+      worldId,
+      npcId,
+      (notes) => {
+        set((store) => {
+          const entry =
+            store.worlds.currentWorld.currentWorldNPCs.npcMap[npcId];
+          if (entry) {
+            entry.gmProperties = withGMNotes(entry.gmProperties, notes);
+          }
+        });
+      },
+      (error) => {
+        console.error(error);
+      }
+    );
 
     return () => {
       notesUnsubscribe();
-      gmPropertiesUnsubscribe && gmPropertiesUnsubscribe();
+      gmPropertiesUnsubscribe();
+      gmNotesUnsubscribe();
     };
   },
 

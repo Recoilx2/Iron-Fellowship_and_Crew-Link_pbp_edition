@@ -115,8 +115,9 @@ const persistence = new Database({
   fetch: async ({ documentName }) => {
     const parsed = parseDocumentName(documentName);
     if (!parsed) return null;
+    const config = scopeConfig(parsed.scope);
     const { rows } = await pool.query(
-      `SELECT content FROM ${scopeConfig(parsed.scope).contentsTable} WHERE note_id = $1`,
+      `SELECT ${config.contentColumn} AS content FROM ${config.table} WHERE ${config.idColumn} = $1`,
       [parsed.noteId]
     );
     const content = rows[0]?.content;
@@ -127,21 +128,34 @@ const persistence = new Database({
     const parsed = parseDocumentName(documentName);
     if (!parsed) return;
     const config = scopeConfig(parsed.scope);
-    const note = await pool.query(
-      `SELECT id FROM ${config.notesTable} WHERE id = $1`,
-      [parsed.noteId]
-    );
-    if (note.rowCount === 0) {
-      // The note was deleted while someone still had it open: drop the
-      // bytes instead of resurrecting the row.
-      console.log(`hocuspocus: dropping store for deleted note ${documentName}`);
+    if (config.notesTable) {
+      const note = await pool.query(
+        `SELECT id FROM ${config.notesTable} WHERE id = $1`,
+        [parsed.noteId]
+      );
+      if (note.rowCount === 0) {
+        // The note was deleted while someone still had it open: drop the
+        // bytes instead of resurrecting the row.
+        console.log(`hocuspocus: dropping store for deleted note ${documentName}`);
+        return;
+      }
+      await pool.query(
+        `INSERT INTO ${config.table} (${config.idColumn}, ${config.contentColumn}) VALUES ($1, $2)
+         ON CONFLICT (${config.idColumn}) DO UPDATE SET ${config.contentColumn} = EXCLUDED.${config.contentColumn}`,
+        [parsed.noteId, Buffer.from(state).toString("base64")]
+      );
       return;
     }
-    await pool.query(
-      `INSERT INTO ${config.contentsTable} (note_id, content) VALUES ($1, $2)
-       ON CONFLICT (note_id) DO UPDATE SET content = EXCLUDED.content`,
-      [parsed.noteId, Buffer.from(state).toString("base64")]
+    // Column-backed scopes (the world description) live beside their own
+    // parent row: the row always exists while the document is open, so the
+    // store is a plain update that touches nothing when it is gone.
+    const { rowCount } = await pool.query(
+      `UPDATE ${config.table} SET ${config.contentColumn} = $1 WHERE ${config.idColumn} = $2`,
+      [Buffer.from(state).toString("base64"), parsed.noteId]
     );
+    if (rowCount === 0) {
+      console.log(`hocuspocus: dropping store for deleted document ${documentName}`);
+    }
   },
 });
 
@@ -152,8 +166,8 @@ async function onAuthenticate(data) {
   }
   const parsed = parseDocumentName(data.documentName);
   if (!parsed) {
-    // Transient world rooms until the worlds ticket ports them: any
-    // signed-in person may sync, nothing is persisted.
+    // Legacy transient rooms: any signed-in person may sync, nothing is
+    // persisted.
     return { userId: claims.sub };
   }
   const access = await checkNoteAccess(claims.sub, parsed.scope, parsed.noteId);

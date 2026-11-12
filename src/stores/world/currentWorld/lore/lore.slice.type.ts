@@ -5,6 +5,8 @@ export type LoreDocumentWithGMProperties = Lore & {
   gmProperties?: GMLore | null;
   notes?: Uint8Array | null;
   imageUrl?: string;
+  publicNoteId?: string;
+  gmNoteId?: string;
 };
 
 export interface LoreSliceData {
@@ -16,7 +18,7 @@ export interface LoreSliceData {
 }
 
 export interface LoreSliceActions {
-  subscribe: (worldId: string, worldOwnerIds: string[]) => Unsubscribe;
+  subscribe: (worldId: string) => Unsubscribe;
   setOpenLoreId: (loreId?: string) => void;
   setLoreSearch: (search: string) => void;
 

@@ -5,6 +5,7 @@ import { useStore } from "stores/store";
 import { RtcRichTextEditor } from "components/shared/RichTextEditor/RtcRichTextEditor";
 import { useCallback } from "react";
 import { WorldTruths } from "./WorldTruths";
+import { getWorldDescriptionDocumentName } from "config/hocuspocus.config";
 
 export interface WorldSheetProps {
   canEdit: boolean;
@@ -59,9 +60,10 @@ export function WorldSheet(props: WorldSheetProps) {
           )}
           <RtcRichTextEditor
             id={worldId}
-            documentName={`worlds-${worldId}-description-${worldId}`}
+            documentName={getWorldDescriptionDocumentName(worldId)}
             onSave={canEdit ? updateWorldDescriptionCallback : undefined}
             initialValue={world.worldDescription}
+            serverPersisted
           />
         </>
       )}

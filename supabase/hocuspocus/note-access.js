@@ -14,8 +14,11 @@
  *   direct privileged connection instead of PostgREST-as-user: one rule
  *   source, no extra HTTP hop on every connect and revocation.
  * - Document names are `<scope>/<note uuid>` for the persistent scopes.
- *   Anything else (world rooms until the worlds ticket ports them) syncs
- *   live but is never read from or written to the database.
+ *   Anything else (legacy world rooms) syncs live but is never read from
+ *   or written to the database. The `table`/`idColumn`/`contentColumn`
+ *   triple says where one document's bytes live; `notesTable` names the
+ *   parent row that must still exist before a store (null when the bytes
+ *   live beside their own parent, like the world description).
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -25,16 +28,36 @@ const UUID_PATTERN =
 
 const SCOPES = {
   "character-notes": {
+    table: "public.character_note_contents",
+    idColumn: "note_id",
+    contentColumn: "content",
     notesTable: "public.character_notes",
-    contentsTable: "public.character_note_contents",
     visibleFn: "private.is_character_note_visible",
     writableFn: "private.is_character_note_owner",
   },
   "campaign-notes": {
+    table: "public.campaign_note_contents",
+    idColumn: "note_id",
+    contentColumn: "content",
     notesTable: "public.campaign_notes",
-    contentsTable: "public.campaign_note_contents",
     visibleFn: "private.is_campaign_note_visible",
     writableFn: "private.is_campaign_note_writable",
+  },
+  "world-notes": {
+    table: "public.world_note_contents",
+    idColumn: "note_id",
+    contentColumn: "content",
+    notesTable: "public.world_notes",
+    visibleFn: "private.is_world_note_visible",
+    writableFn: "private.is_world_note_writable",
+  },
+  "world-descriptions": {
+    table: "public.worlds",
+    idColumn: "id",
+    contentColumn: "description",
+    notesTable: null,
+    visibleFn: "private.is_world_viewer",
+    writableFn: "private.is_world_gm",
   },
 };
 

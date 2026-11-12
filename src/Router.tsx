@@ -26,7 +26,6 @@ import { useListenToOracleSettings } from "stores/settings/useListenToOracleSett
 import { useListenToAccessibilitySettings } from "stores/accessibilitySettings/useListenToAccessibilitySettings";
 import { useListenToHomebrew } from "stores/homebrew/useListenToHomebrew";
 import { HOMEBREW_ROUTES, homebrewPaths } from "pages/Homebrew/routes";
-import { useSyncCampaignWorldPermissions } from "stores/campaign/useSyncCampaignWorldPermissions";
 import { useSyncDataswornTree } from "hooks/useSyncDataswornTree";
 import { installStaleChunkReload } from "lib/staleChunkReload.lib";
 
@@ -164,8 +163,6 @@ export function Router() {
   useListenToWorlds();
   useListenToOracleSettings();
   useListenToHomebrew();
-
-  useSyncCampaignWorldPermissions();
 
   useSyncDataswornTree();
 

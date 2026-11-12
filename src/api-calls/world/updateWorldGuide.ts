@@ -1,7 +1,12 @@
-import { arrayRemove, arrayUnion, updateDoc } from "firebase/firestore";
-import { getWorldDoc } from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
 
+/**
+ * Adds or removes a world guide (an extra owner). Only existing world GMs
+ * manage the list; the database enforces it, and refuses to remove the
+ * last owner. Campaign GMs need no guide entry: they manage linked worlds
+ * through the access rules (decision #12).
+ */
 export const updateWorldGuide = createApiFunction<
   {
     worldId: string;
@@ -9,20 +14,13 @@ export const updateWorldGuide = createApiFunction<
     shouldRemove?: boolean;
   },
   void
->((params) => {
+>(async (params) => {
   const { worldId, guideId, shouldRemove } = params;
-
-  return new Promise((resolve, reject) => {
-    updateDoc(getWorldDoc(worldId), {
-      campaignGuides: !shouldRemove
-        ? arrayUnion(guideId)
-        : arrayRemove(guideId),
-    })
-      .then(() => {
-        resolve();
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
+  const { error } = await getSupabaseClient().rpc(
+    shouldRemove ? "remove_world_guide" : "add_world_guide",
+    { wid: worldId, guide_id: guideId }
+  );
+  if (error) {
+    throw error;
+  }
 }, "Failed to update world guides.");

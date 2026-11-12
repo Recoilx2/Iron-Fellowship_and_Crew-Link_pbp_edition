@@ -1,69 +1,44 @@
-import {
-  deleteDoc,
-  deleteField,
-  getDocs,
-  query,
-  runTransaction,
-  where,
-} from "firebase/firestore";
-import { getWorldDoc } from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
-import { firestore } from "config/firebase.config";
-import {
-  getCampaignCollection,
-  getCampaignDoc,
-} from "api-calls/campaign/_firebaseRef";
-import {
-  getCharacterCollection,
-  getCharacterDoc,
-} from "api-calls/character/_firebaseRef";
-import { deleteAllLocations } from "./locations/deleteAllLocations";
-import { deleteAllLoreDocuments } from "./lore/deleteAllLoreDocuments";
-import { deleteAllNPCs } from "./npcs/deleteAllNPCs";
-import { deleteAllSectors } from "./sectors/deleteAllSectors";
+import { WORLD_IMAGES_BUCKET } from "api-calls/world/worldImageStorage";
+import { WORLDS_TABLE } from "./_getRef";
 
-export const deleteWorld = createApiFunction<string, void>((worldId) => {
-  return new Promise((resolve, reject) => {
-    const campaignsUsingWorld = getDocs(
-      query(getCampaignCollection(), where("worldId", "==", worldId))
-    );
-    const charactersUsingWorld = getDocs(
-      query(getCharacterCollection(), where("worldId", "==", worldId))
-    );
-
-    const promises: Promise<unknown>[] = [];
-    promises.push(
-      runTransaction(firestore, async (transaction) => {
-        (await campaignsUsingWorld).docs.map((doc) => {
-          transaction.update(getCampaignDoc(doc.id), {
-            worldId: deleteField(),
-          });
-        });
-        (await charactersUsingWorld).docs.map((doc) => {
-          transaction.update(getCharacterDoc(doc.id), {
-            worldId: deleteField(),
-          });
-        });
-      })
-    );
-
-    promises.push(deleteAllLocations({ worldId }));
-    promises.push(deleteAllLoreDocuments({ worldId }));
-    promises.push(deleteAllNPCs({ worldId }));
-    promises.push(deleteAllSectors({ worldId }));
-
-    Promise.all(promises)
-      .then(() => {
-        deleteDoc(getWorldDoc(worldId))
-          .then(() => {
-            resolve();
-          })
-          .catch((e) => {
-            reject(e);
-          });
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
-}, "Failed to delete world.");
+/**
+ * Deletes a world and everything under it: items, GM details and notes
+ * follow through cascade deletes, and linked campaigns and characters are
+ * unlinked by the database. Only world owners may delete (campaign GMs may
+ * edit the world but not remove it). Stored images are removed best-effort
+ * first so no orphaned files linger.
+ */
+export const deleteWorld = createApiFunction<string, void>(
+  async (worldId) => {
+    const client = getSupabaseClient();
+    try {
+      const { data: entries } = await client.storage
+        .from(WORLD_IMAGES_BUCKET)
+        .list(worldId);
+      const paths: string[] = [];
+      for (const entry of entries ?? []) {
+        const { data: nested } = await client.storage
+          .from(WORLD_IMAGES_BUCKET)
+          .list(`${worldId}/${entry.name}`);
+        for (const file of nested ?? []) {
+          paths.push(`${worldId}/${entry.name}/${file.name}`);
+        }
+      }
+      if (paths.length > 0) {
+        await client.storage.from(WORLD_IMAGES_BUCKET).remove(paths);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    const { error } = await client
+      .from(WORLDS_TABLE)
+      .delete()
+      .eq("id", worldId);
+    if (error) {
+      throw error;
+    }
+  },
+  "Failed to delete world."
+);

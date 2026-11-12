@@ -4,10 +4,9 @@ import { createApiFunction } from "api-calls/createApiFunction";
 
 /**
  * Adds a co-GM, or demotes one back to player. Only existing GMs change the
- * roster; demoting keeps the person as a campaign member.
- *
- * The previous world-side guide sync stays with the worlds ticket: worlds
- * still live in Firebase, so there is no world row to update yet.
+ * roster; demoting keeps the person as a campaign member. World access
+ * follows the roster through private.is_world_gm, so no world-side write
+ * is needed when GMs change.
  */
 export const updateCampaignGM = createApiFunction<
   {

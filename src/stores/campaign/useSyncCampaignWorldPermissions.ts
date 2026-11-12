@@ -1,53 +1,14 @@
-import { CampaignType } from "api-calls/campaign/_campaign.type";
-import { useEffect, useMemo } from "react";
-import { useStore } from "stores/store";
-
-export function useSyncCampaignWorldPermissions() {
-  const uid = useStore((store) => store.auth.uid);
-  const campaigns = useStore((store) => store.campaigns.campaignMap);
-  const areCampaignsLoading = useStore((store) => store.campaigns.loading);
-  const worlds = useStore((store) => store.worlds.worldMap);
-  const areWorldsLoading = useStore((store) => store.worlds.loading);
-
-  const campaignGuideMap = useMemo(() => {
-    const map: { [worldId: string]: string } = {};
-    Object.keys(campaigns).forEach((campaignKey) => {
-      const campaign = campaigns[campaignKey];
-      const worldId = campaign.worldId;
-      if (
-        worldId &&
-        (campaign.type === CampaignType.Coop ||
-          (campaign.type === CampaignType.Guided &&
-            campaign.gmIds?.includes(uid)))
-      ) {
-        map[worldId] = campaignKey;
-      }
-    });
-    return map;
-  }, [campaigns, uid]);
-  const updateWorldGuides = useStore((store) => store.worlds.updateWorldGuide);
-
-  useEffect(() => {
-    if (uid && !areCampaignsLoading && !areWorldsLoading) {
-      Object.keys(worlds).forEach((worldId) => {
-        const world = worlds[worldId];
-        const isFullOwner = world.ownerIds.includes(uid);
-        const isPartialOwner = world.campaignGuides?.includes(uid);
-        if (campaignGuideMap[worldId] && !isFullOwner && !isPartialOwner) {
-          // Add the user as a guide
-          updateWorldGuides(worldId, uid);
-        } else if (!campaignGuideMap[worldId] && isPartialOwner) {
-          // Remove the user as a guide
-          updateWorldGuides(worldId, uid, true);
-        }
-      });
-    }
-  }, [
-    worlds,
-    areCampaignsLoading,
-    areWorldsLoading,
-    updateWorldGuides,
-    campaignGuideMap,
-    uid,
-  ]);
-}
+/**
+ * World guide sync is intentionally a no-op on the Supabase backend.
+ *
+ * Campaign GMs of campaigns using a world manage it through the database
+ * access rules (decision #12: private.is_world_gm), so no client write adds
+ * or removes guides when campaigns link or unlink worlds. The previous
+ * Firebase behaviour auto-added every co-op member as a guide, which would
+ * now promote players to world owners (full GM access) and must not run.
+ *
+ * Guides remain extra world owners managed by hand through
+ * stores.worlds.updateWorldGuide (backed by add/remove_world_guide); the
+ * database refuses to remove the last owner.
+ */
+export function useSyncCampaignWorldPermissions() {}

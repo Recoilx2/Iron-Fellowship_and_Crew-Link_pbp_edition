@@ -77,7 +77,18 @@ describe("parseDocumentName", () => {
     });
   });
 
-  it("leaves world rooms unparsed: they sync live but persist elsewhere", () => {
+  it("parses the world note and description scopes too", () => {
+    const id = "44444444-4444-4444-4444-444444444444";
+    assert.deepEqual(parseDocumentName(`world-notes/${id}`), {
+      scope: "world-notes",
+      noteId: id,
+    });
+    assert.deepEqual(parseDocumentName(`world-descriptions/${id}`), {
+      scope: "world-descriptions",
+      noteId: id,
+    });
+  });
+  it("leaves legacy world rooms unparsed: they sync live but persist elsewhere", () => {
     assert.equal(
       parseDocumentName("iron-fellowship-world1-lore-abc"),
       null
@@ -94,17 +105,36 @@ describe("parseDocumentName", () => {
 describe("scopeConfig", () => {
   it("maps each persistent scope to its tables and access helpers", () => {
     const character = scopeConfig("character-notes");
-    assert.ok(character.contentsTable.includes("character_note_contents"));
+    assert.ok(character.table.includes("character_note_contents"));
+    assert.equal(character.idColumn, "note_id");
+    assert.equal(character.contentColumn, "content");
     assert.ok(character.visibleFn.includes("is_character_note_visible"));
     assert.ok(character.writableFn.includes("is_character_note_owner"));
     const campaign = scopeConfig("campaign-notes");
-    assert.ok(campaign.contentsTable.includes("campaign_note_contents"));
+    assert.ok(campaign.table.includes("campaign_note_contents"));
+    assert.equal(campaign.idColumn, "note_id");
+    assert.equal(campaign.contentColumn, "content");
     assert.ok(campaign.visibleFn.includes("is_campaign_note_visible"));
     assert.ok(campaign.writableFn.includes("is_campaign_note_writable"));
   });
 
+  it("maps the world scopes to their tables and access helpers", () => {
+    const notes = scopeConfig("world-notes");
+    assert.ok(notes.table.includes("world_note_contents"));
+    assert.equal(notes.idColumn, "note_id");
+    assert.equal(notes.contentColumn, "content");
+    assert.ok(notes.visibleFn.includes("is_world_note_visible"));
+    assert.ok(notes.writableFn.includes("is_world_note_writable"));
+    const descriptions = scopeConfig("world-descriptions");
+    assert.ok(descriptions.table.includes("worlds"));
+    assert.equal(descriptions.idColumn, "id");
+    assert.equal(descriptions.contentColumn, "description");
+    assert.ok(descriptions.visibleFn.includes("is_world_viewer"));
+    assert.ok(descriptions.writableFn.includes("is_world_gm"));
+  });
+
   it("returns null for transient scopes and junk", () => {
-    assert.equal(scopeConfig("world-notes"), null);
+    assert.equal(scopeConfig("iron-fellowship-world1-lore-abc"), null);
     assert.equal(scopeConfig(""), null);
   });
 });

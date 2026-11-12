@@ -9,6 +9,8 @@ import { getSupabaseClient } from "config/supabase.config";
 
 export const CHARACTER_NOTES_DOCUMENT_SCOPE = "character-notes";
 export const CAMPAIGN_NOTES_DOCUMENT_SCOPE = "campaign-notes";
+export const WORLD_NOTES_DOCUMENT_SCOPE = "world-notes";
+export const WORLD_DESCRIPTIONS_DOCUMENT_SCOPE = "world-descriptions";
 
 export function getHocuspocusUrl(): string {
   const base = import.meta.env.VITE_SUPABASE_URL;
@@ -29,6 +31,14 @@ export function getCharacterNoteDocumentName(noteId: string): string {
 
 export function getCampaignNoteDocumentName(noteId: string): string {
   return `${CAMPAIGN_NOTES_DOCUMENT_SCOPE}/${noteId}`;
+}
+
+export function getWorldNoteDocumentName(noteId: string): string {
+  return `${WORLD_NOTES_DOCUMENT_SCOPE}/${noteId}`;
+}
+
+export function getWorldDescriptionDocumentName(worldId: string): string {
+  return `${WORLD_DESCRIPTIONS_DOCUMENT_SCOPE}/${worldId}`;
 }
 
 /**

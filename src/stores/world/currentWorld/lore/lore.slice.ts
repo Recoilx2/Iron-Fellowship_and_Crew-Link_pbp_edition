@@ -10,19 +10,18 @@ import { updateLoreGMProperties } from "api-calls/world/lore/updateLoreGMPropert
 import { updateLoreNotes } from "api-calls/world/lore/updateLoreNotes";
 import { uploadLoreImage } from "api-calls/world/lore/uploadLoreImage";
 import { listenToLoreNotes } from "api-calls/world/lore/listenToLoreNotes";
-import { Unsubscribe } from "api-calls/helpers.type";
 import { listenToLoreGMProperties } from "api-calls/world/lore/listenToLoreGMProperties";
 import { removeLoreImage } from "api-calls/world/lore/removeLoreImage";
+import {
+  ensureWorldItemNotes,
+  getWorldItemNoteIds,
+} from "api-calls/world/worldNotes";
 
 export const createLoreSlice: CreateSliceType<LoreSlice> = (set, getState) => ({
   ...defaultLoreSlice,
-  subscribe: (currentWorldId: string, currentWorldOwnerIds: string[]) => {
-    const uid = getState().auth.uid;
-    const isWorldOwner = currentWorldOwnerIds.includes(uid);
-
+  subscribe: (currentWorldId: string) => {
     return listenToLoreDocuments(
       currentWorldId,
-      isWorldOwner,
       (loreId, lore) => {
         set((store) => {
           if (
@@ -35,6 +34,8 @@ export const createLoreSlice: CreateSliceType<LoreSlice> = (set, getState) => ({
             store.worlds.currentWorld.currentWorldLore.loreMap[loreId];
           const gmProperties = existingLore?.gmProperties;
           const notes = existingLore?.notes;
+          const publicNoteId = existingLore?.publicNoteId;
+          const gmNoteId = existingLore?.gmNoteId;
           const imageUrl =
             (lore.imageFilenames?.length ?? 0) > 0
               ? existingLore?.imageUrl
@@ -43,6 +44,8 @@ export const createLoreSlice: CreateSliceType<LoreSlice> = (set, getState) => ({
             ...lore,
             gmProperties,
             notes,
+            publicNoteId,
+            gmNoteId,
             imageUrl,
           };
         });
@@ -60,7 +63,8 @@ export const createLoreSlice: CreateSliceType<LoreSlice> = (set, getState) => ({
       },
       (error) => {
         set((store) => {
-          store.worlds.currentWorld.currentWorldLore.error = error;
+          store.worlds.currentWorld.currentWorldLore.error =
+            error instanceof Error ? error.message : String(error);
         });
       }
     );
@@ -163,14 +167,34 @@ export const createLoreSlice: CreateSliceType<LoreSlice> = (set, getState) => ({
   subscribeToOpenLore: (loreId) => {
     const state = getState();
     const worldId = state.worlds.currentWorld.currentWorldId;
-    const isWorldOwner =
-      state.worlds.currentWorld.currentWorld?.ownerIds.includes(
-        state.auth.uid
-      ) ?? false;
 
     if (!worldId) {
       return () => {};
     }
+
+    // The open lore's note ids back the live editors. Notes are created
+    // with the lore; when they are missing (a slower create racing the
+    // open), a world GM backfills them while everyone else keeps waiting
+    // for the live rows below.
+    getWorldItemNoteIds("lore", loreId)
+      .then((ids) => {
+        if (ids.publicNoteId && ids.gmNoteId) {
+          return ids;
+        }
+        return ensureWorldItemNotes(worldId, "lore", loreId).catch(() => ids);
+      })
+      .then((ids) => {
+        set((store) => {
+          const entry =
+            store.worlds.currentWorld.currentWorldLore.loreMap[loreId];
+          if (entry) {
+            entry.publicNoteId = ids.publicNoteId;
+            entry.gmNoteId = ids.gmNoteId;
+          }
+        });
+      })
+      .catch(() => {});
+
     const notesUnsubscribe = listenToLoreNotes(
       worldId,
       loreId,
@@ -187,37 +211,28 @@ export const createLoreSlice: CreateSliceType<LoreSlice> = (set, getState) => ({
       }
     );
 
-    let gmPropertiesUnsubscribe: Unsubscribe;
-    if (isWorldOwner) {
-      gmPropertiesUnsubscribe = listenToLoreGMProperties(
-        worldId,
-        loreId,
-        (properties) => {
-          set((store) => {
-            if (store.worlds.currentWorld.currentWorldLore.loreMap[loreId]) {
-              store.worlds.currentWorld.currentWorldLore.loreMap[
-                loreId
-              ].gmProperties = properties ?? null;
-            }
-          });
-        },
-        (error) => {
-          console.error(error);
-        }
-      );
-    } else {
-      set((store) => {
-        if (store.worlds.currentWorld.currentWorldLore.loreMap[loreId]) {
-          store.worlds.currentWorld.currentWorldLore.loreMap[
-            loreId
-          ].gmProperties = null;
-        }
-      });
-    }
+    // GM rows are always subscribed: the database filters them, so players
+    // simply receive nothing and the lore keeps null GM properties.
+    const gmPropertiesUnsubscribe = listenToLoreGMProperties(
+      worldId,
+      loreId,
+      (properties) => {
+        set((store) => {
+          if (store.worlds.currentWorld.currentWorldLore.loreMap[loreId]) {
+            store.worlds.currentWorld.currentWorldLore.loreMap[
+              loreId
+            ].gmProperties = properties ?? null;
+          }
+        });
+      },
+      (error) => {
+        console.error(error);
+      }
+    );
 
     return () => {
       notesUnsubscribe();
-      gmPropertiesUnsubscribe && gmPropertiesUnsubscribe();
+      gmPropertiesUnsubscribe();
     };
   },
   resetStore: () => {
