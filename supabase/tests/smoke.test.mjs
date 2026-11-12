@@ -31,6 +31,8 @@ describe("smoke test", () => {
     for (const endpoint of ["auth/v1/health", "rest/v1/", "storage/v1/", "functions/v1/"]) {
       assert.ok(text.includes(endpoint), `no check for ${endpoint}`);
     }
+    // The gateway's OpenAPI route only admits the service key.
+    assert.ok(text.includes("SERVICE_ROLE_KEY"), "rest probe does not use the service key");
     assert.ok(/realtime.*health|health.*realtime/i.test(text), "no realtime health check");
     assert.ok(/migrate/.test(text), "no migration check");
     assert.ok(/trap|CLEANUP/.test(text), "no cleanup handling");

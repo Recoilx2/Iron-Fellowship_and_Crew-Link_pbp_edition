@@ -37,10 +37,14 @@ IRON_PORT="$(get_var "$IRON_ENV" API_GW_HTTP_PORT)"
 STAR_PORT="$(get_var "$STAR_ENV" API_GW_HTTP_PORT)"
 IRON_ANON="$(get_var "$IRON_ENV" ANON_KEY)"
 STAR_ANON="$(get_var "$STAR_ENV" ANON_KEY)"
+IRON_SERVICE_ROLE="$(get_var "$IRON_ENV" SERVICE_ROLE_KEY)"
+STAR_SERVICE_ROLE="$(get_var "$STAR_ENV" SERVICE_ROLE_KEY)"
 IRON_SITE_PORT="$(get_var "$IRON_ENV" SITE_HTTP_PORT)"
 STAR_SITE_PORT="$(get_var "$STAR_ENV" SITE_HTTP_PORT)"
 [ -n "$IRON_PORT" ] && [ -n "$STAR_PORT" ] && [ -n "$IRON_ANON" ] && [ -n "$STAR_ANON" ] \
   || { echo "smoke: API_GW_HTTP_PORT and ANON_KEY must be set in both env files" >&2; exit 1; }
+[ -n "$IRON_SERVICE_ROLE" ] && [ -n "$STAR_SERVICE_ROLE" ] \
+  || { echo "smoke: SERVICE_ROLE_KEY must be set in both env files" >&2; exit 1; }
 [ "$IRON_PORT" != "$STAR_PORT" ] || { echo "smoke: both copies use port $IRON_PORT" >&2; exit 1; }
 [ -n "$IRON_SITE_PORT" ] && [ -n "$STAR_SITE_PORT" ] \
   || { echo "smoke: SITE_HTTP_PORT must be set in both env files" >&2; exit 1; }
@@ -103,20 +107,22 @@ migrate_done() {
 }
 
 check_copy() {
-  # check_copy <project> <env-file> <port> <anon-key>
-  local project="$1" env_file="$2" port="$3" key="$4"
+  # check_copy <project> <env-file> <port> <anon-key> <service-key>
+  local project="$1" env_file="$2" port="$3" key="$4" service_key="$5"
   local gw="http://localhost:$port"
 
   wait_for "$project auth" -H "apikey: $key" "$gw/auth/v1/health"
-  wait_for "$project rest" -H "apikey: $key" "$gw/rest/v1/"
+  # The gateway's OpenAPI route only admits the service key; table reads
+  # below go through the anon key like a real client.
+  wait_for "$project rest" -H "apikey: $service_key" "$gw/rest/v1/"
   wait_for "$project storage" "$gw/storage/v1/status"
   poll_for "$project realtime" realtime_healthy "$project" "$env_file" "$key"
   poll_for "$project functions" functions_placeholder_ok "$gw" "$key"
   poll_for "$project migrations" migrate_done "$project" "$env_file"
 }
 
-check_copy ironsworn "$IRON_ENV" "$IRON_PORT" "$IRON_ANON"
-check_copy starforged "$STAR_ENV" "$STAR_PORT" "$STAR_ANON"
+check_copy ironsworn "$IRON_ENV" "$IRON_PORT" "$IRON_ANON" "$IRON_SERVICE_ROLE"
+check_copy starforged "$STAR_ENV" "$STAR_PORT" "$STAR_ANON" "$STAR_SERVICE_ROLE"
 
 check_site() {
   # check_site <project> <site-port> <expected-brand>: the copy's site
