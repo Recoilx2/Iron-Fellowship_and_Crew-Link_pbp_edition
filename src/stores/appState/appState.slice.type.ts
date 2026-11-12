@@ -15,8 +15,6 @@ export interface AppStateData {
   // Goes up with every announce() call, so a message that repeats the last one
   // still reaches the live regions and is read out again.
   screenReaderAnnouncementId: number;
-
-  betaTests: Record<string, boolean>;
 }
 
 export interface AppStateActions {
@@ -29,8 +27,6 @@ export interface AppStateActions {
   clearRolls: () => void;
 
   announce: (announcement: string) => void;
-
-  updateBetaTests: (newValues: Record<string, boolean>) => void;
 }
 
 export type AppStateSlice = AppStateData & AppStateActions;

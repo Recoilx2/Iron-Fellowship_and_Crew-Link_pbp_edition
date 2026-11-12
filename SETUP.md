@@ -151,15 +151,6 @@ how much mail one address can be sent. Enabling Firebase App Check on both
 callables is the durable fix, and is worth doing before this carries real
 traffic.
 
-## Posthog Setup (OPTIONAL)
-
-Posthog gives us some light analytics (page views), and the ability to gate new features behind feature flags. If you need to set up posthog you can create a new project and then add the following to your `.env.local` file
-
-```
-VITE_POSTHOG_KEY=
-VITE_POSTHOG_HOST=
-```
-
 ---
 
 With that, you should be all set up and ready to develop locally!

@@ -10,7 +10,6 @@ import { updateLoreGMProperties } from "api-calls/world/lore/updateLoreGMPropert
 import { updateLoreNotes } from "api-calls/world/lore/updateLoreNotes";
 import { uploadLoreImage } from "api-calls/world/lore/uploadLoreImage";
 import { listenToLoreNotes } from "api-calls/world/lore/listenToLoreNotes";
-import { reportApiError } from "lib/analytics.lib";
 import { Unsubscribe } from "firebase/firestore";
 import { listenToLoreGMProperties } from "api-calls/world/lore/listenToLoreGMProperties";
 import { removeLoreImage } from "api-calls/world/lore/removeLoreImage";
@@ -185,7 +184,6 @@ export const createLoreSlice: CreateSliceType<LoreSlice> = (set, getState) => ({
       },
       (error) => {
         console.error(error);
-        reportApiError(error);
       }
     );
 
@@ -205,7 +203,6 @@ export const createLoreSlice: CreateSliceType<LoreSlice> = (set, getState) => ({
         },
         (error) => {
           console.error(error);
-          reportApiError(error);
         }
       );
     } else {

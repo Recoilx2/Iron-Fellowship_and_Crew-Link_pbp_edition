@@ -4,7 +4,6 @@ import { defaultAuthSlice } from "./auth.slice.default";
 import { onAuthStateChanged } from "firebase/auth";
 import { firebaseAuth } from "config/firebase.config";
 import { UserDocument } from "api-calls/user/_user.type";
-import { clearAnalyticsUser, setAnalyticsUser } from "lib/analytics.lib";
 import { updateUserDoc } from "api-calls/user/updateUserDoc";
 import { listenToUserDoc } from "api-calls/user/listenToUserDoc";
 import { updateUserDocNestedFields } from "api-calls/user/updateUserDocNestedFields";
@@ -30,7 +29,6 @@ export const createAuthSlice: CreateSliceType<AuthSlice> = (set, getState) => ({
               userDoc.photoURL = user.photoURL;
             }
 
-            setAnalyticsUser(user);
             updateUserDoc({ uid: user.uid, user: userDoc }).catch((e) => {
               console.error(e);
             });
@@ -39,7 +37,6 @@ export const createAuthSlice: CreateSliceType<AuthSlice> = (set, getState) => ({
             state.auth.uid = user?.uid;
             state.auth.status = AUTH_STATE.AUTHENTICATED;
           } else {
-            clearAnalyticsUser();
             state.auth.user = undefined;
             state.auth.uid = "";
             state.auth.status = AUTH_STATE.UNAUTHENTICATED;
@@ -49,7 +46,6 @@ export const createAuthSlice: CreateSliceType<AuthSlice> = (set, getState) => ({
       (error) => {
         console.error(error);
         set((state) => {
-          clearAnalyticsUser();
           state.auth.user = undefined;
           state.auth.uid = "";
           state.auth.status = AUTH_STATE.UNAUTHENTICATED;

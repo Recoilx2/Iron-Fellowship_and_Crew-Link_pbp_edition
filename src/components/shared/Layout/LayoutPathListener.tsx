@@ -1,5 +1,4 @@
 import { useContinueUrl } from "hooks/useContinueUrl";
-import { sendPageViewEvent } from "lib/analytics.lib";
 import { completeMagicLinkSignupIfPresent } from "lib/auth.lib";
 import { useSnackbar } from "providers/SnackbarProvider";
 import { useEffect, useRef } from "react";
@@ -34,10 +33,6 @@ export function LayoutPathListener() {
       navigateToContinueURL(basePaths[BASE_ROUTES.CHARACTER]);
     }
   }, [pathname, state, navigateToContinueURL, redirectWithContinueUrl]);
-
-  useEffect(() => {
-    sendPageViewEvent();
-  }, [pathname]);
 
   useEffect(() => {
     if (previousMagicLinkPathnameChecked.current !== pathname) {

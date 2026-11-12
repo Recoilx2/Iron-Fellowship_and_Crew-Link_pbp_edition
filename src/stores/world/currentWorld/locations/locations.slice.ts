@@ -10,7 +10,6 @@ import { updateLocationGMProperties } from "api-calls/world/locations/updateLoca
 import { updateLocationNotes } from "api-calls/world/locations/updateLocationNotes";
 import { uploadLocationImage } from "api-calls/world/locations/uploadLocationImage";
 import { listenToLocationNotes } from "api-calls/world/locations/listenToLocationNotes";
-import { reportApiError } from "lib/analytics.lib";
 import { Unsubscribe, arrayRemove, arrayUnion } from "firebase/firestore";
 import { listenToLocationGMProperties } from "api-calls/world/locations/listenToLocationGMProperties";
 import { updateLocationCharacterBond } from "api-calls/world/locations/updateLocationCharacterBond";
@@ -371,7 +370,6 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
       },
       (error) => {
         console.error(error);
-        reportApiError(error);
       }
     );
 
@@ -395,7 +393,6 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
         },
         (error) => {
           console.error(error);
-          reportApiError(error);
         }
       );
     } else {
