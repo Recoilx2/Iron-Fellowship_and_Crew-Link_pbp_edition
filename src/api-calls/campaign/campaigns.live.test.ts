@@ -291,7 +291,7 @@ describe.skipIf(!config)("campaigns end to end", () => {
       "campaign_settings",
       "campaign_rolls",
     ]) {
-      const reread = await player.client.from(table).select("id").limit(1);
+      const reread = await player.client.from(table).select("*").limit(1);
       expect(reread.error).toBeNull();
       expect(reread.data ?? []).toEqual([]);
     }
@@ -377,7 +377,7 @@ describe.skipIf(!config)("campaigns end to end", () => {
     ]) {
       const reread = await gm.client
         .from(table)
-        .select("id")
+        .select("*")
         .eq(table === "campaigns" ? "id" : "campaign_id", campaignId);
       expect(reread.error).toBeNull();
       expect(reread.data ?? []).toEqual([]);
