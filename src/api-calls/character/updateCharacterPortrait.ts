@@ -1,9 +1,9 @@
-import { updateDoc } from "firebase/firestore";
-import { replaceImage } from "api-calls/storage/replaceImage";
 import {
-  constructCharacterPortraitFolderPath,
-  getCharacterDoc,
-} from "./_getRef";
+  removePortraitFile,
+  uploadPortraitFile,
+} from "api-calls/character/portraitStorage";
+import { updateCharacter } from "./updateCharacter";
+import { getCharacterForExport } from "./getCharacterForExport";
 import { createApiFunction } from "api-calls/createApiFunction";
 
 export const updateCharacterPortrait = createApiFunction<
@@ -16,49 +16,31 @@ export const updateCharacterPortrait = createApiFunction<
     position: { x: number; y: number };
   },
   void
->((params) => {
+>(async (params) => {
   const { uid, characterId, oldPortraitFilename, portrait, scale, position } =
     params;
 
-  return new Promise((resolve, reject) => {
-    let replaceImagePromise: Promise<void> | undefined;
-
-    if (portrait) {
-      replaceImagePromise = replaceImage(
-        constructCharacterPortraitFolderPath(uid, characterId),
-        oldPortraitFilename,
-        portrait
+  if (portrait) {
+    const filename = await uploadPortraitFile(uid, characterId, portrait);
+    await updateCharacter({
+      characterId,
+      character: { profileImage: { filename, position, scale } },
+    });
+    if (oldPortraitFilename && oldPortraitFilename !== filename) {
+      await removePortraitFile(uid, characterId, oldPortraitFilename).catch(
+        (e) => console.error(e)
       );
-    } else {
-      replaceImagePromise = Promise.resolve();
     }
+    return;
+  }
 
-    replaceImagePromise
-      .then(() => {
-        updateDoc(
-          getCharacterDoc(characterId),
-          portrait
-            ? {
-                profileImage: {
-                  filename: portrait.name,
-                  position,
-                  scale,
-                },
-              }
-            : {
-                "profileImage.position": position,
-                "profileImage.scale": scale,
-              }
-        )
-          .then(() => {
-            resolve();
-          })
-          .catch((e) => {
-            reject(e);
-          });
-      })
-      .catch((e) => {
-        reject(e);
-      });
+  const existing = await getCharacterForExport(characterId);
+  const filename = existing?.data.profileImage?.filename;
+  if (!filename) {
+    throw new Error("No portrait to reposition");
+  }
+  await updateCharacter({
+    characterId,
+    character: { profileImage: { filename, position, scale } },
   });
 }, "Failed to update character portrait");

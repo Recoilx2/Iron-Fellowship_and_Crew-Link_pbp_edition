@@ -1,5 +1,11 @@
 import { arrayRemove, arrayUnion, setDoc } from "firebase/firestore";
-import { getCampaignSettingsDoc, getCharacterSettingsDoc } from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
+import {
+  getCampaignSettingsDoc,
+  CHARACTER_SETTINGS_TABLE,
+  characterSettingsRowToDocument,
+  type CharacterSettingsRow,
+} from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
 
 export const showOrHideCustomOracle = createApiFunction<
@@ -10,29 +16,45 @@ export const showOrHideCustomOracle = createApiFunction<
     hidden: boolean;
   },
   void
->((params) => {
+>(async (params) => {
   const { campaignId, characterId, oracleId, hidden } = params;
 
-  return new Promise((resolve, reject) => {
-    if (!campaignId && !characterId) {
-      reject(new Error("Either character or campaign ID must be defined."));
-      return;
-    }
+  if (!campaignId && !characterId) {
+    throw new Error("Either campaign or character ID must be defined.");
+  }
 
-    setDoc(
-      campaignId
-        ? getCampaignSettingsDoc(campaignId)
-        : getCharacterSettingsDoc(characterId as string),
-      {
-        hiddenCustomOraclesIds: hidden
-          ? arrayUnion(oracleId)
-          : arrayRemove(oracleId),
-      },
-      { merge: true }
-    )
-      .then(() => resolve())
-      .catch((e) => {
-        reject(e);
-      });
-  });
+  // Campaign settings stay on Firebase until the campaigns ticket ports them.
+  if (campaignId) {
+    await setDoc(getCampaignSettingsDoc(campaignId as string), {
+      hiddenCustomOraclesIds: hidden
+        ? arrayUnion(oracleId)
+        : arrayRemove(oracleId),
+    }, { merge: true });
+    return;
+  }
+  if (!characterId) {
+    throw new Error("Either campaign or character ID must be defined.");
+  }
+  const client = getSupabaseClient();
+  const { data, error: fetchError } = await client
+    .from(CHARACTER_SETTINGS_TABLE)
+    .select("*")
+    .eq("character_id", characterId)
+    .single();
+  if (fetchError && fetchError.code !== "PGRST116") {
+    throw fetchError;
+  }
+  const current = characterSettingsRowToDocument(
+    (data ?? null) as unknown as CharacterSettingsRow | null
+  );
+  const next = hidden
+    ? Array.from(new Set([...current.hiddenCustomOraclesIds, oracleId]))
+    : current.hiddenCustomOraclesIds.filter((entry) => entry !== oracleId);
+  const { error } = await client.from(CHARACTER_SETTINGS_TABLE).upsert(
+    { character_id: characterId, hidden_custom_oracle_ids: next },
+    { onConflict: "character_id" }
+  );
+  if (error) {
+    throw error;
+  }
 }, "Failed to update visibility of custom oracle.");

@@ -1,5 +1,9 @@
 import { deleteDoc } from "firebase/firestore";
-import { getCampaignTracksDoc, getCharacterTracksDoc } from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
+import {
+  getCampaignTracksDoc,
+  CHARACTER_TRACKS_TABLE,
+} from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
 
 export const removeProgressTrack = createApiFunction<
@@ -9,25 +13,24 @@ export const removeProgressTrack = createApiFunction<
     id: string;
   },
   void
->((params) => {
+>(async (params) => {
   const { campaignId, characterId, id } = params;
 
-  return new Promise((resolve, reject) => {
-    if (!campaignId && !characterId) {
-      reject(new Error("Either campaign or character ID must be defined."));
-      return;
-    }
+  if (!campaignId && !characterId) {
+    throw new Error("Either campaign or character ID must be defined.");
+  }
 
-    deleteDoc(
-      campaignId
-        ? getCampaignTracksDoc(campaignId, id)
-        : getCharacterTracksDoc(characterId as string, id)
-    )
-      .then(() => {
-        resolve();
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
+  // Campaign tracks stay on Firebase until the campaigns ticket ports them.
+  if (campaignId) {
+    await deleteDoc(getCampaignTracksDoc(campaignId as string, id));
+    return;
+  }
+  const { data, error } = await getSupabaseClient()
+    .from(CHARACTER_TRACKS_TABLE)
+    .delete()
+    .eq("id", id)
+    .select("id");
+  if (error || !data || data.length === 0) {
+    throw error ?? new Error("Track not found");
+  }
 }, "Failed to remove progress track.");

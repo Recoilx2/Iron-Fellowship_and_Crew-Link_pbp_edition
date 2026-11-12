@@ -1,30 +1,50 @@
 import { createApiFunction } from "api-calls/createApiFunction";
 import { Timestamp, updateDoc } from "firebase/firestore";
+import { getSupabaseClient } from "config/supabase.config";
 import { Roll } from "types/DieRolls.type";
 import {
   getCampaignGameLogDocument,
-  getCharacterGameLogDocument,
+  CHARACTER_ROLLS_TABLE,
+  characterRollToColumns,
 } from "./_getRef";
 
 export const updateLog = createApiFunction<
   { campaignId?: string; characterId?: string; logId: string; log: Roll },
   void
->((params) => {
+>(async (params) => {
   const { campaignId, characterId, logId, log } = params;
 
-  return new Promise((resolve, reject) => {
-    if (!characterId && !campaignId) {
-      reject(new Error("Either campaign or character ID must be defined."));
-    }
+  if (!characterId && !campaignId) {
+    throw new Error("Either campaign or character ID must be defined.");
+  }
 
-    const docRef = campaignId
-      ? getCampaignGameLogDocument(campaignId, logId)
-      : getCharacterGameLogDocument(characterId as string, logId);
-
-    updateDoc(docRef, { ...log, timestamp: Timestamp.fromDate(log.timestamp) })
-      .then(() => {
-        resolve();
-      })
-      .catch(reject);
-  });
+  // Campaign rolls belong to the chat spec and stay on Firebase until then.
+  if (campaignId) {
+    await updateDoc(getCampaignGameLogDocument(campaignId as string, logId), {
+      ...log,
+      timestamp: Timestamp.fromDate(log.timestamp),
+    });
+    return;
+  }
+  if (!characterId) {
+    throw new Error("Either campaign or character ID must be defined.");
+  }
+  const client = getSupabaseClient();
+  const { data: existing, error: fetchError } = await client
+    .from(CHARACTER_ROLLS_TABLE)
+    .select("id")
+    .eq("id", logId)
+    .eq("character_id", characterId)
+    .single();
+  if (fetchError || !existing) {
+    throw fetchError ?? new Error("Roll not found");
+  }
+  const { data, error } = await client
+    .from(CHARACTER_ROLLS_TABLE)
+    .update(characterRollToColumns(characterId, log))
+    .eq("id", logId)
+    .select("id");
+  if (error || !data || data.length === 0) {
+    throw error ?? new Error("Roll not found");
+  }
 }, "Failed to update roll.");

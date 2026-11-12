@@ -1,9 +1,9 @@
 import { deleteDoc } from "firebase/firestore";
+import { getSupabaseClient } from "config/supabase.config";
 import {
   getCampaignNoteContentDocument,
   getCampaignNoteDocument,
-  getCharacterNoteContentDocument,
-  getCharacterNoteDocument,
+  CHARACTER_NOTES_TABLE,
 } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
 
@@ -14,31 +14,31 @@ export const removeNote = createApiFunction<
     noteId: string;
   },
   void
->((params) => {
+>(async (params) => {
   const { campaignId, characterId, noteId } = params;
 
-  return new Promise((resolve, reject) => {
-    if (!campaignId && !characterId) {
-      reject(new Error("Either character or campaign ID must be defined."));
-    }
-    const deleteNotePromise = deleteDoc(
-      characterId
-        ? getCharacterNoteDocument(characterId, noteId)
-        : getCampaignNoteDocument(campaignId as string, noteId)
-    );
+  if (!campaignId && !characterId) {
+    throw new Error("Either character or campaign ID must be defined.");
+  }
 
-    const deleteContentPromise = deleteDoc(
-      characterId
-        ? getCharacterNoteContentDocument(characterId, noteId)
-        : getCampaignNoteContentDocument(campaignId as string, noteId)
+  // Campaign notes stay on Firebase until the notes ticket ports them.
+  if (!characterId) {
+    await deleteDoc(
+      getCampaignNoteDocument(campaignId as string, noteId)
     );
-
-    Promise.all([deleteNotePromise, deleteContentPromise])
-      .then(() => {
-        resolve();
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
+    await deleteDoc(
+      getCampaignNoteContentDocument(campaignId as string, noteId)
+    );
+    return;
+  }
+  // The note content row follows through ON DELETE CASCADE.
+  const { data, error } = await getSupabaseClient()
+    .from(CHARACTER_NOTES_TABLE)
+    .delete()
+    .eq("id", noteId)
+    .eq("character_id", characterId)
+    .select("id");
+  if (error || !data || data.length === 0) {
+    throw error ?? new Error("Note not found");
+  }
 }, "Failed to remove note.");

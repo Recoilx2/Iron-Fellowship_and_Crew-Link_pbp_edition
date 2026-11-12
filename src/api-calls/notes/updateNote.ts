@@ -1,4 +1,5 @@
 import { Bytes, setDoc, updateDoc } from "firebase/firestore";
+import { getSupabaseClient } from "config/supabase.config";
 import {
   constructCampaignNoteContentPath,
   constructCampaignNoteDocPath,
@@ -8,30 +9,54 @@ import {
   getCampaignNoteDocument,
   getCharacterNoteContentDocument,
   getCharacterNoteDocument,
+  CHARACTER_NOTES_TABLE,
+  CHARACTER_NOTE_CONTENTS_TABLE,
 } from "./_getRef";
+import { encodeNoteContent } from "./noteContent";
 import { createApiFunction } from "api-calls/createApiFunction";
 import { projectId } from "config/firebase.config";
 
-export const updateNote = createApiFunction<
-  {
-    campaignId: string | undefined;
-    characterId: string | undefined;
-    noteId: string;
-    title: string;
-    content?: Uint8Array;
-    isBeaconRequest?: boolean;
-  },
-  void
->((params) => {
+async function updateSupabaseNote(
+  characterId: string,
+  noteId: string,
+  title: string,
+  content?: Uint8Array
+): Promise<void> {
+  const client = getSupabaseClient();
+  const { data: updated, error: titleError } = await client
+    .from(CHARACTER_NOTES_TABLE)
+    .update({ title })
+    .eq("id", noteId)
+    .eq("character_id", characterId)
+    .select("id");
+  if (titleError || !updated || updated.length === 0) {
+    throw titleError ?? new Error("Note not found");
+  }
+  if (content) {
+    const { error: contentError } = await client
+      .from(CHARACTER_NOTE_CONTENTS_TABLE)
+      .upsert(
+        { note_id: noteId, content: encodeNoteContent(content) },
+        { onConflict: "note_id" }
+      );
+    if (contentError) {
+      throw contentError;
+    }
+  }
+}
+
+function updateFirebaseNote(params: {
+  campaignId: string | undefined;
+  characterId: string | undefined;
+  noteId: string;
+  title: string;
+  content?: Uint8Array;
+  isBeaconRequest?: boolean;
+}): Promise<void> {
   const { campaignId, characterId, noteId, title, content, isBeaconRequest } =
     params;
 
   return new Promise((resolve, reject) => {
-    if (!campaignId && !characterId) {
-      reject(new Error("Either campaign or character ID must be defined."));
-      return;
-    }
-
     const noteContentPath = characterId
       ? constructCharacterNoteContentPath(characterId, noteId)
       : constructCampaignNoteContentPath(campaignId as string, noteId);
@@ -124,4 +149,37 @@ export const updateNote = createApiFunction<
         });
     }
   });
+}
+
+export const updateNote = createApiFunction<
+  {
+    campaignId: string | undefined;
+    characterId: string | undefined;
+    noteId: string;
+    title: string;
+    content?: Uint8Array;
+    isBeaconRequest?: boolean;
+  },
+  void
+>(async (params) => {
+  const { campaignId, characterId, noteId, title, content, isBeaconRequest } =
+    params;
+
+  if (!campaignId && !characterId) {
+    throw new Error("Either campaign or character ID must be defined.");
+  }
+
+  // Campaign notes stay on Firebase until the notes ticket ports them.
+  if (!characterId) {
+    return updateFirebaseNote(params);
+  }
+  if (isBeaconRequest) {
+    // Best effort: the normal save fires without blocking page unload.
+    // Server-saved shared editing (notes ticket) removes the need for this.
+    void updateSupabaseNote(characterId, noteId, title, content).catch((e) =>
+      console.error(e)
+    );
+    return;
+  }
+  await updateSupabaseNote(characterId, noteId, title, content);
 }, "Failed to update note.");

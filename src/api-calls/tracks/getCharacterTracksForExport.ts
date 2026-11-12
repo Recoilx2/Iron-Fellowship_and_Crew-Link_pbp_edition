@@ -1,5 +1,9 @@
-import { getDocs } from "firebase/firestore";
-import { getCharacterTracksCollection } from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
+import {
+  CHARACTER_TRACKS_TABLE,
+  characterTrackRowToTrack,
+  type CharacterTrackRow,
+} from "./_getRef";
 
 export interface CharacterTrackExportRecord {
   id: string;
@@ -15,14 +19,21 @@ export interface CharacterTrackExportRecord {
 export async function getCharacterTracksForExport(
   characterId: string
 ): Promise<CharacterTrackExportRecord[]> {
-  const snapshot = await getDocs(getCharacterTracksCollection(characterId));
-  return snapshot.docs.map((docSnapshot) => {
-    const { createdTimestamp, ...rest } = docSnapshot.data();
-    const createdDate = createdTimestamp?.toDate() ?? undefined;
+  const { data, error } = await getSupabaseClient()
+    .from(CHARACTER_TRACKS_TABLE)
+    .select("*")
+    .eq("character_id", characterId);
+  if (error) {
+    throw error;
+  }
+  return ((data ?? []) as unknown as CharacterTrackRow[]).map((row) => {
+    const { createdDate, ...rest } = characterTrackRowToTrack(row) as unknown as Record<string, unknown> & {
+      createdDate?: Date;
+    };
     return {
-      id: docSnapshot.id,
+      id: row.id,
       data: { ...rest },
-      ...(createdDate ? { createdDate } : {}),
+      ...(createdDate instanceof Date ? { createdDate } : {}),
     };
   });
 }

@@ -1,9 +1,31 @@
 import { addDoc } from "firebase/firestore";
+import { getSupabaseClient } from "config/supabase.config";
 import {
   getCampaignNoteCollection,
-  getCharacterNoteCollection,
+  CHARACTER_NOTES_TABLE,
 } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
+
+async function addSupabaseNote(
+  characterId: string,
+  order: number,
+  shared?: boolean
+): Promise<string> {
+  const { data, error } = await getSupabaseClient()
+    .from(CHARACTER_NOTES_TABLE)
+    .insert({
+      character_id: characterId,
+      sort_order: order,
+      title: "New Page",
+      shared: shared ?? false,
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    throw error ?? new Error("Failed to add note.");
+  }
+  return (data as { id: string }).id;
+}
 
 export const addNote = createApiFunction<
   {
@@ -13,30 +35,21 @@ export const addNote = createApiFunction<
     shared?: boolean;
   },
   string
->((params) => {
+>(async (params) => {
   const { campaignId, characterId, order, shared } = params;
 
-  return new Promise((resolve, reject) => {
-    if (!campaignId && !characterId) {
-      reject(new Error("Either character or campaign ID must be defined"));
-      return;
-    }
+  if (!campaignId && !characterId) {
+    throw new Error("Either character or campaign ID must be defined");
+  }
 
-    addDoc(
-      characterId
-        ? getCharacterNoteCollection(characterId)
-        : getCampaignNoteCollection(campaignId as string),
-      {
-        order,
-        title: "New Page",
-        shared: shared ?? false,
-      }
-    )
-      .then((doc) => {
-        resolve(doc.id);
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
+  // Campaign notes stay on Firebase until the notes ticket ports them.
+  if (!characterId) {
+    const doc = await addDoc(getCampaignNoteCollection(campaignId as string), {
+      order,
+      title: "New Page",
+      shared: shared ?? false,
+    });
+    return doc.id;
+  }
+  return addSupabaseNote(characterId, order, shared);
 }, "Failed to add note.");
