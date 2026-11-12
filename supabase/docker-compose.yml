@@ -238,6 +238,35 @@ services:
       TENANT_MAX_EVENTS_PER_SECOND: ${TENANT_MAX_EVENTS_PER_SECOND:-100}
       TENANT_MAX_JOINS_PER_SECOND: ${TENANT_MAX_JOINS_PER_SECOND:-100}
 
+  # Authorizes private realtime channels. The realtime.messages table (and
+  # its RLS) is created by the realtime tenant setup at boot, so channel
+  # policies cannot run in the migrate service, which finishes before
+  # realtime starts: this one-shot applies supabase/realtime-auth/*.sql once
+  # realtime is healthy, tracking what ran in supabase_migrations.applied
+  # (same table as migrate) so restarts and upgrades are safe to repeat.
+  realtime-auth:
+    image: supabase/postgres:17.6.1.136
+    restart: "no"
+    depends_on:
+      db:
+        # Disable this if you are using an external Postgres database
+        condition: service_healthy
+      realtime:
+        condition: service_healthy
+    volumes:
+      - ./migrate/apply.sh:/migrate/apply.sh:ro
+      - ./realtime-auth:/realtime-auth:ro
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      MIGRATIONS_DIR: /realtime-auth
+    command:
+      - /bin/sh
+      - /realtime-auth/apply.sh
+
   # File storage. Uses the local filesystem by default (STORAGE_BACKEND: file).
   # Image resizing stays off: imgproxy is dropped, so files are served as uploaded.
   storage:
