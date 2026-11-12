@@ -1,7 +1,7 @@
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import StarterKit from "@tiptap/starter-kit";
-import { User } from "firebase/auth";
+import { AppUser } from "api-calls/auth/appUser";
 import { getHueFromString, hslToHex } from "functions/getHueFromString";
 import { WebrtcProvider } from "y-webrtc";
 import * as Y from "yjs";
@@ -16,7 +16,7 @@ const CustomDocument = Document.extend({
 export const rtcExtensions = (params: {
   doc?: Y.Doc;
   provider?: WebrtcProvider;
-  user?: User;
+  user?: AppUser;
   withHeading?: boolean;
 }) => {
   const extensions: Extensions = [

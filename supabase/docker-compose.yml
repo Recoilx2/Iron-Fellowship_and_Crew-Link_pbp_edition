@@ -335,6 +335,21 @@ services:
         "/home/deno/functions/main"
       ]
 
+  # Site: serves the built site for this copy's game system. Built from the
+  # repo with the copy's GAME_SYSTEM (branding and theme baked in) and the
+  # gateway URL and anon key the browser uses. One copy serves one system.
+  site:
+    build:
+      context: ..
+      dockerfile: supabase/site/Dockerfile
+      args:
+        GAME_SYSTEM: ${GAME_SYSTEM}
+        VITE_SUPABASE_URL: ${SUPABASE_PUBLIC_URL}
+        VITE_SUPABASE_ANON_KEY: ${ANON_KEY}
+    restart: unless-stopped
+    ports:
+      - ${SITE_HTTP_PORT:-8080}:80/tcp
+
   # Comment out everything below this point if you are using an external Postgres database
   db:
     # To upgrade an existing Postgres 15 database in place, see utils/upgrade-pg17.sh.

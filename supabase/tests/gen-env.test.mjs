@@ -74,4 +74,13 @@ describe("bin/gen-env.py", () => {
     assert.equal(star.API_EXTERNAL_URL, "http://localhost:8001/auth/v1");
     assert.equal(iron.ENV_FILE, basename(iron.__out));
   });
+
+  it("serves each copy's site for its own game system", () => {
+    assert.equal(iron.GAME_SYSTEM, "ironsworn");
+    assert.equal(star.GAME_SYSTEM, "starforged");
+    assert.equal(iron.SITE_HTTP_PORT, "8080");
+    assert.equal(star.SITE_HTTP_PORT, "8081");
+    assert.equal(iron.SITE_URL, "http://localhost:8080");
+    assert.equal(star.SITE_URL, "http://localhost:8081");
+  });
 });

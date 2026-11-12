@@ -30,7 +30,17 @@ const firebaseConfigs: GameSystemChooser<FirebaseOptions> = {
 
 export const projectId = firebaseConfigs[gameSystem].projectId;
 
-export const firebaseApp = initializeApp(firebaseConfigs[gameSystem]);
+const firebaseOptions: FirebaseOptions = {
+  ...firebaseConfigs[gameSystem],
+  // Spec #11 moves the app off Firebase: sign-in already runs on Supabase
+  // and the data areas follow in later tickets. Until then the app must boot
+  // without Firebase credentials (the site container ships none, and fresh
+  // checkouts have no .env.local), so an unconfigured project gets a
+  // placeholder key. Firebase calls fail only if actually reached.
+  apiKey: firebaseConfigs[gameSystem].apiKey || "unconfigured",
+};
+
+export const firebaseApp = initializeApp(firebaseOptions);
 
 export const firebaseAuth = getAuth(firebaseApp);
 

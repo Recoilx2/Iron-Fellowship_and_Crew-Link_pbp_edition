@@ -21,7 +21,35 @@ const starforgedHostNames = [
 const DEV_HOSTNAME_START_IRONSWORN = "iron-fellowship-dev";
 const DEV_HOSTNAME_START_STARFORGED = "crew-link-dev";
 
+function getConfiguredGameSystem(): GAME_SYSTEMS | undefined {
+  const configured = import.meta.env.VITE_GAME_SYSTEM;
+  if (
+    configured === GAME_SYSTEMS.IRONSWORN ||
+    configured === GAME_SYSTEMS.STARFORGED
+  ) {
+    return configured;
+  }
+  return undefined;
+}
+
+/**
+ * Whether the site container baked a game system in at build time. When set,
+ * configuration wins and the hostname-based choice (plus the local-storage
+ * override) is disabled.
+ */
+export function getIsGameSystemConfigured() {
+  return getConfiguredGameSystem() !== undefined;
+}
+
 export function getGameSystem() {
+  // One deployment runs one game system: the site container is built for it
+  // (see supabase/site/). Hostnames only decide in local development, where
+  // no system is configured.
+  const configured = getConfiguredGameSystem();
+  if (configured) {
+    return configured;
+  }
+
   let system: GAME_SYSTEMS = GAME_SYSTEMS.IRONSWORN;
   if (ironswornHostNames.includes(location.hostname)) {
     system = GAME_SYSTEMS.IRONSWORN;

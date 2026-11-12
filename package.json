@@ -36,6 +36,7 @@
     "@mui/icons-material": "^5.15.18",
     "@mui/lab": "^5.0.0-alpha.150",
     "@mui/material": "^5.15.18",
+    "@supabase/supabase-js": "^2.119.0",
     "@tiptap/extension-collaboration": "^2.4.0",
     "@tiptap/extension-collaboration-cursor": "^2.4.0",
     "@tiptap/extension-link": "^2.4.0",

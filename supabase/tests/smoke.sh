@@ -37,9 +37,14 @@ IRON_PORT="$(get_var "$IRON_ENV" API_GW_HTTP_PORT)"
 STAR_PORT="$(get_var "$STAR_ENV" API_GW_HTTP_PORT)"
 IRON_ANON="$(get_var "$IRON_ENV" ANON_KEY)"
 STAR_ANON="$(get_var "$STAR_ENV" ANON_KEY)"
+IRON_SITE_PORT="$(get_var "$IRON_ENV" SITE_HTTP_PORT)"
+STAR_SITE_PORT="$(get_var "$STAR_ENV" SITE_HTTP_PORT)"
 [ -n "$IRON_PORT" ] && [ -n "$STAR_PORT" ] && [ -n "$IRON_ANON" ] && [ -n "$STAR_ANON" ] \
   || { echo "smoke: API_GW_HTTP_PORT and ANON_KEY must be set in both env files" >&2; exit 1; }
 [ "$IRON_PORT" != "$STAR_PORT" ] || { echo "smoke: both copies use port $IRON_PORT" >&2; exit 1; }
+[ -n "$IRON_SITE_PORT" ] && [ -n "$STAR_SITE_PORT" ] \
+  || { echo "smoke: SITE_HTTP_PORT must be set in both env files" >&2; exit 1; }
+[ "$IRON_SITE_PORT" != "$STAR_SITE_PORT" ] || { echo "smoke: both copies use site port $IRON_SITE_PORT" >&2; exit 1; }
 [ "$IRON_ANON" != "$STAR_ANON" ] || { echo "smoke: both copies share one ANON_KEY" >&2; exit 1; }
 
 cleanup() {
@@ -112,6 +117,20 @@ check_copy() {
 
 check_copy ironsworn "$IRON_ENV" "$IRON_PORT" "$IRON_ANON"
 check_copy starforged "$STAR_ENV" "$STAR_PORT" "$STAR_ANON"
+
+check_site() {
+  # check_site <project> <site-port> <expected-brand>: the copy's site
+  # serves the built site carrying its own game system's branding.
+  local project="$1" port="$2" title="$3"
+
+  wait_for "$project site" "http://localhost:$port/"
+  curl -sf "http://localhost:$port/" | grep -q "$title" \
+    || { echo "smoke: $project site does not serve $title branding" >&2; return 1; }
+  echo "smoke: $project site serves $title"
+}
+
+check_site ironsworn "$IRON_SITE_PORT" "Iron Fellowship"
+check_site starforged "$STAR_SITE_PORT" "Crew Link"
 
 # The two copies must live on separate Docker networks (per-project networks).
 for project in ironsworn starforged; do

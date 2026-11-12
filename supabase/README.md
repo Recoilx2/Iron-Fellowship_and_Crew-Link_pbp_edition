@@ -18,11 +18,12 @@ dev workflow, see `SETUP.md` at the repo root; this file is for operators.
 | `bin/gen-env.py` | Generates a filled per-copy env file: random passwords/keys, HS256 API keys, per-copy ports. Needs only Python 3 stdlib. |
 | `envoy/` | Gateway config: static bootstrap, cluster table, and the route template rendered at boot. Studio/MCP/postgres-meta routes are removed (those services are dropped). |
 | `db-init/` | First-boot database setup (roles, realtime schema, webhooks), vendored from upstream. Runs once per fresh volume. |
-| `migrations/` | Your schema migrations; applied automatically on every start (see below). Empty until the schema tickets land. |
+| `migrations/` | Your schema migrations; applied automatically on every start (see below). First schema: `profiles` (display names, owner-only access rules). |
 | `migrate/apply.sh` | Applies `migrations/*.sql` in order, exactly once each. |
+| `site/` | The site container: builds the site for the copy's `GAME_SYSTEM` (branding and theme baked in) and serves it. |
 | `functions/` | Server functions for the Edge Runtime. Placeholder 404 until later tickets add real functions. |
 | `studio.docker-compose.yml` | Optional add-on: the admin dashboard + its metadata service, started temporarily (see Admin). |
-| `tests/smoke.sh` | Starts both copies side by side and checks every gateway. Also runs in CI on every pull request. |
+| `tests/smoke.sh` | Starts both copies side by side and checks every gateway plus both sites (each serving its own system's branding). Also runs in CI on every pull request. |
 
 ## Start and stop
 
@@ -41,14 +42,19 @@ ENV_FILE=.env.starforged docker compose -p starforged --env-file .env.starforged
 ```
 
 Check: `docker compose -p ironsworn ps`, gateway at `http://localhost:8000`
-(Ironsworn) and `http://localhost:8001` (Starforged). Stop one copy:
+(Ironsworn) and `http://localhost:8001` (Starforged), site at
+`http://localhost:8080` (Ironsworn) and `http://localhost:8081`
+(Starforged). Stop one copy:
 `ENV_FILE=.env.ironsworn docker compose -p ironsworn down` (volumes stay, so
-data survives restarts and upgrades).
+data survives restarts and upgrades). The site image bakes in its game system
+and branding, so after pulling site changes rebuild it:
+`docker compose -p ironsworn --env-file .env.ironsworn build site`.
 
 Mail server settings (`SMTP_*`), the site URL players return to (`SITE_URL`)
 and the gateway's public URL live in the same env file; magic links are
 constructed from `API_EXTERNAL_URL`, which must be reachable by players'
-browsers.
+browsers. To sign in from a local dev server (`npm run dev`), add its origin
+to `ADDITIONAL_REDIRECT_URLS` (e.g. `http://localhost:5173`) and restart.
 
 ## Secrets
 

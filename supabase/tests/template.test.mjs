@@ -27,6 +27,10 @@ describe("supabase compose template", () => {
       "studio.docker-compose.yml",
       "migrate/apply.sh",
       "migrations/README.md",
+      "site/Dockerfile",
+      "site/nginx.conf",
+      "site/game-ironsworn.env",
+      "site/game-starforged.env",
     ]) {
       assert.ok(exists(f), `missing ${f}`);
     }
@@ -40,7 +44,7 @@ describe("supabase compose template", () => {
 
   it("keeps exactly the trimmed service set", () => {
     const text = compose();
-    for (const s of ["db", "auth", "rest", "realtime", "storage", "api-gw", "functions", "migrate"]) {
+    for (const s of ["db", "auth", "rest", "realtime", "storage", "api-gw", "functions", "migrate", "site"]) {
       serviceBlock(text, s);
     }
     for (const s of ["studio", "meta", "imgproxy", "supavisor", "analytics", "vector", "pooler", "kong"]) {

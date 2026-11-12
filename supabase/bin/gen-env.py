@@ -23,6 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 EXAMPLE = os.path.join(os.path.dirname(HERE), ".env.example")
 
 COPY_PORTS = {"ironsworn": "8000", "starforged": "8001"}
+SITE_PORTS = {"ironsworn": "8080", "starforged": "8081"}
 
 
 def b64url(raw: bytes) -> str:
@@ -62,10 +63,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Generate a per-copy Supabase env file.")
     parser.add_argument("--copy", required=True, help="Copy name, e.g. ironsworn or starforged.")
     parser.add_argument("--port", help="Gateway host port (defaults: 8000/8001 for the two game systems).")
+    parser.add_argument("--site-port", help="Site host port (defaults: 8080/8081 for the two game systems).")
     parser.add_argument("--out", help="Output path (default: .env.<copy> next to .env.example).")
     args = parser.parse_args()
 
     port = args.port or COPY_PORTS.get(args.copy, "8000")
+    site_port = args.site_port or SITE_PORTS.get(args.copy, "8080")
     out = args.out or os.path.join(os.path.dirname(EXAMPLE), f".env.{args.copy}")
 
     lines = open(EXAMPLE).read().splitlines(keepends=False)
@@ -73,9 +76,12 @@ def main() -> int:
     values.update(
         {
             "ENV_FILE": os.path.basename(out),
+            "GAME_SYSTEM": args.copy,
             "API_GW_HTTP_PORT": port,
             "SUPABASE_PUBLIC_URL": f"http://localhost:{port}",
             "API_EXTERNAL_URL": f"http://localhost:{port}/auth/v1",
+            "SITE_HTTP_PORT": site_port,
+            "SITE_URL": f"http://localhost:{site_port}",
         }
     )
 

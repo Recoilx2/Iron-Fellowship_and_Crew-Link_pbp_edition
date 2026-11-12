@@ -1,5 +1,5 @@
 import { Layout } from "components/shared/Layout";
-import { getUser } from "lib/auth.lib";
+import { getUser } from "api-calls/auth/getUser";
 import { BASE_ROUTES, basePaths } from "routes";
 
 import {
@@ -114,28 +114,18 @@ const router = createBrowserRouter(
         {/* Unauthenticated Pages */}
         <Route>
           {/*
-            Emailed one-time codes are the primary sign-in flow. The magic
-            email link flow is kept as a backup under /auth, and is where
-            outstanding magic links are configured to land (see
-            sendMagicEmailLink in lib/auth.lib.ts).
+            Magic email links are the sign-in flow, sent through the
+            deployment's mail server (see supabase/.env.example SMTP_*).
+            The link returns to this site, where the session is picked up
+            automatically; it must be opened in the same browser.
           */}
-          <Route path={basePaths[BASE_ROUTES.AUTH]}>
-            <Route
-              path={"login"}
-              lazy={() => import("pages/Authentication/LoginPage")}
-            />
-            <Route
-              path={"signup"}
-              lazy={() => import("pages/Authentication/SignupPage")}
-            />
-          </Route>
           <Route
             path={basePaths[BASE_ROUTES.LOGIN]}
-            lazy={() => import("pages/Authentication/OtpAuthPage")}
+            lazy={() => import("pages/Authentication/LoginPage")}
           />
           <Route
             path={basePaths[BASE_ROUTES.SIGNUP]}
-            lazy={() => import("pages/Authentication/OtpSignupPage")}
+            lazy={() => import("pages/Authentication/SignupPage")}
           />
         </Route>
       </Route>
