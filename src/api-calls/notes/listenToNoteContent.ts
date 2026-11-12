@@ -1,14 +1,17 @@
-import { onSnapshot, Unsubscribe } from "firebase/firestore";
 import { getSupabaseClient } from "config/supabase.config";
 import { Unsubscribe as PlainUnsubscribe } from "api-calls/helpers.type";
 import { listenToRows } from "api-calls/realtime/listenToRows";
 import {
-  getCampaignNoteContentDocument,
   CHARACTER_NOTE_CONTENTS_TABLE,
+  CAMPAIGN_NOTE_CONTENTS_TABLE,
   characterNoteContentPayloadToChange,
+  campaignNoteContentPayloadToChange,
   constructCharacterNoteContentChannelName,
   constructCharacterNoteContentFilter,
+  constructCampaignNoteContentChannelName,
+  constructCampaignNoteContentFilter,
   type CharacterNoteContentRow,
+  type CampaignNoteContentRow,
 } from "./_getRef";
 import { decodeNoteContent } from "./noteContent";
 
@@ -24,62 +27,71 @@ export function listenToNoteContent(
     onError("Either campaign or character ID is required.");
     return () => {};
   }
-  // Campaign notes stay on Firebase until the notes ticket ports them.
-  if (!characterId) {
-    const firebaseUnsubscribe: Unsubscribe = onSnapshot(
-      getCampaignNoteContentDocument(campaignId as string, noteId),
-      (snapshot) => {
-        const data = snapshot.data();
-        if (data?.notes) {
-          onContent(
-            (
-              data.notes as unknown as { toUint8Array(): Uint8Array }
-            ).toUint8Array()
-          );
-        } else {
-          onContent(undefined);
-        }
-      },
-      (error) => onError(error)
-    );
-    return firebaseUnsubscribe;
-  }
   const client = getSupabaseClient();
-  return listenToRows<CharacterNoteContentRow>({
+  const onRows = (rows: Array<{ content: string | null }>) => {
+    const row = rows[0];
+    if (row?.content) {
+      try {
+        onContent(decodeNoteContent(row.content));
+      } catch (error) {
+        onError(error);
+      }
+    } else {
+      onContent(undefined);
+    }
+  };
+  if (characterId) {
+    return listenToRows<CharacterNoteContentRow>({
+      client,
+      channelName: constructCharacterNoteContentChannelName(noteId),
+      bindings: [
+        {
+          type: "postgres_changes",
+          table: CHARACTER_NOTE_CONTENTS_TABLE,
+          filter: constructCharacterNoteContentFilter(noteId),
+          toChange: characterNoteContentPayloadToChange,
+        },
+      ],
+      fetchRows: async () => {
+        const { data, error } = await client
+          .from(CHARACTER_NOTE_CONTENTS_TABLE)
+          .select("*")
+          .eq("note_id", noteId);
+        if (error) {
+          throw error;
+        }
+        return (data ?? []) as unknown as CharacterNoteContentRow[];
+      },
+      getKey: (row) => row.note_id,
+      getUpdatedAt: (row) => row.updated_at,
+      onRows,
+      onError,
+    });
+  }
+  return listenToRows<CampaignNoteContentRow>({
     client,
-    channelName: constructCharacterNoteContentChannelName(noteId),
+    channelName: constructCampaignNoteContentChannelName(noteId),
     bindings: [
       {
         type: "postgres_changes",
-        table: CHARACTER_NOTE_CONTENTS_TABLE,
-        filter: constructCharacterNoteContentFilter(noteId),
-        toChange: characterNoteContentPayloadToChange,
+        table: CAMPAIGN_NOTE_CONTENTS_TABLE,
+        filter: constructCampaignNoteContentFilter(noteId),
+        toChange: campaignNoteContentPayloadToChange,
       },
     ],
     fetchRows: async () => {
       const { data, error } = await client
-        .from(CHARACTER_NOTE_CONTENTS_TABLE)
+        .from(CAMPAIGN_NOTE_CONTENTS_TABLE)
         .select("*")
         .eq("note_id", noteId);
       if (error) {
         throw error;
       }
-      return (data ?? []) as unknown as CharacterNoteContentRow[];
+      return (data ?? []) as unknown as CampaignNoteContentRow[];
     },
     getKey: (row) => row.note_id,
     getUpdatedAt: (row) => row.updated_at,
-    onRows: (rows) => {
-      const row = rows[0];
-      if (row?.content) {
-        try {
-          onContent(decodeNoteContent(row.content));
-        } catch (error) {
-          onError(error);
-        }
-      } else {
-        onContent(undefined);
-      }
-    },
+    onRows,
     onError,
   });
 }

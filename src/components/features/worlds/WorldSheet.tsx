@@ -59,8 +59,7 @@ export function WorldSheet(props: WorldSheetProps) {
           )}
           <RtcRichTextEditor
             id={worldId}
-            roomPrefix={`worlds-${worldId}-description-`}
-            documentPassword={worldId}
+            documentName={`worlds-${worldId}-description-${worldId}`}
             onSave={canEdit ? updateWorldDescriptionCallback : undefined}
             initialValue={world.worldDescription}
           />

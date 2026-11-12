@@ -389,8 +389,7 @@ export function OpenLocation(props: OpenLocationProps) {
                     <Grid item xs={12}>
                       <RtcRichTextEditor
                         id={locationId}
-                        roomPrefix={`iron-fellowship-${worldId}-location-gmnotes-`}
-                        documentPassword={worldId}
+                        documentName={`iron-fellowship-${worldId}-location-gmnotes-${locationId}`}
                         onSave={updateLocationGMNotes}
                         initialValue={location.gmProperties?.gmNotes}
                       />
@@ -433,8 +432,7 @@ export function OpenLocation(props: OpenLocationProps) {
                       {(location.notes || location.notes === null) && (
                         <RtcRichTextEditor
                           id={locationId}
-                          roomPrefix={`iron-fellowship-${worldId}-location-`}
-                          documentPassword={worldId}
+                          documentName={`iron-fellowship-${worldId}-location-${locationId}`}
                           onSave={updateLocationNotes}
                           initialValue={location.notes || undefined}
                         />

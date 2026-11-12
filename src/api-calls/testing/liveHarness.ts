@@ -97,6 +97,25 @@ export function randomCampaignId(): string {
 }
 
 /**
+ * Websocket URL of the stack copy's note server, through its gateway.
+ */
+export function hocuspocusUrl(config: LiveStackConfig): string {
+  return config.url.replace(/\/+$/, "").replace(/^http/, "ws") + "/hocuspocus";
+}
+
+/**
+ * The person's current access token for the note server.
+ */
+export async function personToken(person: LivePerson): Promise<string> {
+  const { data } = await person.client.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) {
+    throw new Error(`no session for ${person.tag}`);
+  }
+  return token;
+}
+
+/**
  * Creates the campaign row a test roster hangs off. Rosters and character
  * links reference campaigns with foreign keys, so tests insert the row
  * with the service key before granting membership or linking characters.

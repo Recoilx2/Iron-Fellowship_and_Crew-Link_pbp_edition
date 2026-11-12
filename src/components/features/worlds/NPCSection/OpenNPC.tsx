@@ -543,8 +543,7 @@ export function OpenNPC(props: OpenNPCProps) {
                 <Grid item xs={12}>
                   <RtcRichTextEditor
                     id={npcId}
-                    roomPrefix={`iron-fellowship-${worldId}-npc-gmnotes-`}
-                    documentPassword={worldId}
+                    documentName={`iron-fellowship-${worldId}-npc-gmnotes-${npcId}`}
                     onSave={updateNPCGMNotes}
                     initialValue={npc.gmProperties?.gmNotes}
                   />
@@ -617,8 +616,7 @@ export function OpenNPC(props: OpenNPCProps) {
                   {(npc.notes || npc.notes === null) && (
                     <RtcRichTextEditor
                       id={npcId}
-                      roomPrefix={`iron-fellowship-${worldId}-npc-`}
-                      documentPassword={worldId}
+                      documentName={`iron-fellowship-${worldId}-npc-${npcId}`}
                       onSave={updateNPCNotes}
                       initialValue={npc.notes || undefined}
                     />

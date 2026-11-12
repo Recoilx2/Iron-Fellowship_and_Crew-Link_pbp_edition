@@ -25,7 +25,6 @@ export interface NotesSliceData {
 export interface NotesSliceActions {
   subscribe: (
     campaignId: string | undefined,
-    loadAllCampaignDocs: boolean,
     characterId: string | undefined
   ) => Unsubscribe;
   subscribeToNoteContent: (note: {
