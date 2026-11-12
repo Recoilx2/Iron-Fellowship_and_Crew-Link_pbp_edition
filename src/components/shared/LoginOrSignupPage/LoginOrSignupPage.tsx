@@ -3,15 +3,15 @@ import {
   AlertTitle,
   Box,
   Button,
-  Divider,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
 import AccountIcon from "@mui/icons-material/Person";
-import { AuthPageHeading, GoogleSignInButton } from "components/shared/Auth";
+import { AuthPageHeading } from "components/shared/Auth";
 import { PageContent, PageHeader } from "components/shared/Layout";
 import { sendMagicEmailLink } from "api-calls/auth/sendMagicEmailLink";
+import { getErrorMessage } from "functions/getErrorMessage";
 import { FormEvent, useState } from "react";
 
 export interface LoginOrSignupPageProps {
@@ -45,16 +45,13 @@ export function LoginOrSignupPage(props: LoginOrSignupPageProps) {
     }
 
     setLinkSendLoading(true);
-    sendMagicEmailLink(email, !isLoginPage ? name : undefined)
+    sendMagicEmailLink({ email, name: !isLoginPage ? name : undefined })
       .then(() => {
         setLinkSent(true);
         setErrorMessage(undefined);
       })
-      .catch((e: unknown) => {
-        setErrorMessage(
-          "Error sending email link: " +
-            (e instanceof Error ? e.message : String(e))
-        );
+      .catch((e) => {
+        setErrorMessage(getErrorMessage(e, "Error sending sign in link"));
       })
       .finally(() => {
         setLinkSendLoading(false);
@@ -73,54 +70,50 @@ export function LoginOrSignupPage(props: LoginOrSignupPageProps) {
         <Stack spacing={4}>
           <AuthPageHeading isLoginPage={isLoginPage} icon={<AccountIcon />} />
           {!linkSent ? (
-            <>
-              <GoogleSignInButton isLoginPage={isLoginPage} />
-              <Divider>OR</Divider>
-              <Stack spacing={2} component={"form"} onSubmit={handleSubmit}>
-                <Typography variant={"h6"} component={"h2"}>
-                  Passwordless Sign in
-                </Typography>
-                <Alert severity={"info"}>
-                  {!isLoginPage &&
-                    "Get a sign in link emailed to you each time you log in. "}
-                  You must open the link on the same device you clicked{" "}
-                  {'"Send sign in link"'} on.
+            <Stack spacing={2} component={"form"} onSubmit={handleSubmit}>
+              <Typography variant={"h6"} component={"h2"}>
+                Passwordless Sign in
+              </Typography>
+              <Alert severity={"info"}>
+                {!isLoginPage &&
+                  "Get a sign in link emailed to you each time you log in. "}
+                You must open the link in the same browser you clicked{" "}
+                {'"Send sign in link"'} on.
+              </Alert>
+              {errorMessage && (
+                <Alert severity={"error"}>
+                  <AlertTitle>Error Sending Sign In Link</AlertTitle>
+                  {errorMessage}
                 </Alert>
-                {errorMessage && (
-                  <Alert severity={"error"}>
-                    <AlertTitle>Error Sending Sign In Link</AlertTitle>
-                    {errorMessage}
-                  </Alert>
-                )}
+              )}
+              <TextField
+                label={"Email Address"}
+                type={"email"}
+                autoComplete={"email"}
+                value={email}
+                onChange={(evt) => setEmail(evt.currentTarget.value)}
+              ></TextField>
+              {!isLoginPage && (
                 <TextField
-                  label={"Email Address"}
-                  type={"email"}
-                  autoComplete={"email"}
-                  value={email}
-                  onChange={(evt) => setEmail(evt.currentTarget.value)}
-                ></TextField>
-                {!isLoginPage && (
-                  <TextField
-                    label={"Name"}
-                    autoComplete={"name"}
-                    helperText={
-                      "This will be visible to other players in a campaign."
-                    }
-                    value={name}
-                    onChange={(evt) => setName(evt.currentTarget.value)}
-                  />
-                )}
-                <Box display={"flex"} justifyContent={"flex-end"}>
-                  <Button
-                    type={"submit"}
-                    variant={"contained"}
-                    disabled={linkSendLoading}
-                  >
-                    Send Sign In Link
-                  </Button>
-                </Box>
-              </Stack>
-            </>
+                  label={"Name"}
+                  autoComplete={"name"}
+                  helperText={
+                    "This will be visible to other players in a campaign."
+                  }
+                  value={name}
+                  onChange={(evt) => setName(evt.currentTarget.value)}
+                />
+              )}
+              <Box display={"flex"} justifyContent={"flex-end"}>
+                <Button
+                  type={"submit"}
+                  variant={"contained"}
+                  disabled={linkSendLoading}
+                >
+                  Send Sign In Link
+                </Button>
+              </Box>
+            </Stack>
           ) : (
             <Alert severity="info">
               <AlertTitle>Sign in link sent</AlertTitle>

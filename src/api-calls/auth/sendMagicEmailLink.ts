@@ -1,31 +1,31 @@
-import { sendSignInLinkToEmail } from "firebase/auth";
-import { firebaseAuth } from "config/firebase.config";
-import { BASE_ROUTES, basePaths } from "routes";
+import { getSupabaseClient } from "config/supabase.config";
 
-export function sendMagicEmailLink(
-  email: string,
-  name?: string
-): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    // The backup magic link flow lives under /auth, since /login now serves
-    // the primary one-time code flow. Landing a magic link on /login would
-    // drop the user on the code form mid sign-in.
-    const actionCodeSettings = {
-      url: window.location.origin + basePaths[BASE_ROUTES.AUTH] + "/login",
-      handleCodeInApp: true,
-    };
-
-    sendSignInLinkToEmail(firebaseAuth, email, actionCodeSettings)
-      .then(() => {
-        window.localStorage.setItem("auth-email", email);
-        if (name) {
-          window.localStorage.setItem("auth-name", name);
-        }
-        resolve(true);
-      })
-      .catch((error) => {
+/**
+ * Sends a magic-link sign-in email through the deployment's SMTP server
+ * (see supabase/.env.example). The link returns to this site, where the
+ * session is picked up automatically; like all single-use links it must be
+ * opened in the same browser that requested it. When `name` is given (signup)
+ * it is stored in the auth user's metadata so the profile row created on
+ * signup already carries the display name.
+ */
+export function sendMagicEmailLink(params: {
+  email: string;
+  name?: string;
+}): Promise<boolean> {
+  const { email, name } = params;
+  return getSupabaseClient()
+    .auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: window.location.origin,
+        data: name ? { display_name: name } : {},
+      },
+    })
+    .then(({ error }) => {
+      if (error) {
         console.error(error);
-        reject(error);
-      });
-  });
+        return Promise.reject("Failed to send sign-in email.");
+      }
+      return true;
+    });
 }
