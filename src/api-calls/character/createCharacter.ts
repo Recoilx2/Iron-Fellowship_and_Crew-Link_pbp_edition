@@ -14,13 +14,26 @@ export const createCharacter = createApiFunction<
   },
   string
 >(async (params) => {
-  const { uid, name, stats, assets, expansionIds } = params;
+  const { name, stats, assets, expansionIds } = params;
   const client = getSupabaseClient();
+
+  // Ownership always comes from the signed-in session: the INSERT policy
+  // (characters_insert_own) compares owner_id against auth.uid(), so a
+  // caller-supplied uid naming anyone else is rejected by the database.
+  // params.uid stays for signature compatibility but never decides
+  // ownership; createCampaign already works this way (its RPC ignores uid
+  // and uses auth.uid()).
+  const { data: sessionData, error: sessionError } =
+    await client.auth.getSession();
+  const ownerId = sessionData.session?.user.id;
+  if (sessionError || !ownerId) {
+    throw sessionError ?? new Error("You must be logged in to create a character");
+  }
 
   const { data, error } = await client
     .from(CHARACTERS_TABLE)
     .insert({
-      owner_id: uid,
+      owner_id: ownerId,
       name,
       stats,
       ...(expansionIds ? { expansion_ids: expansionIds } : {}),
