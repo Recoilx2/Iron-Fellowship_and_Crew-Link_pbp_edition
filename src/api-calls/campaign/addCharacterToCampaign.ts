@@ -1,5 +1,5 @@
 import { arrayUnion, updateDoc } from "firebase/firestore";
-import { getCharacterDoc } from "../character/_getRef";
+import { getCharacterDoc } from "../character/_firebaseRef";
 import { getCampaignDoc } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
 

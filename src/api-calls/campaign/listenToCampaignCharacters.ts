@@ -1,6 +1,13 @@
-import { onSnapshot, Unsubscribe } from "firebase/firestore";
-import { getCharacterDoc } from "../character/_getRef";
+import { getSupabaseClient } from "config/supabase.config";
+import { Unsubscribe } from "api-calls/helpers.type";
+import { listenToRows } from "api-calls/realtime/listenToRows";
 import { CharacterDocument } from "api-calls/character/_character.type";
+import {
+  CHARACTERS_TABLE,
+  characterPayloadToChange,
+  characterRowToDocument,
+  type CharacterRow,
+} from "../character/_getRef";
 
 interface Params {
   characterIdList: string[];
@@ -12,18 +19,36 @@ interface Params {
 export function listenToCampaignCharacters(params: Params): Unsubscribe[] {
   const { characterIdList, onDocChange, onError } = params;
 
-  const unsubscribes = (characterIdList || []).map((characterId) => {
-    return onSnapshot(
-      getCharacterDoc(characterId),
-      (snapshot) => {
-        const characterDoc = snapshot.data();
-        onDocChange(characterId, characterDoc);
+  return (characterIdList || []).map((characterId) => {
+    const client = getSupabaseClient();
+    return listenToRows<CharacterRow>({
+      client,
+      channelName: `character:${characterId}`,
+      bindings: [
+        {
+          type: "postgres_changes",
+          table: CHARACTERS_TABLE,
+          filter: `id=eq.${characterId}`,
+          toChange: characterPayloadToChange,
+        },
+      ],
+      fetchRows: async () => {
+        const { data, error } = await client
+          .from(CHARACTERS_TABLE)
+          .select("*")
+          .eq("id", characterId);
+        if (error) {
+          throw error;
+        }
+        return (data ?? []) as unknown as CharacterRow[];
       },
-      (error) => {
-        console.error(error);
-        onError(new Error("Failed to fetch characters."));
-      }
-    );
+      getKey: (row) => row.id,
+      getUpdatedAt: (row) => row.updated_at,
+      onRows: (rows) => {
+        const row = rows[0];
+        onDocChange(characterId, row ? characterRowToDocument(row) : undefined);
+      },
+      onError,
+    });
   });
-  return unsubscribes;
 }

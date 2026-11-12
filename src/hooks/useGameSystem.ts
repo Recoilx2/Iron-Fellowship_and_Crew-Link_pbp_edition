@@ -17,6 +17,11 @@ export function getSystem() {
     return defaultGameSystem;
   }
 
+  // Node (tests) has no local storage; there is no override to read.
+  if (typeof localStorage === "undefined") {
+    return defaultGameSystem;
+  }
+
   let localStorageGameSystem: GAME_SYSTEMS | undefined = undefined;
   if (localStorage.getItem(LOCAL_STORAGE_KEY) === GAME_SYSTEMS.IRONSWORN) {
     localStorageGameSystem = GAME_SYSTEMS.IRONSWORN;

@@ -8,7 +8,7 @@ import {
 } from "firebase/firestore";
 import { getHomebrewCollectionDoc } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
-import { getCharacterCollection } from "api-calls/character/_getRef";
+import { getCharacterCollection } from "api-calls/character/_firebaseRef";
 import { getCampaignCollection } from "api-calls/campaign/_getRef";
 
 export const deleteHomebrewExpansion = createApiFunction<{ id: string }, void>(

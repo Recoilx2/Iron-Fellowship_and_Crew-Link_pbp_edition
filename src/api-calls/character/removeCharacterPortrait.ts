@@ -1,6 +1,5 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { deleteImage } from "api-calls/storage/deleteImage";
-import { constructCharacterPortraitFolderPath } from "./_getRef";
+import { removePortraitFile } from "api-calls/character/portraitStorage";
 import { updateCharacter } from "./updateCharacter";
 
 export const removeCharacterPortrait = createApiFunction<
@@ -10,28 +9,12 @@ export const removeCharacterPortrait = createApiFunction<
     oldPortraitFilename: string;
   },
   void
->((params) => {
+>(async (params) => {
   const { uid, characterId, oldPortraitFilename } = params;
 
-  return new Promise((resolve, reject) => {
-    updateCharacter({
-      characterId,
-      character: {
-        profileImage: null,
-      },
-    })
-      .then(() => {
-        deleteImage(
-          constructCharacterPortraitFolderPath(uid, characterId),
-          oldPortraitFilename
-        )
-          .then(() => {
-            resolve();
-          })
-          .catch((e) => {
-            reject(e);
-          });
-      })
-      .catch((e) => reject(e));
+  await updateCharacter({
+    characterId,
+    character: { profileImage: null },
   });
+  await removePortraitFile(uid, characterId, oldPortraitFilename);
 }, "Failed to remove old character portrait");

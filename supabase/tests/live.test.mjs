@@ -16,6 +16,9 @@ const liveFiles = [
   "src/api-calls/realtime/listenToRows.live.test.ts",
   "src/api-calls/campaign/campaignMembers.live.test.ts",
   "src/api-calls/user/settings/userSettings.live.test.ts",
+  "src/api-calls/character/characters.live.test.ts",
+  "src/api-calls/character/characterChildren.live.test.ts",
+  "src/api-calls/character/portraits.live.test.ts",
 ];
 
 describe("docker behavior tests", () => {
@@ -24,7 +27,6 @@ describe("docker behavior tests", () => {
       assert.ok(existsSync(join(repo, file)), `${file} missing`);
     }
   });
-
   it("behavior tests skip without a stack, so plain runs stay green", () => {
     for (const file of liveFiles) {
       const text = read(file);

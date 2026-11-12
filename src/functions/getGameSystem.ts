@@ -41,6 +41,12 @@ export function getIsGameSystemConfigured() {
   return getConfiguredGameSystem() !== undefined;
 }
 
+function currentHostname(): string {
+  // Tests run in node, where no location exists; treat that as an
+  // unrecognized host so callers fall back to their defaults.
+  return typeof location === "undefined" ? "" : location.hostname;
+}
+
 export function getGameSystem() {
   // One deployment runs one game system: the site container is built for it
   // (see supabase/site/). Hostnames only decide in local development, where
@@ -51,22 +57,23 @@ export function getGameSystem() {
   }
 
   let system: GAME_SYSTEMS = GAME_SYSTEMS.IRONSWORN;
-  if (ironswornHostNames.includes(location.hostname)) {
+  const hostname = currentHostname();
+  if (ironswornHostNames.includes(hostname)) {
     system = GAME_SYSTEMS.IRONSWORN;
-  } else if (starforgedHostNames.includes(location.hostname)) {
+  } else if (starforgedHostNames.includes(hostname)) {
     system = GAME_SYSTEMS.STARFORGED;
-  } else if (location.hostname.startsWith(DEV_HOSTNAME_START_IRONSWORN)) {
+  } else if (hostname.startsWith(DEV_HOSTNAME_START_IRONSWORN)) {
     system = GAME_SYSTEMS.IRONSWORN;
-  } else if (location.hostname.startsWith(DEV_HOSTNAME_START_STARFORGED)) {
+  } else if (hostname.startsWith(DEV_HOSTNAME_START_STARFORGED)) {
     system = GAME_SYSTEMS.STARFORGED;
   }
   return system;
 }
 
 export function getIsProdEnvironment() {
-  return prodHostnames.includes(location.hostname);
+  return prodHostnames.includes(currentHostname());
 }
 
 export function getIsLocalEnvironment() {
-  return location.hostname === "localhost";
+  return currentHostname() === "localhost";
 }

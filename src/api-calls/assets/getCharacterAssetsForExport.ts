@@ -1,5 +1,9 @@
-import { getDocs } from "firebase/firestore";
-import { getCharacterAssetCollection } from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
+import {
+  CHARACTER_ASSETS_TABLE,
+  characterAssetRowToDocument,
+  type CharacterAssetRow,
+} from "./_getRef";
 import { AssetDocument } from "./_asset.type";
 
 export interface CharacterAssetExportRecord {
@@ -13,9 +17,15 @@ export interface CharacterAssetExportRecord {
 export async function getCharacterAssetsForExport(
   characterId: string
 ): Promise<CharacterAssetExportRecord[]> {
-  const snapshot = await getDocs(getCharacterAssetCollection(characterId));
-  return snapshot.docs.map((docSnapshot) => ({
-    id: docSnapshot.id,
-    data: docSnapshot.data(),
+  const { data, error } = await getSupabaseClient()
+    .from(CHARACTER_ASSETS_TABLE)
+    .select("*")
+    .eq("character_id", characterId);
+  if (error) {
+    throw error;
+  }
+  return ((data ?? []) as unknown as CharacterAssetRow[]).map((row) => ({
+    id: row.id,
+    data: characterAssetRowToDocument(row),
   }));
 }

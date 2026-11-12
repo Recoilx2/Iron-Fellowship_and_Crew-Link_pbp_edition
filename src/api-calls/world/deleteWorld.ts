@@ -16,7 +16,7 @@ import {
 import {
   getCharacterCollection,
   getCharacterDoc,
-} from "api-calls/character/_getRef";
+} from "api-calls/character/_firebaseRef";
 import { deleteAllLocations } from "./locations/deleteAllLocations";
 import { deleteAllLoreDocuments } from "./lore/deleteAllLoreDocuments";
 import { deleteAllNPCs } from "./npcs/deleteAllNPCs";

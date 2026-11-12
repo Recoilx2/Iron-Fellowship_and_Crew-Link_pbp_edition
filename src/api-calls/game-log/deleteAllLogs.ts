@@ -1,64 +1,46 @@
-import { deleteDoc, getDocs } from "firebase/firestore";
+import { getDocs } from "firebase/firestore";
+import { getSupabaseClient } from "config/supabase.config";
 import {
   getCampaignGameLogCollection,
-  getCampaignGameLogDocument,
-  getCharacterGameLogCollection,
-  getCharacterGameLogDocument,
+  CHARACTER_ROLLS_TABLE,
 } from "./_getRef";
+import { removeLog } from "./removeLog";
 import { createApiFunction } from "api-calls/createApiFunction";
-
-function getAllLogs(
-  campaignId: string | undefined,
-  characterId: string | undefined
-): Promise<string[]> {
-  return new Promise<string[]>((resolve, reject) => {
-    if (!characterId && !campaignId) {
-      reject(new Error("Either character or campaign ID must be defined."));
-      return;
-    }
-    getDocs(
-      characterId
-        ? getCharacterGameLogCollection(characterId)
-        : getCampaignGameLogCollection(campaignId as string)
-    )
-      .then((snapshot) => {
-        const ids = snapshot.docs.map((doc) => doc.id);
-        resolve(ids);
-      })
-      .catch(() => {
-        reject("Failed to get game logs.");
-      });
-  });
-}
 
 export const deleteAllLogs = createApiFunction<
   { characterId?: string; campaignId?: string },
   void
->(({ campaignId, characterId }) => {
-  return new Promise<void>((resolve, reject) => {
-    if (!campaignId && !characterId) {
-      reject("Either campaign or character ID must be defined.");
-      return;
-    }
-    getAllLogs(campaignId, characterId)
-      .then((logIds) => {
-        const promises = logIds.map((logId) =>
-          deleteDoc(
-            characterId
-              ? getCharacterGameLogDocument(characterId, logId)
-              : getCampaignGameLogDocument(campaignId as string, logId)
-          )
-        );
-        Promise.all(promises)
-          .then(() => {
-            resolve();
-          })
-          .catch((e) => {
-            reject(e);
-          });
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
+>(async ({ campaignId, characterId }) => {
+  if (!campaignId && !characterId) {
+    throw new Error("Either character or campaign ID must be defined.");
+  }
+  // Campaign rolls belong to the chat spec and stay on Firebase until then.
+  if (campaignId) {
+    const snapshot = await getDocs(
+      getCampaignGameLogCollection(campaignId as string)
+    ).catch(() => {
+      throw new Error("Failed to get game logs.");
+    });
+    const logIds = snapshot.docs.map((doc) => doc.id);
+    await Promise.all(
+      logIds.map((logId) => removeLog({ campaignId, characterId, logId }))
+    );
+    return;
+  }
+  if (!characterId) {
+    throw new Error("Either character or campaign ID must be defined.");
+  }
+  const { data, error } = await getSupabaseClient()
+    .from(CHARACTER_ROLLS_TABLE)
+    .select("id")
+    .eq("character_id", characterId);
+  if (error) {
+    throw error;
+  }
+  const logIds = ((data ?? []) as Array<{ id: string }>).map(
+    (row) => row.id
+  );
+  await Promise.all(
+    logIds.map((logId) => removeLog({ campaignId, characterId, logId }))
+  );
 }, "Failed to delete some or all logs.");
