@@ -1,19 +1,15 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { deleteDoc } from "firebase/firestore";
-import { getHomebrewStatsDoc } from "./_getRef";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
+import { HomebrewStatDocument } from "api-calls/homebrew/rules/stats/_homebrewStat.type";
+
+const api = createHomebrewContentApi<HomebrewStatDocument>("homebrew_stats");
 
 export const deleteHomebrewStat = createApiFunction<
-  {
-    statId: string;
-  },
+  { statId: string } & ClientOption,
   void
->((params) => {
-  const { statId } = params;
-  return new Promise((resolve, reject) => {
-    deleteDoc(getHomebrewStatsDoc(statId))
-      .then(() => {
-        resolve();
-      })
-      .catch(reject);
-  });
+>(async (params) => {
+  await api.remove({ id: params.statId, client: params.client });
 }, "Failed to delete stat.");

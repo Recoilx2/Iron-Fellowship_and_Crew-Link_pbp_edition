@@ -1,23 +1,24 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { updateDoc } from "firebase/firestore";
-import { getHomebrewImpactsDoc } from "./_getRef";
 import { HomebrewImpact } from "api-calls/homebrew/rules/impacts/_homebrewImpacts.type";
+import {
+  ClientOption,
+  modifyContentData,
+} from "api-calls/homebrew/_supabase";
 
 export const updateHomebrewImpact = createApiFunction<
-  {
-    impactCategoryId: string;
-    impact: HomebrewImpact;
-  },
+  { impactCategoryId: string; impact: HomebrewImpact } & ClientOption,
   void
->((params) => {
-  const { impactCategoryId, impact } = params;
-  return new Promise((resolve, reject) => {
-    updateDoc(getHomebrewImpactsDoc(impactCategoryId), {
-      [`contents.${impact.dataswornId}`]: impact,
-    })
-      .then(() => {
-        resolve();
-      })
-      .catch(reject);
-  });
+>(async (params) => {
+  await modifyContentData(
+    "homebrew_impact_categories",
+    params.impactCategoryId,
+    (data) => {
+      const contents = {
+        ...((data.contents ?? {}) as Record<string, unknown>),
+      };
+      contents[params.impact.dataswornId] = params.impact;
+      data.contents = contents;
+    },
+    { client: params.client }
+  );
 }, "Failed to update impact.");

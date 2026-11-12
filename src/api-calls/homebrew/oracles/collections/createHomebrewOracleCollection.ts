@@ -1,16 +1,17 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { addDoc } from "firebase/firestore";
 import { HomebrewOracleCollectionDocument } from "api-calls/homebrew/oracles/collections/_homebrewOracleCollection.type";
-import { getHomebrewOracleCollectionCollection } from "./_getRef";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
+
+const api = createHomebrewContentApi<HomebrewOracleCollectionDocument>(
+  "homebrew_oracle_collections"
+);
 
 export const createHomebrewOracleCollection = createApiFunction<
-  { oracleCollection: HomebrewOracleCollectionDocument },
+  { oracleCollection: HomebrewOracleCollectionDocument } & ClientOption,
   void
->((params) => {
-  const { oracleCollection } = params;
-  return new Promise((resolve, reject) => {
-    addDoc(getHomebrewOracleCollectionCollection(), oracleCollection)
-      .then(() => resolve())
-      .catch(reject);
-  });
+>(async (params) => {
+  await api.create({ doc: params.oracleCollection, client: params.client });
 }, "Failed to create oracle collection.");
