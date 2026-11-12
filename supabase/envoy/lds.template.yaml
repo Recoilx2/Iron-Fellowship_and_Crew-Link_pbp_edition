@@ -416,6 +416,18 @@ resources:
                             '@type': >-
                               type.googleapis.com/envoy.config.route.v3.FilterConfig
                             disabled: true
+                          envoy.filters.http.rbac:
+                            '@type': >-
+                              type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBACPerRoute
+                            rbac:
+                              rules:
+                                action: ALLOW
+                                policies:
+                                  allow_all:
+                                    permissions:
+                                      - any: true
+                                    principals:
+                                      - any: true
 
                       - name: auth-v1-protected
                         match:
