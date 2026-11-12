@@ -15,6 +15,10 @@ ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
 
 COPY package.json package-lock.json ./
+# The root postinstall (scripts/cleanup-dicebox-assets.cjs) runs as part of
+# `npm ci`, so the script must exist before installing. Copying only this
+# keeps the layer cache for dependencies intact.
+COPY scripts/ ./scripts/
 RUN npm ci --no-audit --no-fund
 
 COPY . ./
