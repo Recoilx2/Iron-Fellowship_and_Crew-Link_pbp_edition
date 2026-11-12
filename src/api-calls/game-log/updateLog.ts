@@ -1,11 +1,11 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { Timestamp, updateDoc } from "firebase/firestore";
 import { getSupabaseClient } from "config/supabase.config";
 import { Roll } from "types/DieRolls.type";
 import {
-  getCampaignGameLogDocument,
   CHARACTER_ROLLS_TABLE,
+  CAMPAIGN_ROLLS_TABLE,
   characterRollToColumns,
+  campaignRollToColumns,
 } from "./_getRef";
 
 export const updateLog = createApiFunction<
@@ -18,12 +18,25 @@ export const updateLog = createApiFunction<
     throw new Error("Either campaign or character ID must be defined.");
   }
 
-  // Campaign rolls belong to the chat spec and stay on Firebase until then.
   if (campaignId) {
-    await updateDoc(getCampaignGameLogDocument(campaignId as string, logId), {
-      ...log,
-      timestamp: Timestamp.fromDate(log.timestamp),
-    });
+    const client = getSupabaseClient();
+    const { data: existing, error: fetchError } = await client
+      .from(CAMPAIGN_ROLLS_TABLE)
+      .select("id")
+      .eq("id", logId)
+      .eq("campaign_id", campaignId)
+      .single();
+    if (fetchError || !existing) {
+      throw fetchError ?? new Error("Roll not found");
+    }
+    const { data, error } = await client
+      .from(CAMPAIGN_ROLLS_TABLE)
+      .update(campaignRollToColumns(campaignId, log))
+      .eq("id", logId)
+      .select("id");
+    if (error || !data || data.length === 0) {
+      throw error ?? new Error("Roll not found");
+    }
     return;
   }
   if (!characterId) {

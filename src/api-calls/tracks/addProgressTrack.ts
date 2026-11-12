@@ -1,10 +1,9 @@
-import { addDoc } from "firebase/firestore";
 import { getSupabaseClient } from "config/supabase.config";
 import {
-  convertToDatabase,
-  getCampaignTracksCollection,
   CHARACTER_TRACKS_TABLE,
+  CAMPAIGN_TRACKS_TABLE,
   characterTrackToColumns,
+  campaignTrackToColumns,
 } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
 import { Track } from "types/Track.type";
@@ -23,13 +22,13 @@ export const addProgressTrack = createApiFunction<
     throw new Error("Must provide either a character or a campaign ID");
   }
 
-  // Campaign tracks stay on Firebase until the campaigns ticket ports them.
   if (campaignId) {
-    const storedTrack = convertToDatabase(track);
-    await addDoc(
-      getCampaignTracksCollection(campaignId as string),
-      storedTrack
-    );
+    const { error } = await getSupabaseClient()
+      .from(CAMPAIGN_TRACKS_TABLE)
+      .insert(campaignTrackToColumns(campaignId, track));
+    if (error) {
+      throw error;
+    }
     return;
   }
   if (!characterId) {

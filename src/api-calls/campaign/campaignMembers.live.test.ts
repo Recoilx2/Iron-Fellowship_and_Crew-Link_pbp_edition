@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   createPerson,
   deletePerson,
+  ensureCampaign,
   grantMembership,
   liveStackConfig,
   personClient,
@@ -40,6 +41,7 @@ describe.skipIf(!config)("campaign membership access rules", () => {
     player = await createPerson(cfg, "player");
     outsider = await createPerson(cfg, "outsider");
     people = [gm, player, outsider];
+    await ensureCampaign(cfg, campaignId);
     await grantMembership(cfg, campaignId, gm.userId, "gm");
     await grantMembership(cfg, campaignId, player.userId, "player");
   }

@@ -35,6 +35,7 @@ import { ROLL_RESULT, ROLL_TYPE } from "types/DieRolls.type";
 import {
   createPerson,
   deletePerson,
+  ensureCampaign,
   grantMembership,
   liveStackConfig,
   randomCampaignId,
@@ -414,6 +415,7 @@ describe.skipIf(!config)("character children end to end", () => {
     const member = await createPerson(cfg, "member");
     people.push(owner, member);
     const campaignId = randomCampaignId();
+    await ensureCampaign(cfg, campaignId);
     await grantMembership(cfg, campaignId, member.userId, "player");
 
     await signInAs(owner);

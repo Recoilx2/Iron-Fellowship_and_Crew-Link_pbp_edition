@@ -1,8 +1,7 @@
-import { getDocs } from "firebase/firestore";
 import { getSupabaseClient } from "config/supabase.config";
 import { removeProgressTrack } from "./removeProgressTrack";
 import {
-  getCampaignTracksCollection,
+  CAMPAIGN_TRACKS_TABLE,
   CHARACTER_TRACKS_TABLE,
 } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
@@ -14,14 +13,17 @@ export const deleteAllProgressTracks = createApiFunction<
   if (!campaignId && !characterId) {
     throw new Error("Either campaign or character ID must be defined.");
   }
-  // Campaign tracks stay on Firebase until the campaigns ticket ports them.
   if (campaignId) {
-    const snapshot = await getDocs(
-      getCampaignTracksCollection(campaignId as string)
-    ).catch(() => {
-      throw new Error("Failed to get tracks.");
-    });
-    const trackIds = snapshot.docs.map((doc) => doc.id);
+    const { data, error } = await getSupabaseClient()
+      .from(CAMPAIGN_TRACKS_TABLE)
+      .select("id")
+      .eq("campaign_id", campaignId);
+    if (error) {
+      throw error;
+    }
+    const trackIds = ((data ?? []) as Array<{ id: string }>).map(
+      (row) => row.id
+    );
     await Promise.all(
       trackIds.map((trackId) =>
         removeProgressTrack({ campaignId, characterId, id: trackId })

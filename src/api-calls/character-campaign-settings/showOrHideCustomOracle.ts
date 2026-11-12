@@ -1,9 +1,10 @@
-import { arrayRemove, arrayUnion, setDoc } from "firebase/firestore";
 import { getSupabaseClient } from "config/supabase.config";
 import {
-  getCampaignSettingsDoc,
   CHARACTER_SETTINGS_TABLE,
+  CAMPAIGN_SETTINGS_TABLE,
   characterSettingsRowToDocument,
+  campaignSettingsRowToDocument,
+  type CampaignSettingsRow,
   type CharacterSettingsRow,
 } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
@@ -23,13 +24,34 @@ export const showOrHideCustomOracle = createApiFunction<
     throw new Error("Either campaign or character ID must be defined.");
   }
 
-  // Campaign settings stay on Firebase until the campaigns ticket ports them.
+  // Campaign settings hide one id in an array column: read the row, toggle
+  // the id, and write it back. Reads and writes both pass the members-only
+  // access rules.
   if (campaignId) {
-    await setDoc(getCampaignSettingsDoc(campaignId as string), {
-      hiddenCustomOraclesIds: hidden
-        ? arrayUnion(oracleId)
-        : arrayRemove(oracleId),
-    }, { merge: true });
+    const client = getSupabaseClient();
+    const { data, error: fetchError } = await client
+      .from(CAMPAIGN_SETTINGS_TABLE)
+      .select("*")
+      .eq("campaign_id", campaignId)
+      .single();
+    if (fetchError && fetchError.code !== "PGRST116") {
+      throw fetchError;
+    }
+    const current = campaignSettingsRowToDocument(
+      (data ?? null) as unknown as CampaignSettingsRow | null
+    );
+    const next = hidden
+      ? Array.from(new Set([...current.hiddenCustomOraclesIds, oracleId]))
+      : current.hiddenCustomOraclesIds.filter((entry) => entry !== oracleId);
+    const { error } = await client
+      .from(CAMPAIGN_SETTINGS_TABLE)
+      .upsert(
+        { campaign_id: campaignId, hidden_custom_oracle_ids: next },
+        { onConflict: "campaign_id" }
+      );
+    if (error) {
+      throw error;
+    }
     return;
   }
   if (!characterId) {

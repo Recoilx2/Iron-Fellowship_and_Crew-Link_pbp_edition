@@ -11,6 +11,7 @@ import type { CharacterDocument } from "api-calls/character/_character.type";
 import {
   createPerson,
   deletePerson,
+  ensureCampaign,
   grantMembership,
   liveStackConfig,
   randomCampaignId,
@@ -135,6 +136,7 @@ describe.skipIf(!config)("characters end to end", () => {
     const outsider = await createPerson(cfg, "outsider");
     people.push(owner, member, outsider);
     const campaignId = randomCampaignId();
+    await ensureCampaign(cfg, campaignId);
     await grantMembership(cfg, campaignId, member.userId, "player");
 
     await signInAs(owner);

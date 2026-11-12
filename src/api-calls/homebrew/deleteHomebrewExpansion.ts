@@ -9,7 +9,7 @@ import {
 import { getHomebrewCollectionDoc } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
 import { getCharacterCollection } from "api-calls/character/_firebaseRef";
-import { getCampaignCollection } from "api-calls/campaign/_getRef";
+import { getCampaignCollection } from "api-calls/campaign/_firebaseRef";
 
 export const deleteHomebrewExpansion = createApiFunction<{ id: string }, void>(
   async (params) => {

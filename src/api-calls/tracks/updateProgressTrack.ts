@@ -1,9 +1,10 @@
-import { updateDoc } from "firebase/firestore";
 import { getSupabaseClient } from "config/supabase.config";
 import {
-  getCampaignTracksDoc,
+  CAMPAIGN_TRACKS_TABLE,
   CHARACTER_TRACKS_TABLE,
+  campaignTrackUpdateToColumns,
   characterTrackUpdateToColumns,
+  type CampaignTrackRow,
   type CharacterTrackRow,
 } from "./_getRef";
 import { Track } from "types/Track.type";
@@ -24,9 +25,32 @@ export const updateProgressTrack = createApiFunction<
     throw new Error("Either campaign or character ID must be defined.");
   }
 
-  // Campaign tracks stay on Firebase until the campaigns ticket ports them.
   if (campaignId) {
-    await updateDoc(getCampaignTracksDoc(campaignId as string, trackId), track);
+    const client = getSupabaseClient();
+    const { data: row, error: fetchError } = await client
+      .from(CAMPAIGN_TRACKS_TABLE)
+      .select("*")
+      .eq("id", trackId)
+      .eq("campaign_id", campaignId)
+      .single();
+    if (fetchError || !row) {
+      throw fetchError ?? new Error("Track not found");
+    }
+    const columns = campaignTrackUpdateToColumns(
+      row as CampaignTrackRow,
+      track
+    );
+    if (Object.keys(columns).length === 0) {
+      return;
+    }
+    const { data, error } = await client
+      .from(CAMPAIGN_TRACKS_TABLE)
+      .update(columns)
+      .eq("id", trackId)
+      .select("id");
+    if (error || !data || data.length === 0) {
+      throw error ?? new Error("Track not found");
+    }
     return;
   }
   const client = getSupabaseClient();

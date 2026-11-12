@@ -1,6 +1,5 @@
 import { createApiFunction } from "api-calls/createApiFunction";
 import { removeCharacterFromCampaign } from "api-calls/campaign/removeCharacterFromCampaign";
-import { firebaseAuth } from "config/firebase.config";
 import { getSupabaseClient } from "config/supabase.config";
 import { CHARACTERS_TABLE } from "./_getRef";
 import { removePortraitFile } from "./portraitStorage";
@@ -18,7 +17,7 @@ export const deleteCharacter = createApiFunction<
 
   if (campaignId) {
     await removeCharacterFromCampaign({
-      uid: firebaseAuth.currentUser?.uid ?? "",
+      uid,
       campaignId,
       characterId,
     });

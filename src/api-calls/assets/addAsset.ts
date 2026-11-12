@@ -1,8 +1,8 @@
-import { addDoc } from "firebase/firestore";
 import { getSupabaseClient } from "config/supabase.config";
 import {
-  getCampaignAssetCollection,
+  CAMPAIGN_ASSETS_TABLE,
   CHARACTER_ASSETS_TABLE,
+  campaignAssetDocumentToColumns,
   characterAssetDocumentToColumns,
 } from "./_getRef";
 import { AssetDocument } from "api-calls/assets/_asset.type";
@@ -26,28 +26,23 @@ async function addSupabaseAsset(
   }
 }
 
-function addFirebaseAsset(params: AddAssetParams): Promise<void> {
-  const { campaignId, asset } = params;
-  return new Promise((resolve, reject) => {
-    addDoc(getCampaignAssetCollection(campaignId as string), asset)
-      .then(() => {
-        resolve();
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
-}
-
 export const addAsset = createApiFunction<AddAssetParams, void>(
   async (params) => {
     const { characterId, campaignId } = params;
     if (!characterId && !campaignId) {
       throw new Error("Either campaign or character ID must be defined.");
     }
-    // Campaign assets stay on Firebase until the campaigns ticket ports them.
+    if (campaignId) {
+      const { error } = await getSupabaseClient()
+        .from(CAMPAIGN_ASSETS_TABLE)
+        .insert(campaignAssetDocumentToColumns(campaignId, params.asset));
+      if (error) {
+        throw error;
+      }
+      return;
+    }
     if (!characterId) {
-      return addFirebaseAsset(params);
+      throw new Error("Either campaign or character ID must be defined.");
     }
     await addSupabaseAsset(characterId, params.asset);
   },
