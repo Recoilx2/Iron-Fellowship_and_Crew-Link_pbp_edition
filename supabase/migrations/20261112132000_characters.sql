@@ -22,11 +22,39 @@ BEGIN;
 
 CREATE SCHEMA IF NOT EXISTS private;
 
+CREATE TABLE IF NOT EXISTS public.characters (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
+  campaign_id uuid NULL,
+  world_id uuid NULL,
+  name text NOT NULL DEFAULT '',
+  stats jsonb NOT NULL DEFAULT '{}'::jsonb,
+  condition_meters jsonb NOT NULL DEFAULT '{}'::jsonb,
+  initiative_status text NULL,
+  momentum integer NOT NULL DEFAULT 2,
+  special_tracks jsonb NOT NULL DEFAULT '{}'::jsonb,
+  experience jsonb NOT NULL DEFAULT '{}'::jsonb,
+  debilities jsonb NOT NULL DEFAULT '{}'::jsonb,
+  adds integer NULL,
+  profile_image jsonb NULL,
+  expansion_ids text[] NOT NULL DEFAULT '{}',
+  custom_tracks jsonb NOT NULL DEFAULT '{}'::jsonb,
+  theme text NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS characters_by_owner
+  ON public.characters (owner_id);
+CREATE INDEX IF NOT EXISTS characters_by_campaign
+  ON public.characters (campaign_id);
+
 -- Visibility checks used by every character access rule. Security definer so
 -- the checks run even for people with no direct grant on the tables; the
--- private schema is never exposed through the data API. Created before the
--- table policies below: Postgres resolves the functions a policy calls when
--- the policy is created.
+-- private schema is never exposed through the data API. The characters table
+-- comes first because Postgres validates a SQL-language function body when
+-- the function is created; the checks still precede the table policies
+-- below, which resolve the functions they call when each policy is created.
 CREATE OR REPLACE FUNCTION private.is_character_owner(cid uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -59,71 +87,6 @@ AS $$
       )
   );
 $$;
-
--- Character notes are shared with the campaign only when the owner marks
--- them shared; unshared notes stay owner-only.
-CREATE OR REPLACE FUNCTION private.is_character_note_visible(nid uuid)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.character_notes n
-    JOIN public.characters c ON c.id = n.character_id
-    WHERE n.id = nid
-      AND (
-        c.owner_id = (select auth.uid())
-        OR (
-          n.shared
-          AND c.campaign_id IS NOT NULL
-          AND private.is_campaign_member(c.campaign_id)
-        )
-      )
-  );
-$$;
-
-CREATE OR REPLACE FUNCTION private.is_character_note_owner(nid uuid)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.character_notes n
-    JOIN public.characters c ON c.id = n.character_id
-    WHERE n.id = nid AND c.owner_id = (select auth.uid())
-  );
-$$;
-
-CREATE TABLE IF NOT EXISTS public.characters (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  owner_id uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
-  campaign_id uuid NULL,
-  world_id uuid NULL,
-  name text NOT NULL DEFAULT '',
-  stats jsonb NOT NULL DEFAULT '{}'::jsonb,
-  condition_meters jsonb NOT NULL DEFAULT '{}'::jsonb,
-  initiative_status text NULL,
-  momentum integer NOT NULL DEFAULT 2,
-  special_tracks jsonb NOT NULL DEFAULT '{}'::jsonb,
-  experience jsonb NOT NULL DEFAULT '{}'::jsonb,
-  debilities jsonb NOT NULL DEFAULT '{}'::jsonb,
-  adds integer NULL,
-  profile_image jsonb NULL,
-  expansion_ids text[] NOT NULL DEFAULT '{}',
-  custom_tracks jsonb NOT NULL DEFAULT '{}'::jsonb,
-  theme text NULL,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS characters_by_owner
-  ON public.characters (owner_id);
-CREATE INDEX IF NOT EXISTS characters_by_campaign
-  ON public.characters (campaign_id);
 
 ALTER TABLE public.characters ENABLE ROW LEVEL SECURITY;
 
@@ -285,6 +248,45 @@ CREATE TABLE IF NOT EXISTS public.character_notes (
 
 CREATE INDEX IF NOT EXISTS character_notes_by_character
   ON public.character_notes (character_id);
+
+-- Character notes are shared with the campaign only when the owner marks
+-- them shared; unshared notes stay owner-only. Defined after the notes
+-- table for the same creation-order reason as the character checks above.
+CREATE OR REPLACE FUNCTION private.is_character_note_visible(nid uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.character_notes n
+    JOIN public.characters c ON c.id = n.character_id
+    WHERE n.id = nid
+      AND (
+        c.owner_id = (select auth.uid())
+        OR (
+          n.shared
+          AND c.campaign_id IS NOT NULL
+          AND private.is_campaign_member(c.campaign_id)
+        )
+      )
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION private.is_character_note_owner(nid uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.character_notes n
+    JOIN public.characters c ON c.id = n.character_id
+    WHERE n.id = nid AND c.owner_id = (select auth.uid())
+  );
+$$;
 
 ALTER TABLE public.character_notes ENABLE ROW LEVEL SECURITY;
 

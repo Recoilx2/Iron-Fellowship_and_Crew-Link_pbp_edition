@@ -21,25 +21,8 @@
 
 BEGIN;
 
--- Membership check used by every homebrew write rule. Security definer so the
--- check runs even though nobody has a direct grant on the editors table; the
--- private schema is never exposed through the data API. Follows the same
--- conventions as private.is_campaign_member: empty search path, and the
--- (select auth.uid()) subquery so the planner evaluates the caller once.
+-- The private schema is never exposed through the data API.
 CREATE SCHEMA IF NOT EXISTS private;
-
-CREATE OR REPLACE FUNCTION private.is_homebrew_editor(cid uuid)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.homebrew_editors
-    WHERE collection_id = cid AND user_id = (select auth.uid())
-  );
-$$;
 
 -- Collections: the top-level container. The `slug` column carries the
 -- datasworn package id (the `id` field of the document); the row id is the
@@ -65,6 +48,26 @@ CREATE TABLE IF NOT EXISTS public.homebrew_editors (
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (collection_id, user_id)
 );
+
+-- Editor check used by every homebrew write rule. Security definer so the
+-- check runs even though nobody has a direct grant on the editors table.
+-- Follows the same conventions as private.is_campaign_member: empty search
+-- path, and the (select auth.uid()) subquery so the planner evaluates the
+-- caller once. Defined after the editors table because Postgres validates a
+-- SQL-language function body when the function is created; the check still
+-- precedes the policies that call it.
+CREATE OR REPLACE FUNCTION private.is_homebrew_editor(cid uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.homebrew_editors
+    WHERE collection_id = cid AND user_id = (select auth.uid())
+  );
+$$;
 
 CREATE TABLE IF NOT EXISTS public.homebrew_viewers (
   collection_id uuid NOT NULL REFERENCES public.homebrew_collections (id) ON DELETE CASCADE,

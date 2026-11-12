@@ -21,12 +21,16 @@
 services:
   # Applies supabase/migrations/*.sql in filename order, tracking what ran in
   # supabase_migrations.applied so restarts and upgrades are safe to repeat.
-  # The data services wait for this to finish before they boot.
+  # Storage boots first and brings its own schema (storage.buckets), which
+  # the portrait and homebrew migrations need; the remaining data services
+  # wait for this to finish before they boot.
   migrate:
     image: supabase/postgres:17.6.1.136
     restart: "no"
     depends_on:
       db:
+        condition: service_healthy
+      storage:
         condition: service_healthy
     volumes:
       - ./migrate/apply.sh:/migrate/apply.sh:ro
@@ -146,8 +150,6 @@ services:
       db:
         # Disable this if you are using an external Postgres database
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     healthcheck:
       test: [ "CMD", "postgrest", "--ready" ]
       interval: 5s
@@ -247,8 +249,6 @@ services:
         condition: service_healthy
       rest:
         condition: service_started
-      migrate:
-        condition: service_completed_successfully
     healthcheck:
       test:
         [
