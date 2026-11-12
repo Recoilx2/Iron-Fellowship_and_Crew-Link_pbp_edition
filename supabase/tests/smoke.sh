@@ -279,12 +279,55 @@ PY_EOF
     echo "probe-62: no node or python3 on runner, skipping join probe"
   fi
 
+  echo "--- probe-62 3b: authenticated join (mirrors the live tests) ---"
+  svc_key="$(get_var "$env_file" SERVICE_ROLE_KEY)"
+  echo "::add-mask::$svc_key" 2>/dev/null || true
+  PROBE_GW="$gw" PROBE_ANON="$key" PROBE_SERVICE="$svc_key" node -e '
+    (async () => {
+      const gw = process.env.PROBE_GW;
+      const anon = process.env.PROBE_ANON;
+      const service = process.env.PROBE_SERVICE;
+      const tag = "probe62-" + Date.now();
+      const email = tag + "@example.com";
+      const password = "pw-" + tag;
+      const adminHeaders = { apikey: service, Authorization: "Bearer " + service, "Content-Type": "application/json" };
+      let res = await fetch(gw + "/auth/v1/admin/users", { method: "POST", headers: adminHeaders, body: JSON.stringify({ email: email, password: password, email_confirm: true }) });
+      if (!res.ok) { console.log("PROBE-62 auth: admin create failed " + res.status + " " + (await res.text()).slice(0, 200)); return; }
+      const created = await res.json();
+      const userId = created.id || (created.user && created.user.id);
+      console.log("PROBE-62 auth: created user " + userId);
+      res = await fetch(gw + "/auth/v1/token?grant_type=password", { method: "POST", headers: { apikey: anon, "Content-Type": "application/json" }, body: JSON.stringify({ email: email, password: password }) });
+      if (!res.ok) { console.log("PROBE-62 auth: sign-in failed " + res.status + " " + (await res.text()).slice(0, 200)); return; }
+      const session = await res.json();
+      const token = session.access_token;
+      console.log("PROBE-62 auth: signed in, token prefix " + String(token).slice(0, 12));
+      const url = gw.replace(/^http/, "ws") + "/realtime/v1/websocket?apikey=" + anon + "&vsn=2.0.0";
+      const ws = new WebSocket(url);
+      const timer = setTimeout(() => { console.log("PROBE-62 auth: TIMEOUT waiting for reply"); try { ws.close(); } catch (e) {} }, 20000);
+      const baseConfig = { broadcast: { ack: false, self: false }, presence: { key: "" }, private: true };
+      const pg = [{ event: "*", schema: "public", table: "user_settings", filter: "user_id=eq." + userId }];
+      ws.onopen = () => {
+        console.log("PROBE-62 auth: ws open");
+        ws.send(JSON.stringify(["1", "1", "realtime:user-settings:" + userId, "phx_join", { config: Object.assign({}, baseConfig, { postgres_changes: pg }), access_token: token }]));
+      };
+      ws.onmessage = (e) => { console.log("PROBE-62 auth msg: " + String(e.data).slice(0, 500)); };
+      ws.onerror = () => { console.log("PROBE-62 auth: ws error"); };
+      ws.onclose = (e) => { clearTimeout(timer); console.log("PROBE-62 auth: ws close code=" + e.code); };
+    })();
+  ' || echo "probe-62: node auth exit $?"
+
   echo "--- probe-62 2a: envoy access lines for realtime ---"
   compose "$project" "$env_file" logs --tail 500 api-gw 2>/dev/null | grep -i "realtime" | tail -30 || true
   echo "--- probe-62 2b: realtime logs ---"
   compose "$project" "$env_file" logs --tail 150 realtime 2>/dev/null || true
-  echo "--- probe-62 2c: publication contents ---"
+  echo "--- probe-62 2c: publication, roles, RLS state, messages policies ---"
   compose "$project" "$env_file" exec -T db psql -U postgres -tAc "select tablename from pg_publication_tables where pubname='supabase_realtime' order by 1;" || true
+  compose "$project" "$env_file" exec -T db psql -U postgres -tAc "SELECT rolname || ':super=' || rolsuper || ':bypassrls=' || rolbypassrls FROM pg_roles WHERE rolname IN ('supabase_admin','supabase_realtime_admin','authenticated','anon','service_role') ORDER BY 1;" || true
+  compose "$project" "$env_file" exec -T db psql -U postgres -tAc "SELECT 'messages rls=' || relrowsecurity || ' force=' || relforcerowsecurity FROM pg_class WHERE oid = 'realtime.messages'::regclass;" || true
+  compose "$project" "$env_file" exec -T db psql -U postgres -tAc "SELECT policyname || ' cmd=' || cmd || ' roles=' || array_to_string(roles, ',') FROM pg_policies WHERE schemaname='realtime' AND tablename='messages' ORDER BY 1;" || true
+  echo "--- probe-62 2d: realtime-auth applier status ---"
+  compose "$project" "$env_file" ps realtime-auth 2>/dev/null || true
+  compose "$project" "$env_file" logs realtime-auth 2>/dev/null | tail -20 || true
 }
 
 probe_realtime_gateway ironsworn "$IRON_ENV" "$IRON_PORT" "$IRON_ANON"
