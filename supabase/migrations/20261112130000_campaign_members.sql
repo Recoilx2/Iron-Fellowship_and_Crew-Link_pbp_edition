@@ -22,10 +22,22 @@ BEGIN;
 -- and the (select auth.uid()) subquery follow the database performance guide:
 -- the planner evaluates the caller's identity once per statement, and the
 -- (campaign_id, user_id) primary key serves the lookup.
---
--- Created before the table policies below: Postgres resolves the functions a
--- policy calls when the policy is created.
 CREATE SCHEMA IF NOT EXISTS private;
+
+-- The roster table comes before the helpers: Postgres validates the body of
+-- a SQL-language function when it is created, so the table must exist first.
+-- The helpers still precede the table policies below, which resolve the
+-- functions they call when each policy is created.
+CREATE TABLE IF NOT EXISTS public.campaign_members (
+  campaign_id uuid NOT NULL,
+  user_id uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
+  role text NOT NULL CHECK (role IN ('gm', 'player')),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (campaign_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS campaign_members_by_user
+  ON public.campaign_members (user_id);
 
 CREATE OR REPLACE FUNCTION private.is_campaign_member(cid uuid)
 RETURNS boolean
@@ -52,17 +64,6 @@ AS $$
     WHERE campaign_id = cid AND user_id = (select auth.uid()) AND role = 'gm'
   );
 $$;
-
-CREATE TABLE IF NOT EXISTS public.campaign_members (
-  campaign_id uuid NOT NULL,
-  user_id uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
-  role text NOT NULL CHECK (role IN ('gm', 'player')),
-  created_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (campaign_id, user_id)
-);
-
-CREATE INDEX IF NOT EXISTS campaign_members_by_user
-  ON public.campaign_members (user_id);
 
 ALTER TABLE public.campaign_members ENABLE ROW LEVEL SECURITY;
 
