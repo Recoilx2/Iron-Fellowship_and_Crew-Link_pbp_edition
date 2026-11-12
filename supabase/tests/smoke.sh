@@ -146,3 +146,59 @@ done
 echo "smoke: both copies side by side on isolated networks"
 
 echo "smoke: OK - both copies healthy"
+
+# TEMPORARY (#62): read-only realtime gateway probes. REMOVE BEFORE MERGE.
+# Never fails the script: every probe tolerates errors so smoke stays green.
+probe_realtime_gateway() {
+  # probe_realtime_gateway <project> <env-file> <port> <anon-key>
+  local project="$1" env_file="$2" port="$3" key="$4"
+  local gw="http://localhost:$port"
+  echo "::add-mask::$key" 2>/dev/null || true
+  echo "probe-62: WS path through the gateway ($project port $port)"
+
+  echo "--- probe-62 1a: upgrade with ?apikey= (what realtime-js sends) ---"
+  curl -sS -i -N -m 10 \
+    -H "Connection: Upgrade" -H "Upgrade: websocket" \
+    -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+    "$gw/realtime/v1/websocket?apikey=$key&vsn=1.0.0" | head -12 || echo "probe-62: curl exit $?"
+  echo "--- probe-62 1b: upgrade with apikey header, no query key ---"
+  curl -sS -i -N -m 10 -H "apikey: $key" \
+    -H "Connection: Upgrade" -H "Upgrade: websocket" \
+    -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+    "$gw/realtime/v1/websocket?vsn=1.0.0" | head -12 || echo "probe-62: curl exit $?"
+  echo "--- probe-62 1c: negative control, no key at all (expect 401) ---"
+  curl -sS -i -N -m 10 \
+    -H "Connection: Upgrade" -H "Upgrade: websocket" \
+    -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+    "$gw/realtime/v1/websocket?vsn=1.0.0" | head -6 || echo "probe-62: curl exit $?"
+
+  if command -v node >/dev/null 2>&1; then
+    echo "--- probe-62 3: phoenix join via the gateway (hand-rolled, no deps) ---"
+    PROBE_GW="$gw" PROBE_ANON="$key" node -e '
+      if (typeof WebSocket === "undefined") { console.log("PROBE-62 join: no global WebSocket, skipping"); process.exit(0); }
+      const gw = process.env.PROBE_GW.replace(/^http/, "ws");
+      const anon = process.env.PROBE_ANON;
+      const url = gw + "/realtime/v1/websocket?apikey=" + anon + "&vsn=1.0.0";
+      const ws = new WebSocket(url);
+      const timer = setTimeout(() => { console.log("PROBE-62 join: TIMEOUT waiting for reply"); try { ws.close(); } catch (e) {} }, 15000);
+      ws.onopen = () => {
+        console.log("PROBE-62 ws: open (upgrade ok)");
+        ws.send(JSON.stringify(["1", "1", "realtime:probe-62", "phx_join", { config: { broadcast: { ack: false, self: false }, presence: { key: "" }, postgres_changes: [{ event: "*", schema: "public", table: "user_settings" }], private: true }, access_token: anon }]));
+      };
+      ws.onmessage = (e) => { console.log("PROBE-62 msg:", String(e.data).slice(0, 400)); };
+      ws.onerror = () => { console.log("PROBE-62 ws: error"); };
+      ws.onclose = (e) => { clearTimeout(timer); console.log("PROBE-62 ws: close code=" + e.code + " reason=" + e.reason); };
+    ' || echo "probe-62: node exit $?"
+  else
+    echo "probe-62: no node on runner, skipping join probe"
+  fi
+
+  echo "--- probe-62 2a: envoy access lines for realtime ---"
+  compose "$project" "$env_file" logs --tail 500 api-gw 2>/dev/null | grep -i "realtime" | tail -30 || true
+  echo "--- probe-62 2b: realtime logs ---"
+  compose "$project" "$env_file" logs --tail 150 realtime 2>/dev/null || true
+  echo "--- probe-62 2c: publication contents ---"
+  compose "$project" "$env_file" exec -T db psql -U postgres -tAc "select tablename from pg_publication_tables where pubname='supabase_realtime' order by 1;" || true
+}
+
+probe_realtime_gateway ironsworn "$IRON_ENV" "$IRON_PORT" "$IRON_ANON"
