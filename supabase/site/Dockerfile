@@ -7,7 +7,7 @@
 # system baked in here (see game-ironsworn.env / game-starforged.env).
 ARG GAME_SYSTEM=ironsworn
 
-FROM node:20-bookworm-slim AS build
+FROM node:24-bookworm-slim AS build
 WORKDIR /app
 
 ARG GAME_SYSTEM
