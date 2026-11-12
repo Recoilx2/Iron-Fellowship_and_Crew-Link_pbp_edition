@@ -12,7 +12,7 @@ import {
 } from "@mui/material";
 import { LoadingButton } from "@mui/lab";
 import { useSnackbar } from "providers/SnackbarProvider/useSnackbar";
-import { updateUser } from "lib/auth.lib";
+import { updateUser } from "api-calls/auth/updateUser";
 import { useEffect, useState } from "react";
 import { useStore } from "stores/store";
 import { UserAvatar } from "./UserAvatar";

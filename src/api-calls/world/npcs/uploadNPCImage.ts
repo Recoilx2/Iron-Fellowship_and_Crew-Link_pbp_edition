@@ -1,5 +1,5 @@
 import { constructNPCImagesPath, getNPCDoc } from "./_getRef";
-import { replaceImage } from "lib/storage.lib";
+import { replaceImage } from "api-calls/storage/replaceImage";
 import { updateDoc } from "firebase/firestore";
 import { createApiFunction } from "api-calls/createApiFunction";
 

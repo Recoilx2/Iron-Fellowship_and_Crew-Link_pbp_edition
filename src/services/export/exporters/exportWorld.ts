@@ -1,4 +1,4 @@
-import { getCountFromServer, query, where } from "firebase/firestore";
+import { countWorldItemsForExport } from "api-calls/world/countWorldItemsForExport";
 import { Exporter, ExportFile } from "services/export/types";
 import { ExportAbortedError } from "services/export/zipBundle";
 import { yjsUpdateToMarkdown } from "services/export/yjsToMarkdown";
@@ -6,9 +6,6 @@ import { getWorldForExport } from "api-calls/world/getWorldForExport";
 import { getAllNPCsForExport } from "api-calls/world/npcs/getAllNPCsForExport";
 import { getAllLoreForExport } from "api-calls/world/lore/getAllLoreForExport";
 import { getAllLocationsForExport } from "api-calls/world/locations/getAllLocationsForExport";
-import { getNPCCollection } from "api-calls/world/npcs/_getRef";
-import { getLoreCollection } from "api-calls/world/lore/_getRef";
-import { getLocationCollection } from "api-calls/world/locations/_getRef";
 import { World } from "api-calls/world/_world.type";
 import {
   buildUniqueExportPath,
@@ -67,32 +64,8 @@ export class WorldExporter implements Exporter {
     let total = 1;
 
     // Collection counts (filtered by sharedWithPlayers for non-owners)
-    const [npcCount, loreCount, locationCount] = await Promise.all([
-      getCountFromServer(
-        isOwner
-          ? getNPCCollection(this.worldId)
-          : query(
-              getNPCCollection(this.worldId),
-              where("sharedWithPlayers", "==", true)
-            )
-      ).then((r) => r.data().count),
-      getCountFromServer(
-        isOwner
-          ? getLoreCollection(this.worldId)
-          : query(
-              getLoreCollection(this.worldId),
-              where("sharedWithPlayers", "==", true)
-            )
-      ).then((r) => r.data().count),
-      getCountFromServer(
-        isOwner
-          ? getLocationCollection(this.worldId)
-          : query(
-              getLocationCollection(this.worldId),
-              where("sharedWithPlayers", "==", true)
-            )
-      ).then((r) => r.data().count),
-    ]);
+    const { npcCount, loreCount, locationCount } =
+      await countWorldItemsForExport(this.worldId, isOwner);
 
     throwIfAborted(signal);
 

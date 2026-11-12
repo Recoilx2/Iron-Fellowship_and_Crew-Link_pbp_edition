@@ -1,4 +1,5 @@
-import { PartialWithFieldValue, updateDoc } from "firebase/firestore";
+import { UpdateData, updateDoc } from "firebase/firestore";
+import { DocumentUpdate } from "api-calls/helpers.type";
 import { getCampaignAssetDoc, getCharacterAssetDoc } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
 import { AssetDocument } from "api-calls/assets/_asset.type";
@@ -8,7 +9,7 @@ export const updateAsset = createApiFunction<
     characterId?: string;
     campaignId?: string;
     assetId: string;
-    asset: PartialWithFieldValue<AssetDocument>;
+    asset: DocumentUpdate<AssetDocument>;
   },
   void
 >((params) => {
@@ -23,7 +24,7 @@ export const updateAsset = createApiFunction<
       characterId
         ? getCharacterAssetDoc(characterId, assetId)
         : getCampaignAssetDoc(campaignId as string, assetId),
-      asset
+      asset as UpdateData<AssetDocument>
     )
       .then(() => {
         resolve();

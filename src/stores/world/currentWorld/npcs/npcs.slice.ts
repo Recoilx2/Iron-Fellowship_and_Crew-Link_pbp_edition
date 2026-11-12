@@ -10,7 +10,7 @@ import { updateNPCGMProperties } from "api-calls/world/npcs/updateNPCGMPropertie
 import { updateNPCNotes } from "api-calls/world/npcs/updateNPCNotes";
 import { uploadNPCImage } from "api-calls/world/npcs/uploadNPCImage";
 import { listenToNPCNotes } from "api-calls/world/npcs/listenToNPCNotes";
-import { Unsubscribe } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { listenToNPCGMProperties } from "api-calls/world/npcs/listenToNPCGMProperties";
 import { updateNPCCharacterBond } from "api-calls/world/npcs/updateNPCCharacterBond";
 import { updateNPCCharacterConnection } from "api-calls/world/npcs/updateNPCCharacterConnection";

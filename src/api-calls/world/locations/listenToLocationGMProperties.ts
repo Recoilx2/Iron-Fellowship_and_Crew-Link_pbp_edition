@@ -1,4 +1,4 @@
-import { Unsubscribe } from "firebase/auth";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { onSnapshot } from "firebase/firestore";
 import { GMLocation } from "types/Locations.type";
 import { getPrivateDetailsLocationDoc } from "./_getRef";

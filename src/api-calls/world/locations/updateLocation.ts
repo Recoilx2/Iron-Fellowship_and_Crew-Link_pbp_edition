@@ -1,4 +1,5 @@
 import { UpdateData, updateDoc } from "firebase/firestore";
+import { DocumentUpdate } from "api-calls/helpers.type";
 import { Location } from "types/Locations.type";
 import { convertUpdateDataToDatabase, getLocationDoc } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
@@ -6,7 +7,7 @@ import { createApiFunction } from "api-calls/createApiFunction";
 interface LocationParams {
   worldId: string;
   locationId: string;
-  location: UpdateData<Location>;
+  location: DocumentUpdate<Location>;
 }
 
 export const updateLocation = createApiFunction<LocationParams, void>(
@@ -16,7 +17,7 @@ export const updateLocation = createApiFunction<LocationParams, void>(
     return new Promise((resolve, reject) => {
       updateDoc(
         getLocationDoc(worldId, locationId),
-        convertUpdateDataToDatabase(location)
+        convertUpdateDataToDatabase(location as UpdateData<Location>)
       )
         .then(() => {
           resolve();

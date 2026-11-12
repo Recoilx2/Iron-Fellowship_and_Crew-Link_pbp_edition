@@ -17,7 +17,7 @@ import { useUpdateQueryStringValueWithoutNavigation } from "hooks/useUpdateQuery
 import { OracleSection } from "./OracleSection";
 import { MovesSection } from "./MovesSection";
 import { AssetsSection } from "./AssetsSection";
-import { arrayUnion } from "firebase/firestore";
+import { addHomebrewViewer } from "api-calls/homebrew/addHomebrewViewer";
 import { useSnackbar } from "providers/SnackbarProvider";
 import { Head } from "providers/HeadProvider/Head";
 
@@ -75,18 +75,15 @@ export function HomebrewEditorPage() {
 
   const { success } = useSnackbar();
 
-  const updateHomebrewCollection = useStore(
-    (store) => store.homebrew.updateExpansion
-  );
   const addSelfAsViewer = useCallback(() => {
     if (homebrewId && uid) {
-      updateHomebrewCollection(homebrewId, { viewers: arrayUnion(uid) })
+      addHomebrewViewer({ id: homebrewId, uid })
         .catch(() => {})
         .then(() => {
           success("Added collection to your homebrew");
         });
     }
-  }, [uid, updateHomebrewCollection, homebrewId, success]);
+  }, [uid, homebrewId, success]);
 
   if (loading || (!homebrewDetails && syncLoading)) {
     return <LinearProgress />;

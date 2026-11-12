@@ -11,8 +11,7 @@ import {
 import AccountIcon from "@mui/icons-material/Person";
 import { AuthPageHeading, GoogleSignInButton } from "components/shared/Auth";
 import { PageContent, PageHeader } from "components/shared/Layout";
-import { FirebaseError } from "firebase/app";
-import { sendMagicEmailLink } from "lib/auth.lib";
+import { sendMagicEmailLink } from "api-calls/auth/sendMagicEmailLink";
 import { FormEvent, useState } from "react";
 
 export interface LoginOrSignupPageProps {
@@ -51,8 +50,11 @@ export function LoginOrSignupPage(props: LoginOrSignupPageProps) {
         setLinkSent(true);
         setErrorMessage(undefined);
       })
-      .catch((e: FirebaseError) => {
-        setErrorMessage("Error sending email link: " + e.message);
+      .catch((e: unknown) => {
+        setErrorMessage(
+          "Error sending email link: " +
+            (e instanceof Error ? e.message : String(e))
+        );
       })
       .finally(() => {
         setLinkSendLoading(false);

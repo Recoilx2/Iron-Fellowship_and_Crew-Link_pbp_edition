@@ -1,4 +1,4 @@
-import { Unsubscribe } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { GMLore, Lore } from "types/Lore.type";
 
 export type LoreDocumentWithGMProperties = Lore & {

@@ -2,9 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { collectAsyncIterable } from "../../__tests__/testUtils";
 
 const mocks = vi.hoisted(() => ({
-  getCountFromServer: vi.fn(),
-  query: vi.fn(),
-  where: vi.fn(),
+  countWorldItemsForExport: vi.fn(),
   getWorldForExport: vi.fn(),
   getAllNPCsForExport: vi.fn(),
   getAllLoreForExport: vi.fn(),
@@ -12,10 +10,8 @@ const mocks = vi.hoisted(() => ({
   yjsUpdateToMarkdown: vi.fn(),
 }));
 
-vi.mock("firebase/firestore", () => ({
-  getCountFromServer: mocks.getCountFromServer,
-  query: mocks.query,
-  where: mocks.where,
+vi.mock("api-calls/world/countWorldItemsForExport", () => ({
+  countWorldItemsForExport: mocks.countWorldItemsForExport,
 }));
 vi.mock("api-calls/world/getWorldForExport", () => ({
   getWorldForExport: mocks.getWorldForExport,
@@ -29,15 +25,6 @@ vi.mock("api-calls/world/lore/getAllLoreForExport", () => ({
 vi.mock("api-calls/world/locations/getAllLocationsForExport", () => ({
   getAllLocationsForExport: mocks.getAllLocationsForExport,
 }));
-vi.mock("api-calls/world/npcs/_getRef", () => ({
-  getNPCCollection: vi.fn(() => "npcs"),
-}));
-vi.mock("api-calls/world/lore/_getRef", () => ({
-  getLoreCollection: vi.fn(() => "lore"),
-}));
-vi.mock("api-calls/world/locations/_getRef", () => ({
-  getLocationCollection: vi.fn(() => "locations"),
-}));
 vi.mock("services/export/yjsToMarkdown", () => ({
   yjsUpdateToMarkdown: mocks.yjsUpdateToMarkdown,
 }));
@@ -47,11 +34,6 @@ import { WorldExporter } from "../exportWorld";
 describe("WorldExporter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.query.mockImplementation((collection: string) => `query:${collection}`);
-    mocks.where.mockImplementation(
-      (field: string, operator: string, value: unknown) =>
-        `where:${field}:${operator}:${String(value)}`
-    );
     mocks.yjsUpdateToMarkdown.mockImplementation(
       (content: Uint8Array | null) => (content ? `markdown-${content[0]}` : "")
     );
@@ -63,10 +45,11 @@ describe("WorldExporter", () => {
       settingKey: "starforged",
       ownerIds: ["user-1"],
     });
-    mocks.getCountFromServer
-      .mockResolvedValueOnce({ data: () => ({ count: 2 }) })
-      .mockResolvedValueOnce({ data: () => ({ count: 3 }) })
-      .mockResolvedValueOnce({ data: () => ({ count: 4 }) });
+    mocks.countWorldItemsForExport.mockResolvedValue({
+      npcCount: 2,
+      loreCount: 3,
+      locationCount: 4,
+    });
 
     const exporter = new WorldExporter({ worldId: "world-1", userId: "user-1" });
 

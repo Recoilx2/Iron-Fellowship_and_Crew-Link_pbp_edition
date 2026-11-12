@@ -19,7 +19,7 @@ import { useSnackbar } from "providers/SnackbarProvider";
 import { constructHomebrewEditorPath } from "pages/Homebrew/routes";
 import { UserList } from "./UserList";
 import { useConfirm } from "material-ui-confirm";
-import { arrayRemove } from "firebase/firestore";
+import { removeHomebrewViewer } from "api-calls/homebrew/removeHomebrewViewer";
 import { removeSelfAsEditor } from "api-calls/homebrew/editorFunction/removeSelfAsEditor";
 import { useNavigate } from "react-router-dom";
 import { BASE_ROUTES, basePaths } from "routes";
@@ -61,7 +61,6 @@ export function AboutSection(props: AboutSectionProps) {
   };
 
   const deleteCollection = useStore((store) => store.homebrew.deleteExpansion);
-  const updateExpansion = useStore((store) => store.homebrew.updateExpansion);
 
   const uid = useStore((store) => store.auth.uid);
 
@@ -72,7 +71,7 @@ export function AboutSection(props: AboutSectionProps) {
   const removeSelf = () => {
     const promises: Promise<unknown>[] = [];
     if (isViewer) {
-      promises.push(updateExpansion(id, { viewers: arrayRemove(uid) }));
+      promises.push(removeHomebrewViewer({ id, uid }));
     }
     if (isEditor) {
       promises.push(removeSelfAsEditor(id));

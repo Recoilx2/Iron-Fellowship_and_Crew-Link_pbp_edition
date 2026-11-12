@@ -1,4 +1,4 @@
-import { getImageUrl } from "lib/storage.lib";
+import { getImageUrl } from "api-calls/storage/getImageUrl";
 import { constructCharacterPortraitPath } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
 

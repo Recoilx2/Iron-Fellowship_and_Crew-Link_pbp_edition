@@ -1,4 +1,4 @@
-import { Unsubscribe } from "firebase/auth";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { onSnapshot, query, where } from "firebase/firestore";
 import { Location } from "types/Locations.type";
 import {
@@ -6,7 +6,7 @@ import {
   convertFromDatabase,
   getLocationCollection,
 } from "./_getRef";
-import { getImageUrl } from "lib/storage.lib";
+import { getImageUrl } from "api-calls/storage/getImageUrl";
 
 export function listenToLocations(
   worldId: string,

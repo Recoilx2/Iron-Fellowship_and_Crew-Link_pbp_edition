@@ -1,7 +1,7 @@
 import { createApiFunction } from "api-calls/createApiFunction";
 import { updateLocation } from "./updateLocation";
 import { constructLocationImagesPath } from "./_getRef";
-import { deleteImage } from "lib/storage.lib";
+import { deleteImage } from "api-calls/storage/deleteImage";
 import { deleteField } from "firebase/firestore";
 
 export const removeLocationMapBackgroundImage = createApiFunction<

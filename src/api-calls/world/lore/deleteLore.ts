@@ -6,7 +6,7 @@ import {
   getPublicNotesLoreDoc,
 } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
-import { deleteImage } from "lib/storage.lib";
+import { deleteImage } from "api-calls/storage/deleteImage";
 
 interface Params {
   worldId: string;

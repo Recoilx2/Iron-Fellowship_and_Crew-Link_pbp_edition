@@ -1,6 +1,6 @@
 import { CharacterDocument } from "api-calls/character/_character.type";
 import { listenToCharacter } from "api-calls/character/listenToCharacter";
-import { Unsubscribe } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
