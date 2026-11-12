@@ -189,8 +189,86 @@ probe_realtime_gateway() {
       ws.onerror = () => { console.log("PROBE-62 ws: error"); };
       ws.onclose = (e) => { clearTimeout(timer); console.log("PROBE-62 ws: close code=" + e.code + " reason=" + e.reason); };
     ' || echo "probe-62: node exit $?"
+  elif command -v python3 >/dev/null 2>&1; then
+    echo "--- probe-62 3 (python fallback): phoenix join via the gateway ---"
+    PROBE_PORT="$port" PROBE_ANON="$key" python3 - <<'PY_EOF' || echo "probe-62: python exit $?"
+import base64, json, os, select, socket, struct, sys
+host, port = "localhost", int(os.environ["PROBE_PORT"])
+anon = os.environ["PROBE_ANON"]
+path = "/realtime/v1/websocket?apikey=" + anon + "&vsn=1.0.0"
+key = base64.b64encode(os.urandom(16)).decode()
+req = ("GET " + path + " HTTP/1.1\r\nHost: localhost:" + str(port) + "\r\n"
+       "Upgrade: websocket\r\nConnection: Upgrade\r\n"
+       "Sec-WebSocket-Key: " + key + "\r\nSec-WebSocket-Version: 13\r\n\r\n")
+s = socket.create_connection((host, port), timeout=10)
+s.sendall(req.encode())
+resp = b""
+while b"\r\n\r\n" not in resp:
+    chunk = s.recv(4096)
+    if not chunk:
+        break
+    resp += chunk
+print("PROBE-62 py: handshake:", resp.split(b"\r\n", 1)[0].decode(errors="replace"))
+if b" 101 " not in resp:
+    print(resp.decode(errors="replace")[:400])
+    sys.exit(0)
+join = json.dumps(["1", "1", "realtime:probe-62", "phx_join",
+    {"config": {"broadcast": {"ack": False, "self": False}, "presence": {"key": ""},
+     "postgres_changes": [{"event": "*", "schema": "public", "table": "user_settings"}],
+     "private": True}, "access_token": anon}]).encode()
+mask = os.urandom(4)
+masked = bytes(b ^ mask[i % 4] for i, b in enumerate(join))
+if len(join) < 126:
+    frame = bytes([0x81, 0x80 | len(join)]) + mask + masked
+else:
+    frame = struct.pack("!BBH", 0x81, 0x80 | 126, len(join)) + mask + masked
+s.sendall(frame)
+s.setblocking(False)
+buf = b""
+deadline = 15
+while deadline > 0:
+    r, _, _ = select.select([s], [], [], 1)
+    deadline -= 1
+    if not r:
+        continue
+    try:
+        chunk = s.recv(65536)
+    except BlockingIOError:
+        continue
+    if not chunk:
+        print("PROBE-62 py: connection closed by peer")
+        break
+    buf += chunk
+    while len(buf) >= 2:
+        opcode = buf[0] & 0x0F
+        ln = buf[1] & 0x7F
+        idx = 2
+        if ln == 126:
+            if len(buf) < 4:
+                break
+            ln = struct.unpack("!H", buf[2:4])[0]
+            idx = 4
+        elif ln == 127:
+            if len(buf) < 10:
+                break
+            ln = struct.unpack("!Q", buf[2:10])[0]
+            idx = 10
+        if len(buf) < idx + ln:
+            break
+        payload = buf[idx:idx + ln]
+        buf = buf[idx + ln:]
+        if opcode == 0x8:
+            print("PROBE-62 py: close frame")
+            sys.exit(0)
+        if opcode == 0x1:
+            print("PROBE-62 py: msg:", payload.decode(errors="replace")[:400])
+        if opcode == 0x9:
+            s.sendall(bytes([0x8A, 0x00]))
+else:
+    print("PROBE-62 py: TIMEOUT waiting for reply")
+PY_EOF
   else
-    echo "probe-62: no node on runner, skipping join probe"
+    echo "probe-62: no node or python3 on runner, skipping join probe"
   fi
 
   echo "--- probe-62 2a: envoy access lines for realtime ---"
