@@ -47,6 +47,7 @@ describe.skipIf(!config)("listenToRows against the local stack", () => {
   it("opens the channel as private", { timeout: 60000 }, async () => {
     const owner = track(await createPerson(cfg, "owner"));
     const channelSpy = vi.spyOn(owner.client, "channel");
+    const errors: unknown[] = [];
 
     const unsubscribe = listenToRows<SettingsRow>({
       client: owner.client,
@@ -55,6 +56,7 @@ describe.skipIf(!config)("listenToRows against the local stack", () => {
       fetchRows: () => fetchOwnRows(owner),
       getKey,
       onRows: () => {},
+      onError: (error) => errors.push(error),
     });
     try {
       expect(channelSpy).toHaveBeenCalledWith(
@@ -70,6 +72,7 @@ describe.skipIf(!config)("listenToRows against the local stack", () => {
       unsubscribe();
       channelSpy.mockRestore();
     }
+    expect(errors).toEqual([]);
   });
 
   it("delivers the current rows and later changes in order", { timeout: 60000 }, async () => {
@@ -80,6 +83,7 @@ describe.skipIf(!config)("listenToRows against the local stack", () => {
     });
 
     const seen: boolean[][] = [];
+    const errors: unknown[] = [];
     const unsubscribe = listenToRows<SettingsRow>({
       client: owner.client,
       channelName: `user-settings:${owner.userId}`,
@@ -102,6 +106,7 @@ describe.skipIf(!config)("listenToRows against the local stack", () => {
       getUpdatedAt,
       onRows: (rows) =>
         seen.push(rows.map((row) => row.verbose_roll_results)),
+      onError: (error) => errors.push(error),
     });
     try {
       await waitFor(() => (seen.length >= 1 ? seen : null));
@@ -119,6 +124,7 @@ describe.skipIf(!config)("listenToRows against the local stack", () => {
         seen.length >= 3 ? seen : null
       );
       expect(final.map((flags) => flags[0])).toEqual([false, true, false]);
+      expect(errors).toEqual([]);
     } finally {
       unsubscribe();
     }
@@ -132,6 +138,7 @@ describe.skipIf(!config)("listenToRows against the local stack", () => {
     });
 
     const seen: boolean[][] = [];
+    const errors: unknown[] = [];
     const unsubscribe = listenToRows<SettingsRow>({
       client: owner.client,
       channelName: `user-settings:${owner.userId}`,
@@ -154,6 +161,7 @@ describe.skipIf(!config)("listenToRows against the local stack", () => {
       getUpdatedAt,
       onRows: (rows) =>
         seen.push(rows.map((row) => row.verbose_roll_results)),
+      onError: (error) => errors.push(error),
     });
     try {
       await waitFor(() => (seen.length >= 1 ? seen : null));
@@ -166,11 +174,15 @@ describe.skipIf(!config)("listenToRows against the local stack", () => {
         .update({ verbose_roll_results: true })
         .eq("user_id", owner.userId);
       owner.client.realtime.connect();
+      // The forced disconnect above is itself expected to surface CLOSED, so
+      // only errors from the reconnect onward indicate a real problem.
+      errors.length = 0;
 
       const caughtUp = await waitFor(() =>
         seen.at(-1)?.[0] === true ? seen : null
       );
       expect(caughtUp.at(-1)).toEqual([true]);
+      expect(errors).toEqual([]);
     } finally {
       unsubscribe();
     }
@@ -185,6 +197,7 @@ describe.skipIf(!config)("listenToRows against the local stack", () => {
     });
 
     const seen: SettingsRow[][] = [];
+    const errors: unknown[] = [];
     const unsubscribe = listenToRows<SettingsRow>({
       client: outsider.client,
       channelName: `user-settings:${owner.userId}`,
@@ -213,6 +226,7 @@ describe.skipIf(!config)("listenToRows against the local stack", () => {
       getKey,
       getUpdatedAt,
       onRows: (rows) => seen.push(rows),
+      onError: (error) => errors.push(error),
     });
     try {
       await waitFor(() => (seen.length >= 1 ? seen : null));
@@ -225,6 +239,7 @@ describe.skipIf(!config)("listenToRows against the local stack", () => {
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
       expect(seen).toEqual([[]]);
+      expect(errors).toEqual([]);
     } finally {
       unsubscribe();
     }
