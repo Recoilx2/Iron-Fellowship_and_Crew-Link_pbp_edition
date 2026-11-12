@@ -21,6 +21,23 @@ BEGIN;
 
 CREATE SCHEMA IF NOT EXISTS private;
 
+-- The notes table comes before the helpers: Postgres validates the body of
+-- a SQL-language function when it is created, so the table must exist
+-- first. The helpers still precede the table policies below, which resolve
+-- the functions they call when each policy is created.
+CREATE TABLE IF NOT EXISTS public.campaign_notes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id uuid NOT NULL REFERENCES public.campaigns (id) ON DELETE CASCADE,
+  title text NOT NULL DEFAULT 'New Page',
+  shared boolean NOT NULL DEFAULT false,
+  sort_order integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS campaign_notes_by_campaign
+  ON public.campaign_notes (campaign_id);
+
 -- Members read the notes shared with their campaign; GMs read every note,
 -- including unshared drafts. Outsiders read nothing.
 CREATE OR REPLACE FUNCTION private.is_campaign_note_visible(nid uuid)
@@ -52,19 +69,6 @@ AS $$
       AND private.is_campaign_member(n.campaign_id)
   );
 $$;
-
-CREATE TABLE IF NOT EXISTS public.campaign_notes (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  campaign_id uuid NOT NULL REFERENCES public.campaigns (id) ON DELETE CASCADE,
-  title text NOT NULL DEFAULT 'New Page',
-  shared boolean NOT NULL DEFAULT false,
-  sort_order integer NOT NULL DEFAULT 0,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS campaign_notes_by_campaign
-  ON public.campaign_notes (campaign_id);
 
 ALTER TABLE public.campaign_notes ENABLE ROW LEVEL SECURITY;
 
