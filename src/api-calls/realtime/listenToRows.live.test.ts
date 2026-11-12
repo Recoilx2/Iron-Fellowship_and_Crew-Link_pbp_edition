@@ -59,7 +59,12 @@ describe.skipIf(!config)("listenToRows against the local stack", () => {
     try {
       expect(channelSpy).toHaveBeenCalledWith(
         `user-settings:${owner.userId}`,
-        { config: { private: true } }
+        // The installed SDK merges its broadcast/presence defaults into the
+        // params object in place, so exact equality can never match. Match
+        // the private flag as a subset: the channel must still be private.
+        expect.objectContaining({
+          config: expect.objectContaining({ private: true }),
+        })
       );
     } finally {
       unsubscribe();
