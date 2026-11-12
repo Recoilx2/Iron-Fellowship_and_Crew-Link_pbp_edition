@@ -1,42 +1,60 @@
-import { onSnapshot, setDoc } from "firebase/firestore";
-import { decodeDataswornId } from "functions/dataswornIdEncoder";
+import { getSupabaseClient } from "config/supabase.config";
+import { listenToRows } from "api-calls/realtime/listenToRows";
 import { OracleSettingsDocument } from "api-calls/user/settings/_settings.type";
-import { getUserOracleSettingsDoc } from "./_getRef";
+import {
+  constructUserSettingsChannelName,
+  constructUserSettingsFilter,
+  USER_SETTINGS_TABLE,
+  UserSettingsRow,
+} from "./_getRef";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ErrorCallback = (error: any) => void;
 
 export function listenToOracleSettings(
   uid: string,
   onOracleSettings: (settings: OracleSettingsDocument) => void,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onError: (error: any) => void
+  onError: ErrorCallback
 ) {
-  return onSnapshot(
-    getUserOracleSettingsDoc(uid),
-    (snapshot) => {
-      const data = snapshot.data();
-      if (data) {
-        const { pinnedOracleSections } = data;
-        const decodedPinnedOracleSections: { [key: string]: boolean } = {};
-
-        if (pinnedOracleSections) {
-          Object.keys(data.pinnedOracleSections ?? {}).forEach((pinnedId) => {
-            decodedPinnedOracleSections[decodeDataswornId(pinnedId)] =
-              pinnedOracleSections[pinnedId];
-          });
-        }
-
-        onOracleSettings({ pinnedOracleSections: decodedPinnedOracleSections });
-      } else {
-        if (uid) {
-          setDoc(getUserOracleSettingsDoc(uid), {
-            pinnedOracleSections: {},
-          });
-        }
-        onOracleSettings({});
+  const client = getSupabaseClient();
+  return listenToRows<UserSettingsRow>({
+    client,
+    channelName: constructUserSettingsChannelName(uid),
+    bindings: [
+      {
+        type: "postgres_changes",
+        table: USER_SETTINGS_TABLE,
+        filter: constructUserSettingsFilter(uid),
+        toChange: (payload) => {
+          const row = payload.new as Partial<UserSettingsRow>;
+          if (row && typeof row.user_id === "string") {
+            return { kind: "upsert", row: row as UserSettingsRow };
+          }
+          return null;
+        },
+      },
+    ],
+    fetchRows: async () => {
+      const { data, error } = await client
+        .from(USER_SETTINGS_TABLE)
+        .select(
+          "user_id, verbose_roll_results, pinned_oracle_sections, updated_at"
+        )
+        .eq("user_id", uid);
+      if (error) {
+        throw error;
       }
+      return (data ?? []) as unknown as UserSettingsRow[];
     },
-    (error) => {
-      console.error(error);
-      onError(error);
-    }
-  );
+    getKey: (row) => row.user_id,
+    getUpdatedAt: (row) => row.updated_at,
+    onRows: (rows) => {
+      const row = rows[0];
+      onOracleSettings({
+        pinnedOracleSections:
+          (row?.pinned_oracle_sections as Record<string, boolean>) ?? {},
+      });
+    },
+    onError,
+  });
 }
