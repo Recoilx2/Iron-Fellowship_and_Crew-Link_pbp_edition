@@ -1,5 +1,3 @@
-import { getErrorMessage } from "functions/getErrorMessage";
-import { reportApiError } from "lib/analytics.lib";
 import { createErrorSnackbar } from "providers/SnackbarProvider";
 
 export type ApiFunction<Params, ReturnType> = (
@@ -16,8 +14,6 @@ export function createApiFunction<Params, Result>(
         .then(resolve)
         .catch((e) => {
           console.error(e);
-          const apiErrorMessage = getErrorMessage(e, friendlyErrorMessage);
-          reportApiError(friendlyErrorMessage, apiErrorMessage);
           createErrorSnackbar(friendlyErrorMessage);
           reject(e);
         });

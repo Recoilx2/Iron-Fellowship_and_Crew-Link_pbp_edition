@@ -10,7 +10,6 @@ import { updateNPCGMProperties } from "api-calls/world/npcs/updateNPCGMPropertie
 import { updateNPCNotes } from "api-calls/world/npcs/updateNPCNotes";
 import { uploadNPCImage } from "api-calls/world/npcs/uploadNPCImage";
 import { listenToNPCNotes } from "api-calls/world/npcs/listenToNPCNotes";
-import { reportApiError } from "lib/analytics.lib";
 import { Unsubscribe } from "firebase/firestore";
 import { listenToNPCGMProperties } from "api-calls/world/npcs/listenToNPCGMProperties";
 import { updateNPCCharacterBond } from "api-calls/world/npcs/updateNPCCharacterBond";
@@ -225,7 +224,6 @@ export const createNPCsSlice: CreateSliceType<NPCsSlice> = (set, getState) => ({
       },
       (error) => {
         console.error(error);
-        reportApiError(error);
       }
     );
 
@@ -245,7 +243,6 @@ export const createNPCsSlice: CreateSliceType<NPCsSlice> = (set, getState) => ({
         },
         (error) => {
           console.error(error);
-          reportApiError(error);
         }
       );
     } else {

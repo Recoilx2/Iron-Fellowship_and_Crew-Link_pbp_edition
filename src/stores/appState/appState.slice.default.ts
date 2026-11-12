@@ -7,5 +7,4 @@ export const defaultAppState: AppStateData = {
   },
   rolls: {},
   screenReaderAnnouncementId: 0,
-  betaTests: {},
 };

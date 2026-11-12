@@ -2,9 +2,6 @@
 
 Any development help on this project is more than welcome!
 New features should be developed in feature branches, and then will be merged into the `prod` branch to deploy to production.
-
-New features can be gated behind feature flags until they are fully tested.
-See the `src/hooks/featureFlags` folder for examples.
 We can work out the details whenever you create a pull request for your work!
 
 ## Development Setup
