@@ -73,4 +73,36 @@ describe("docker behavior tests", () => {
     );
     assert.ok(/^set -euo? pipefail/m.test(text), "not fail-fast");
   });
+
+  it("live.sh fails the run when any behavior test is skipped", () => {
+    const text = read("supabase/tests/live.sh");
+    assert.ok(
+      text.includes("--reporter=json"),
+      "does not capture a machine-readable report"
+    );
+    assert.ok(text.includes("--outputFile"), "does not save the report to a file");
+    assert.ok(
+      text.includes("numPendingTests"),
+      "does not check the skipped-test count"
+    );
+    assert.ok(/skipped/i.test(text), "no failure message for skipped tests");
+  });
+});
+
+describe("live-test ci job", () => {
+  const workflow = ".github/workflows/supabase-smoke.yml";
+
+  it("runs the behavior tests against one stack copy on every pull request", () => {
+    assert.ok(existsSync(join(repo, workflow)), "workflow missing");
+    const text = read(workflow);
+    assert.ok(/pull_request/.test(text), "does not trigger on pull_request");
+    assert.ok(text.includes("live.sh"), "does not run the behavior tests");
+    assert.ok(text.includes("gen-env.py"), "does not generate the copy env file");
+  });
+
+  it("tears the copy down including volumes and never prints generated keys", () => {
+    const text = read(workflow);
+    assert.ok(text.includes("down -v"), "does not remove volumes on teardown");
+    assert.ok(text.includes("add-mask"), "does not mask generated keys in logs");
+  });
 });
