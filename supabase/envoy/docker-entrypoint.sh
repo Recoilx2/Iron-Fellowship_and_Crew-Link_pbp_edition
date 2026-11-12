@@ -5,11 +5,17 @@
 # From upstream supabase/supabase docker/volumes/api/envoy/docker-entrypoint.sh
 # @ 189adda9 (Apache-2.0), unchanged. DASHBOARD_* may be empty (no dashboard in
 # this stack); the basic-auth filter it feeds is disabled on every kept route.
+# Envoy still rejects an empty user list, so an unset dashboard falls back to
+# a dummy entry that is never checked.
 set -e
 
-# Generate SHA1 base64 hash for Envoy basic auth user list
-PASSWORD_HASH=$(printf '%s' "${DASHBOARD_PASSWORD}" | openssl sha1 -binary | openssl base64)
-DASHBOARD_BASIC_AUTH="${DASHBOARD_USERNAME}:{SHA}${PASSWORD_HASH}"
+if [ -z "${DASHBOARD_USERNAME}" ]; then
+  DASHBOARD_BASIC_AUTH="disabled:{SHA}$(printf '%s' 'disabled' | openssl sha1 -binary | openssl base64)"
+else
+  # Generate SHA1 base64 hash for Envoy basic auth user list
+  PASSWORD_HASH=$(printf '%s' "${DASHBOARD_PASSWORD}" | openssl sha1 -binary | openssl base64)
+  DASHBOARD_BASIC_AUTH="${DASHBOARD_USERNAME}:{SHA}${PASSWORD_HASH}"
+fi
 
 echo "Generating Envoy configuration..."
 
