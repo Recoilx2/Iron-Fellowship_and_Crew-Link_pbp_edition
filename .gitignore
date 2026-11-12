@@ -26,6 +26,11 @@ dist-ssr
 # Project Specific
 .firebase/*
 
+# Per-copy Supabase stack env files (secrets - never commit; see supabase/.env.example)
+supabase/.env
+supabase/.env.ironsworn
+supabase/.env.starforged
+
 # @3d-dice/dice-box install script generates unused copies here.
 /public/assets/ammo/
 /public/assets/themes/

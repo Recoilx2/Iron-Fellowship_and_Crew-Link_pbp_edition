@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:supabase": "node --test \"supabase/tests/*.test.mjs\"",
     "postinstall": "node scripts/cleanup-dicebox-assets.cjs"
   },
   "dependencies": {
