@@ -27,9 +27,15 @@ export const updateHomebrewExpansion = createApiFunction<
     return;
   }
   const client = resolveClient({ client: params.client });
-  const { error } = await client
+  // Editors-only writes match zero rows for outsiders and PostgREST answers
+  // success with an empty payload, so reject when nothing was written.
+  const { data, error } = await client
     .from("homebrew_collections")
     .update(patch)
-    .eq("id", id);
+    .eq("id", id)
+    .select("id");
   if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error(`homebrew collection ${id} was not updated`);
+  }
 }, "Failed to update expansion.");

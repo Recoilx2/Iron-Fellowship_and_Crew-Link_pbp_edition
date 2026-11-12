@@ -1,4 +1,4 @@
-import { HOMEBREW_ROUTES, homebrewPaths } from "pages/Homebrew/routes";
+import { HOMEBREW_ROUTES, homebrewPaths } from "pages/Homebrew/homebrewRoutes";
 
 export enum BASE_ROUTES {
   CHARACTER,

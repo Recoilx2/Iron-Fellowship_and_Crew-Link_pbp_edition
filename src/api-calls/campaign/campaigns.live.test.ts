@@ -155,7 +155,9 @@ describe.skipIf(!config)("campaigns end to end", () => {
     await expect(
       joinCampaign({ campaignId: "00000000-0000-0000-0000-000000000000" })
     ).rejects.toBeTruthy();
-    await expect(previewCampaign({ campaignId })).rejects.toBeTruthy();
+    await expect(
+      previewCampaign({ campaignId: "00000000-0000-0000-0000-000000000000" })
+    ).rejects.toBeTruthy();
   });
 
   it("lets a player join with a character, and unlink it again", { timeout: 90000 }, async () => {
@@ -228,7 +230,7 @@ describe.skipIf(!config)("campaigns end to end", () => {
     const campaignId = await createCampaign({
       uid: gm.userId,
       campaignName: "Managed table",
-      campaignType: CampaignType.Guided,
+      campaignType: CampaignType.Coop,
     });
     await signOut();
     await signInAs(player);

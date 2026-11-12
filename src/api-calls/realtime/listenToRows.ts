@@ -164,11 +164,34 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
     }
   }
 
-  channel.subscribe((status) => {
+  channel.subscribe((status, subscribeError) => {
     if (removed) return;
     // Every (re-)subscribe re-fetches: missed events are never replayed, so
     // the fresh select is what catches the subscriber up after a reconnect.
-    if (status === "SUBSCRIBED") void refresh();
+    if (status === "SUBSCRIBED") {
+      void refresh();
+      return;
+    }
+    // SUBSCRIBED is the only success signal. Anything else means the channel
+    // will never deliver rows, so surface it: without this the subscriber
+    // stalls with no fetch and no error, and every failure looks identical.
+    if (
+      status === "CHANNEL_ERROR" ||
+      status === "TIMED_OUT" ||
+      status === "CLOSED"
+    ) {
+      const detail =
+        subscribeError instanceof Error
+          ? `: ${subscribeError.message}`
+          : subscribeError !== undefined && subscribeError !== null
+            ? `: ${String(subscribeError)}`
+            : "";
+      onError?.(
+        new Error(`realtime subscribe ${status}${detail}`, {
+          cause: subscribeError,
+        })
+      );
+    }
   });
 
   return () => {

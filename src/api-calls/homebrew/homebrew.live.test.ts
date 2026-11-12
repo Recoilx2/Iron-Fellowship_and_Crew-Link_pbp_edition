@@ -242,11 +242,20 @@ describe.skipIf(!config)("homebrew on Supabase", () => {
       const updated = await outsider.client
         .from(table)
         .update({ data: { label: "Hijacked" } })
-        .eq("id", id);
-      expect(updated.error, `${table} update`).not.toBeNull();
+        .eq("id", id)
+        .select("id");
+      // RLS filters denied writes instead of raising, so the denial surfaces
+      // as zero matched rows (and the app helpers reject on exactly that).
+      expect(updated.error, `${table} update`).toBeNull();
+      expect(updated.data, `${table} update`).toEqual([]);
 
-      const deleted = await outsider.client.from(table).delete().eq("id", id);
-      expect(deleted.error, `${table} delete`).not.toBeNull();
+      const deleted = await outsider.client
+        .from(table)
+        .delete()
+        .eq("id", id)
+        .select("id");
+      expect(deleted.error, `${table} delete`).toBeNull();
+      expect(deleted.data, `${table} delete`).toEqual([]);
 
       const cleanup = await owner.client.from(table).delete().eq("id", id);
       expect(cleanup.error, `${table} editor delete`).toBeNull();

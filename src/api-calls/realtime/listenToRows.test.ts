@@ -9,7 +9,7 @@ interface Row {
   updated_at: string;
 }
 
-type StatusCallback = (status: string) => void;
+type StatusCallback = (status: string, err?: unknown) => void;
 type EventCallback = (payload: never) => void;
 
 interface FakeChannel {
@@ -97,7 +97,9 @@ describe("listenToRows", () => {
 
     expect(channels).toHaveLength(1);
     expect(channels[0].name).toBe("user-settings:abc");
-    expect(channels[0].options).toEqual({ config: { private: true } });
+    // Subset-match: the installed SDK merges broadcast/presence defaults into
+    // the params in place, so exact equality is brittle. Private must stay true.
+    expect(channels[0].options).toMatchObject({ config: { private: true } });
   });
 
   it("emits the current rows once subscribed", async () => {
@@ -317,6 +319,57 @@ describe("listenToRows", () => {
         updated_at: "2026-11-12T00:00:01Z",
       },
     ]);
+  });
+
+  it("surfaces channel errors to onError instead of stalling", async () => {
+    const { client, channels } = makeFakeRealtime();
+    const onRows = vi.fn();
+    const onError = vi.fn();
+
+    listenToRows<Row>({
+      client: client as never,
+      channelName: "rows",
+      bindings: [postgresChanges<Row>("user_settings", () => null)],
+      fetchRows: () => Promise.resolve([]),
+      getKey: keyOf,
+      onRows,
+      onError,
+    });
+
+    const detail = new Error("join failed");
+    for (const cb of channels[0].subscribeCbs) cb("CHANNEL_ERROR", detail);
+    await Promise.resolve();
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    const reported = onError.mock.calls[0][0] as Error;
+    expect(String(reported?.message ?? reported)).toContain("CHANNEL_ERROR");
+    expect(onRows).not.toHaveBeenCalled();
+  });
+
+  it("surfaces timed-out and closed channels to onError", async () => {
+    for (const status of ["TIMED_OUT", "CLOSED"] as const) {
+      const { client, channels } = makeFakeRealtime();
+      const onRows = vi.fn();
+      const onError = vi.fn();
+
+      listenToRows<Row>({
+        client: client as never,
+        channelName: "rows",
+        bindings: [postgresChanges<Row>("user_settings", () => null)],
+        fetchRows: () => Promise.resolve([]),
+        getKey: keyOf,
+        onRows,
+        onError,
+      });
+
+      for (const cb of channels[0].subscribeCbs) cb(status);
+      await Promise.resolve();
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      const reported = onError.mock.calls[0][0] as Error;
+      expect(String(reported?.message ?? reported)).toContain(status);
+      expect(onRows).not.toHaveBeenCalled();
+    }
   });
 
   it("unsubscribes with a plain function that closes the channel once", async () => {

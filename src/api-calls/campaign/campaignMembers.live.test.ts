@@ -23,7 +23,7 @@ async function rosterAs(person: LivePerson, campaignId: string) {
 
 describe.skipIf(!config)("campaign membership access rules", () => {
   const cfg = config as LiveStackConfig;
-  const campaignId = randomCampaignId();
+  let campaignId = "";
   let people: LivePerson[] = [];
   let gm: LivePerson;
   let player: LivePerson;
@@ -37,6 +37,7 @@ describe.skipIf(!config)("campaign membership access rules", () => {
   });
 
   async function setUpRoster() {
+    campaignId = randomCampaignId();
     gm = await createPerson(cfg, "gm");
     player = await createPerson(cfg, "player");
     outsider = await createPerson(cfg, "outsider");
