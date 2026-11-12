@@ -1,4 +1,4 @@
-import { createErrorSnackbar } from "providers/SnackbarProvider";
+import { createErrorSnackbar } from "providers/SnackbarProvider/useSnackbar";
 
 export type ApiFunction<Params, ReturnType> = (
   params: Params

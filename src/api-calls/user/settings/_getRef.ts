@@ -1,28 +1,22 @@
-import { firestore } from "config/firebase.config";
-import { DocumentReference, doc } from "firebase/firestore";
-import {
-  AccessibilitySettingsDocument,
-  OracleSettingsDocument,
-} from "api-calls/user/settings/_settings.type";
+/**
+ * Identifiers for the user_settings table. The data layer is the only place
+ * that names backend tables and live-update topics; stores, pages and
+ * components stay backend-free.
+ */
 
-export function constructUserAccessibilitySettingsDocPath(userId: string) {
-  return `/users/${userId}/settings/accessibility`;
+export const USER_SETTINGS_TABLE = "user_settings";
+
+export interface UserSettingsRow {
+  user_id: string;
+  verbose_roll_results: boolean;
+  pinned_oracle_sections: Record<string, boolean>;
+  updated_at: string;
 }
 
-export function getUserAccessibilitySettingsDoc(userId: string) {
-  return doc(
-    firestore,
-    constructUserAccessibilitySettingsDocPath(userId)
-  ) as DocumentReference<AccessibilitySettingsDocument>;
+export function constructUserSettingsChannelName(userId: string): string {
+  return `user-settings:${userId}`;
 }
 
-export function constructUserOracleSettingsDocPath(userId: string) {
-  return `/users/${userId}/settings/oracle`;
-}
-
-export function getUserOracleSettingsDoc(userId: string) {
-  return doc(
-    firestore,
-    constructUserOracleSettingsDocPath(userId)
-  ) as DocumentReference<OracleSettingsDocument>;
+export function constructUserSettingsFilter(userId: string): string {
+  return `user_id=eq.${userId}`;
 }
