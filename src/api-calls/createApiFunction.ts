@@ -14,7 +14,12 @@ export function createApiFunction<Params, Result>(
         .then(resolve)
         .catch((e) => {
           console.error(e);
-          createErrorSnackbar(friendlyErrorMessage);
+          try {
+            createErrorSnackbar(friendlyErrorMessage);
+          } catch {
+            // No SnackbarProvider mounted (e.g. vitest): the toast cannot be
+            // shown, but the caller must still get the rejection below.
+          }
           reject(e);
         });
     });
