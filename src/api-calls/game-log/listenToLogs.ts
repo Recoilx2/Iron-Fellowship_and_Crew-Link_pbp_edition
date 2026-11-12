@@ -1,23 +1,18 @@
-import {
-  QueryConstraint,
-  Unsubscribe,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  where,
-} from "firebase/firestore";
 import { getSupabaseClient } from "config/supabase.config";
 import { Unsubscribe as PlainUnsubscribe } from "api-calls/helpers.type";
 import { listenToRows } from "api-calls/realtime/listenToRows";
 import {
-  convertFromDatabase,
-  getCampaignGameLogCollection,
   CHARACTER_ROLLS_TABLE,
+  CAMPAIGN_ROLLS_TABLE,
   characterRollPayloadToChange,
   characterRollRowToRoll,
+  campaignRollPayloadToChange,
+  campaignRollRowToRoll,
   constructCharacterRollsChannelName,
   constructCharacterRollsFilter,
+  constructCampaignRollsChannelName,
+  constructCampaignRollsFilter,
+  type CampaignRollRow,
   type CharacterRollRow,
 } from "./_getRef";
 import { Roll } from "types/DieRolls.type";
@@ -46,36 +41,62 @@ export function listenToLogs(params: {
     return () => {};
   }
 
-  // Campaign rolls belong to the chat spec and stay on Firebase until then.
+  // Campaign rolls stream from the campaign roll log table, newest first
+  // with a client-side window. GM-only rolls never reach non-GMs: the
+  // database refuses the rows, and the listener skips them as well.
   if (campaignId) {
-    const collection = getCampaignGameLogCollection(campaignId as string);
-
-    const queryConstraints: QueryConstraint[] = [
-      limit(totalLogsToLoad),
-      orderBy("timestamp", "desc"),
-    ];
-    if (!isGM) {
-      queryConstraints.push(where("gmsOnly", "==", false));
-    }
-
-    const firebaseUnsubscribe: Unsubscribe = onSnapshot(
-      query(collection, ...queryConstraints),
-      (snapshot) => {
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === "added" || change.type === "modified") {
-            const doc = convertFromDatabase(change.doc.data());
-            updateLog(change.doc.id, doc);
-          } else if (change.type === "removed") {
-            removeLog(change.doc.id);
-          }
-        });
+    const client = getSupabaseClient();
+    let previousIds = new Set<string>();
+    return listenToRows<CampaignRollRow>({
+      client,
+      channelName: constructCampaignRollsChannelName(campaignId),
+      bindings: [
+        {
+          type: "postgres_changes",
+          table: CAMPAIGN_ROLLS_TABLE,
+          filter: constructCampaignRollsFilter(campaignId),
+          toChange: campaignRollPayloadToChange,
+        },
+      ],
+      fetchRows: async () => {
+        let rowsQuery = client
+          .from(CAMPAIGN_ROLLS_TABLE)
+          .select("*")
+          .eq("campaign_id", campaignId)
+          .order("created_at", { ascending: false })
+          .limit(totalLogsToLoad);
+        if (!isGM) {
+          rowsQuery = rowsQuery.eq("gms_only", false);
+        }
+        const { data, error } = await rowsQuery;
+        if (error) {
+          throw error;
+        }
+        return (data ?? []) as unknown as CampaignRollRow[];
       },
-      (error) => {
+      getKey: (row) => row.id,
+      getUpdatedAt: (row) => row.updated_at,
+      onRows: (rows) => {
+        const seen = new Set<string>();
+        for (const row of rows) {
+          if (!isGM && row.gms_only) {
+            continue;
+          }
+          seen.add(row.id);
+          updateLog(row.id, campaignRollRowToRoll(row));
+        }
+        for (const id of previousIds) {
+          if (!seen.has(id)) {
+            removeLog(id);
+          }
+        }
+        previousIds = seen;
+      },
+      onError: (error) => {
         console.error(error);
         onError("Error getting new logs.");
-      }
-    );
-    return firebaseUnsubscribe;
+      },
+    });
   }
 
   if (!characterId) {

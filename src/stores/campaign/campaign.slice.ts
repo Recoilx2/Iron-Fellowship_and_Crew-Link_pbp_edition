@@ -6,7 +6,8 @@ import { getErrorMessage } from "functions/getErrorMessage";
 import { createCampaign } from "api-calls/campaign/createCampaign";
 import { createCurrentCampaignSlice } from "./currentCampaign/currentCampaign.slice";
 import { getCampaign } from "api-calls/campaign/getCampaign";
-import { addUserToCampaign } from "api-calls/campaign/addUserToCampaign";
+import { joinCampaign } from "api-calls/campaign/joinCampaign";
+import { previewCampaign } from "api-calls/campaign/previewCampaign";
 
 export const createCampaignSlice: CreateSliceType<CampaignSlice> = (
   ...params
@@ -83,8 +84,11 @@ export const createCampaignSlice: CreateSliceType<CampaignSlice> = (
       }
     },
 
-    addUserToCampaign: (userId, campaignId) => {
-      return addUserToCampaign({ userId, campaignId });
+    joinCampaign: (campaignId) => {
+      return joinCampaign({ campaignId });
+    },
+    previewCampaign: (campaignId) => {
+      return previewCampaign({ campaignId });
     },
   };
 };

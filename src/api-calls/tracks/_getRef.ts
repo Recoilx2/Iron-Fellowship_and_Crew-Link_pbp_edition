@@ -79,8 +79,9 @@ export function convertFromDatabase(track: TrackDocument): Track {
 }
 
 // ---------------------------------------------------------------------------
-// Supabase (character scope). Campaign tracks stay on Firebase until the
-// campaigns ticket ports them.
+// Supabase (character scope). Character tracks belong to one person: the
+// owner changes them, and the owner plus members of the character's
+// campaign read them. They stream as plain row changes.
 // ---------------------------------------------------------------------------
 
 export const CHARACTER_TRACKS_TABLE = "character_tracks";
@@ -217,5 +218,148 @@ export function characterTrackPayloadToChange(
   const row = payload.new as Partial<CharacterTrackRow>;
   return row && typeof row.id === "string"
     ? { kind: "upsert", row: row as CharacterTrackRow }
+    : null;
+}
+
+// ---------------------------------------------------------------------------
+// Supabase (campaign scope). Campaign tracks belong to every member of the
+// campaign: members read them, members change them, outsiders see nothing.
+// They stream on the campaign's private tracks topic.
+// ---------------------------------------------------------------------------
+
+export const CAMPAIGN_TRACKS_TABLE = "campaign_tracks";
+
+export interface CampaignTrackRow {
+  id: string;
+  campaign_id: string;
+  label: string;
+  type: string;
+  description: string;
+  value: number;
+  status: string;
+  difficulty: string | null;
+  segments: number | null;
+  segments_filled: number | null;
+  oracle_key: string | null;
+  created_date: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export function constructCampaignTracksChannelName(
+  campaignId: string
+): string {
+  return `campaign:${campaignId}:tracks`;
+}
+
+export function constructCampaignTracksFilter(campaignId: string): string {
+  return `campaign_id=eq.${campaignId}`;
+}
+
+export function campaignTrackRowToTrack(row: CampaignTrackRow): Track {
+  const base = {
+    label: row.label,
+    type: row.type,
+    value: row.value,
+    status: row.status,
+    createdDate: new Date(row.created_date),
+    ...(row.description ? { description: row.description } : {}),
+  };
+  if (row.type === "clock") {
+    return {
+      ...base,
+      segments: row.segments ?? 0,
+      ...(row.oracle_key ? { oracleKey: row.oracle_key } : {}),
+    } as unknown as Track;
+  }
+  if (row.type === "sceneChallenge") {
+    return {
+      ...base,
+      segmentsFilled: row.segments_filled ?? 0,
+      difficulty: row.difficulty,
+    } as unknown as Track;
+  }
+  return {
+    ...base,
+    difficulty: row.difficulty,
+  } as unknown as Track;
+}
+
+export function campaignTrackToColumns(
+  campaignId: string,
+  track: Track
+): Record<string, unknown> {
+  return {
+    campaign_id: campaignId,
+    label: track.label,
+    type: track.type,
+    description: track.description ?? "",
+    value: track.value,
+    status: track.status,
+    difficulty: "difficulty" in track ? track.difficulty ?? null : null,
+    segments: "segments" in track ? track.segments ?? null : null,
+    segments_filled:
+      "segmentsFilled" in track ? track.segmentsFilled ?? null : null,
+    oracle_key: "oracleKey" in track ? track.oracleKey ?? null : null,
+    created_date: track.createdDate.toISOString(),
+  };
+}
+
+const campaignTrackFieldToColumn: Record<string, string> = {
+  label: "label",
+  type: "type",
+  description: "description",
+  value: "value",
+  status: "status",
+  difficulty: "difficulty",
+  segments: "segments",
+  segmentsFilled: "segments_filled",
+  oracleKey: "oracle_key",
+  createdDate: "created_date",
+};
+
+export function campaignTrackUpdateToColumns(
+  row: CampaignTrackRow,
+  track: Partial<Track>
+): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    label: row.label,
+    type: row.type,
+    description: row.description,
+    value: row.value,
+    status: row.status,
+    difficulty: row.difficulty,
+    segments: row.segments,
+    segmentsFilled: row.segments_filled,
+    oracleKey: row.oracle_key,
+    createdDate: row.created_date,
+  };
+  const update: Record<string, unknown> = { ...(track as Record<string, unknown>) };
+  if (update.createdDate instanceof Date) {
+    update.createdDate = update.createdDate.toISOString();
+  }
+  const merged = applyDocumentUpdate(base, update);
+  const touched = new Set(Object.keys(update).map((path) => path.split(".")[0]));
+  const columns: Record<string, unknown> = {};
+  for (const [field, column] of Object.entries(campaignTrackFieldToColumn)) {
+    if (touched.has(field)) {
+      columns[column] = merged[field] ?? null;
+    }
+  }
+  return columns;
+}
+
+export function campaignTrackPayloadToChange(
+  payload: PostgresChangePayload<CampaignTrackRow>
+): RowChange<CampaignTrackRow> | null {
+  if (payload.eventType === "DELETE") {
+    const old = payload.old as Partial<CampaignTrackRow>;
+    return typeof old.id === "string"
+      ? { kind: "remove", key: old.id }
+      : null;
+  }
+  const row = payload.new as Partial<CampaignTrackRow>;
+  return row && typeof row.id === "string"
+    ? { kind: "upsert", row: row as CampaignTrackRow }
     : null;
 }

@@ -19,7 +19,8 @@ export interface CampaignSliceActions {
     campaignType: CampaignType
   ) => Promise<string>;
   getCampaign: (campaignId: string) => Promise<CampaignDocument>;
-  addUserToCampaign: (uid: string, campaignId: string) => Promise<void>;
+  joinCampaign: (campaignId: string) => Promise<{ id: string; name: string }>;
+  previewCampaign: (campaignId: string) => Promise<{ id: string; name: string }>;
 }
 
 export type CampaignSlice = CampaignSliceData &

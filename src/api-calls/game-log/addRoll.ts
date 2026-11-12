@@ -1,12 +1,11 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { addDoc } from "firebase/firestore";
 import { getSupabaseClient } from "config/supabase.config";
 import { Roll } from "types/DieRolls.type";
 import {
-  convertRollToGameLogDocument,
-  getCampaignGameLogCollection,
   CHARACTER_ROLLS_TABLE,
+  CAMPAIGN_ROLLS_TABLE,
   characterRollToColumns,
+  campaignRollToColumns,
 } from "./_getRef";
 
 export const addRoll = createApiFunction<
@@ -19,13 +18,16 @@ export const addRoll = createApiFunction<
     throw new Error("Either campaign or character ID must be defined.");
   }
 
-  // Campaign rolls belong to the chat spec and stay on Firebase until then.
   if (campaignId) {
-    const doc = await addDoc(
-      getCampaignGameLogCollection(campaignId as string),
-      convertRollToGameLogDocument(roll)
-    );
-    return doc.id;
+    const { data, error } = await getSupabaseClient()
+      .from(CAMPAIGN_ROLLS_TABLE)
+      .insert(campaignRollToColumns(campaignId, roll))
+      .select("id")
+      .single();
+    if (error || !data) {
+      throw error ?? new Error("Failed to add roll to log.");
+    }
+    return (data as { id: string }).id;
   }
   if (!characterId) {
     throw new Error("Either campaign or character ID must be defined.");

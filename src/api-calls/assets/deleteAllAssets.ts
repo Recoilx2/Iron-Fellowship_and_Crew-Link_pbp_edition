@@ -1,25 +1,10 @@
-import { deleteDoc, getDocs } from "firebase/firestore";
 import { getSupabaseClient } from "config/supabase.config";
 import {
-  getCampaignAssetCollection,
-  getCampaignAssetDoc,
+  CAMPAIGN_ASSETS_TABLE,
   CHARACTER_ASSETS_TABLE,
 } from "./_getRef";
 import { removeAsset } from "./removeAsset";
 import { createApiFunction } from "api-calls/createApiFunction";
-
-function getAllFirebaseAssets(campaignId: string): Promise<string[]> {
-  return new Promise<string[]>((resolve, reject) => {
-    getDocs(getCampaignAssetCollection(campaignId))
-      .then((snapshot) => {
-        const ids = snapshot.docs.map((doc) => doc.id);
-        resolve(ids);
-      })
-      .catch(() => {
-        reject("Failed to get assets.");
-      });
-  });
-}
 
 async function deleteAllSupabaseAssets(characterId: string): Promise<void> {
   const { data, error } = await getSupabaseClient()
@@ -42,15 +27,22 @@ export const deleteAllAssets = createApiFunction<
   if (!campaignId && !characterId) {
     throw new Error("Either campaign or character ID must be defined.");
   }
-  // Campaign assets stay on Firebase until the campaigns ticket ports them.
-  if (!characterId) {
-    const assetIds = await getAllFirebaseAssets(campaignId as string);
+  if (campaignId) {
+    const { data, error } = await getSupabaseClient()
+      .from(CAMPAIGN_ASSETS_TABLE)
+      .select("id")
+      .eq("campaign_id", campaignId);
+    if (error) {
+      throw error;
+    }
+    const ids = ((data ?? []) as Array<{ id: string }>).map((row) => row.id);
     await Promise.all(
-      assetIds.map((assetId) =>
-        deleteDoc(getCampaignAssetDoc(campaignId as string, assetId))
-      )
+      ids.map((assetId) => removeAsset({ campaignId, assetId }))
     );
     return;
+  }
+  if (!characterId) {
+    throw new Error("Either campaign or character ID must be defined.");
   }
   await deleteAllSupabaseAssets(characterId);
 }, "Failed to delete some or all assets.");

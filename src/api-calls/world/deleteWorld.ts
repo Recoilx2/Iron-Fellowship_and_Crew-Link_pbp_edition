@@ -12,7 +12,7 @@ import { firestore } from "config/firebase.config";
 import {
   getCampaignCollection,
   getCampaignDoc,
-} from "api-calls/campaign/_getRef";
+} from "api-calls/campaign/_firebaseRef";
 import {
   getCharacterCollection,
   getCharacterDoc,

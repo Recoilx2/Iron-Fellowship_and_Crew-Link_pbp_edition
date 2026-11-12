@@ -1,43 +1,15 @@
-import { arrayUnion, deleteField, updateDoc } from "firebase/firestore";
-import { getCampaignDoc } from "./_getRef";
+import { updateCampaign } from "./updateCampaign";
 import { createApiFunction } from "api-calls/createApiFunction";
-import { getWorldDoc } from "api-calls/world/_getRef";
 
+/**
+ * Points a campaign at a world. Only the campaign row changes here; linking
+ * the world's owner list back stays with the worlds ticket, whose tables do
+ * not exist yet.
+ */
 export const updateCampaignWorld = createApiFunction<
   { campaignId: string; gmIds: string[]; worldId?: string },
   void
->((params) => {
-  const { campaignId, gmIds, worldId } = params;
-  if (worldId) {
-    return new Promise((resolve, reject) => {
-      updateDoc(getWorldDoc(worldId), {
-        ownerIds: arrayUnion(...gmIds),
-      })
-        .then(() => {
-          updateDoc(getCampaignDoc(campaignId), {
-            worldId,
-          })
-            .then(() => {
-              resolve();
-            })
-            .catch((e) => {
-              reject(e);
-            });
-        })
-        .catch((e) => {
-          reject(e);
-        });
-    });
-  }
-  return new Promise((resolve, reject) => {
-    updateDoc(getCampaignDoc(campaignId), {
-      worldId: deleteField(),
-    })
-      .then(() => {
-        resolve();
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
+>(async (params) => {
+  const { campaignId, worldId } = params;
+  await updateCampaign({ campaignId, campaign: { worldId } });
 }, "Failed to update campaign world.");

@@ -96,6 +96,24 @@ export function randomCampaignId(): string {
   return crypto.randomUUID();
 }
 
+/**
+ * Creates the campaign row a test roster hangs off. Rosters and character
+ * links reference campaigns with foreign keys, so tests insert the row
+ * with the service key before granting membership or linking characters.
+ */
+export async function ensureCampaign(
+  config: LiveStackConfig,
+  campaignId: string,
+  name = "Test campaign"
+): Promise<void> {
+  const { error } = await adminClient(config)
+    .from("campaigns")
+    .insert({ id: campaignId, name, type: "guided" });
+  if (error) {
+    throw new Error(`could not create campaign: ${error.message}`);
+  }
+}
+
 export type MembershipRole = "gm" | "player";
 
 export async function grantMembership(

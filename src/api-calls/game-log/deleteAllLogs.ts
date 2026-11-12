@@ -1,8 +1,7 @@
-import { getDocs } from "firebase/firestore";
 import { getSupabaseClient } from "config/supabase.config";
 import {
-  getCampaignGameLogCollection,
   CHARACTER_ROLLS_TABLE,
+  CAMPAIGN_ROLLS_TABLE,
 } from "./_getRef";
 import { removeLog } from "./removeLog";
 import { createApiFunction } from "api-calls/createApiFunction";
@@ -14,16 +13,22 @@ export const deleteAllLogs = createApiFunction<
   if (!campaignId && !characterId) {
     throw new Error("Either character or campaign ID must be defined.");
   }
-  // Campaign rolls belong to the chat spec and stay on Firebase until then.
+  // Campaign rolls stream from the campaign roll log table.
   if (campaignId) {
-    const snapshot = await getDocs(
-      getCampaignGameLogCollection(campaignId as string)
-    ).catch(() => {
-      throw new Error("Failed to get game logs.");
-    });
-    const logIds = snapshot.docs.map((doc) => doc.id);
+    const { data, error } = await getSupabaseClient()
+      .from(CAMPAIGN_ROLLS_TABLE)
+      .select("id")
+      .eq("campaign_id", campaignId);
+    if (error) {
+      throw error;
+    }
+    const campaignLogIds = ((data ?? []) as Array<{ id: string }>).map(
+      (row) => row.id
+    );
     await Promise.all(
-      logIds.map((logId) => removeLog({ campaignId, characterId, logId }))
+      campaignLogIds.map((logId) =>
+        removeLog({ campaignId, characterId, logId })
+      )
     );
     return;
   }

@@ -1,15 +1,19 @@
-import { onSnapshot } from "firebase/firestore";
 import { getSupabaseClient } from "config/supabase.config";
 import { Unsubscribe } from "api-calls/helpers.type";
 import { listenToRows } from "api-calls/realtime/listenToRows";
 import { SettingsDocument } from "api-calls/character-campaign-settings/_character-campaign-settings.type";
 import {
-  getCampaignSettingsDoc,
   CHARACTER_SETTINGS_TABLE,
+  CAMPAIGN_SETTINGS_TABLE,
   characterSettingsPayloadToChange,
   characterSettingsRowToDocument,
+  campaignSettingsPayloadToChange,
+  campaignSettingsRowToDocument,
   constructCharacterSettingsChannelName,
   constructCharacterSettingsFilter,
+  constructCampaignSettingsChannelName,
+  constructCampaignSettingsFilter,
+  type CampaignSettingsRow,
   type CharacterSettingsRow,
 } from "./_getRef";
 
@@ -24,21 +28,37 @@ export function listenToSettings(
     onError("Either campaign or character ID must be defined.");
     return () => {};
   }
-  // Campaign settings stay on Firebase until the campaigns ticket ports them.
+  // Campaign settings are one row per campaign, shared by every member.
   if (campaignId) {
-    return onSnapshot(
-      getCampaignSettingsDoc(campaignId as string),
-      (snapshot) => {
-        onSettings({
-          hiddenCustomMoveIds: [],
-          hiddenCustomOraclesIds: [],
-          customStats: [],
-          customTracks: {},
-          ...snapshot.data(),
-        });
+    const client = getSupabaseClient();
+    return listenToRows<CampaignSettingsRow>({
+      client,
+      channelName: constructCampaignSettingsChannelName(campaignId),
+      bindings: [
+        {
+          type: "postgres_changes",
+          table: CAMPAIGN_SETTINGS_TABLE,
+          filter: constructCampaignSettingsFilter(campaignId),
+          toChange: campaignSettingsPayloadToChange,
+        },
+      ],
+      fetchRows: async () => {
+        const { data, error } = await client
+          .from(CAMPAIGN_SETTINGS_TABLE)
+          .select("*")
+          .eq("campaign_id", campaignId);
+        if (error) {
+          throw error;
+        }
+        return (data ?? []) as unknown as CampaignSettingsRow[];
       },
-      (error) => onError(error)
-    );
+      getKey: (row) => row.campaign_id,
+      getUpdatedAt: (row) => row.updated_at,
+      onRows: (rows) => {
+        onSettings(campaignSettingsRowToDocument(rows[0]));
+      },
+      onError,
+    });
   }
   if (!characterId) {
     onError("Either campaign or character ID must be defined.");
