@@ -503,15 +503,15 @@ CREATE INDEX IF NOT EXISTS campaigns_by_world
 -- DISTINCT because plain UNIQUE treats NULL parent links as distinct.
 DROP INDEX IF EXISTS world_notes_unique_location;
 CREATE UNIQUE INDEX world_notes_unique_location ON public.world_notes
-  (location_id NULLS NOT DISTINCT, gm_only)
+  (location_id, gm_only) NULLS NOT DISTINCT
   WHERE location_id IS NOT NULL;
 DROP INDEX IF EXISTS world_notes_unique_lore;
 CREATE UNIQUE INDEX world_notes_unique_lore ON public.world_notes
-  (lore_id NULLS NOT DISTINCT, gm_only)
+  (lore_id, gm_only) NULLS NOT DISTINCT
   WHERE lore_id IS NOT NULL;
 DROP INDEX IF EXISTS world_notes_unique_npc;
 CREATE UNIQUE INDEX world_notes_unique_npc ON public.world_notes
-  (npc_id NULLS NOT DISTINCT, gm_only)
+  (npc_id, gm_only) NULLS NOT DISTINCT
   WHERE npc_id IS NOT NULL;
 
 -- Note access used by the table policies and the note server alike, so the
