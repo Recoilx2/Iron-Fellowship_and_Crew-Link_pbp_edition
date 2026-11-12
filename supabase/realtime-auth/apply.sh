@@ -16,10 +16,11 @@ PGUSER=postgres
 export PGHOST PGPORT PGDATABASE PGUSER
 export PGPASSWORD="$POSTGRES_PASSWORD"
 
-deadline=$((SECONDS + 300))
+i=0
 until psql -v ON_ERROR_STOP=1 -qAt \
     -c "SELECT 1 FROM realtime.messages LIMIT 0;" >/dev/null 2>&1; do
-  [ "$SECONDS" -ge "$deadline" ] \
+  i=$((i + 1))
+  [ "$i" -ge 60 ] \
     && { echo "realtime-auth: timed out waiting for realtime.messages" >&2; exit 1; }
   sleep 5
 done
