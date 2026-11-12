@@ -180,14 +180,33 @@ export function createHomebrewContentApi<TDoc extends { collectionId: string }>(
         (current.data ?? {}) as Record<string, unknown>,
         doc as DocumentUpdate<Record<string, unknown>>
       );
-      const { error } = await client.from(table).update({ data }).eq("id", id);
+      // Reads are public but writes are editors-only, so an outsider's
+      // UPDATE matches zero rows and PostgREST answers success with an empty
+      // payload. Returning the row turns that silent no-op into a rejection.
+      const { data: written, error } = await client
+        .from(table)
+        .update({ data })
+        .eq("id", id)
+        .select("id");
       if (error) throw error;
+      if (!written || written.length === 0) {
+        throw new Error(`failed to update row ${id} in ${table}`);
+      }
     },
 
     remove: async ({ id, client: override }) => {
       const client = resolveClient({ client: override });
-      const { error } = await client.from(table).delete().eq("id", id);
+      // Same silent-no-op semantics as update: a DELETE that matches nothing
+      // succeeds with an empty payload, so reject when nothing was written.
+      const { data: written, error } = await client
+        .from(table)
+        .delete()
+        .eq("id", id)
+        .select("id");
       if (error) throw error;
+      if (!written || written.length === 0) {
+        throw new Error(`failed to delete row ${id} in ${table}`);
+      }
     },
 
     listen: (homebrewId, updateData, onError, opts) => {
@@ -296,8 +315,17 @@ export async function modifyContentData(
   const row = await fetchContentRow(client, table, id);
   const data = { ...((row.data ?? {}) as Record<string, unknown>) };
   mutate(data);
-  const { error } = await client.from(table).update({ data }).eq("id", id);
+  // Reject silent no-ops the same way the flat update path does: an
+  // outsider's write matches zero rows and succeeds with an empty payload.
+  const { data: written, error } = await client
+    .from(table)
+    .update({ data })
+    .eq("id", id)
+    .select("id");
   if (error) throw error;
+  if (!written || written.length === 0) {
+    throw new Error(`failed to write row ${id} in ${table}`);
+  }
 }
 
 /** Reads one collection with its editors and viewers; null when missing. */

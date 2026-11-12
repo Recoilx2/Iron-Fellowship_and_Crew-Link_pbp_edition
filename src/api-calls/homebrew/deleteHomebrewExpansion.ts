@@ -17,9 +17,15 @@ export const deleteHomebrewExpansion = createApiFunction<
   void
 >(async (params) => {
   const client = resolveClient({ client: params.client });
-  const { error } = await client
+  // Only the creator can delete: anyone else's DELETE matches zero rows and
+  // succeeds with an empty payload, so reject when nothing was written.
+  const { data, error } = await client
     .from("homebrew_collections")
     .delete()
-    .eq("id", params.id);
+    .eq("id", params.id)
+    .select("id");
   if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error(`homebrew collection ${params.id} was not deleted`);
+  }
 }, "Failed to delete expansion.");
