@@ -1,25 +1,25 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { UpdateData, updateDoc } from "firebase/firestore";
 import { DocumentUpdate } from "api-calls/helpers.type";
-import { getHomebrewLegacyTrackDoc } from "./_getRef";
 import { HomebrewLegacyTrackDocument } from "api-calls/homebrew/rules/legacyTracks/_homebrewLegacyTrack.type";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
+
+const api = createHomebrewContentApi<HomebrewLegacyTrackDocument>(
+  "homebrew_legacy_tracks"
+);
 
 export const updateHomebrewLegacyTrack = createApiFunction<
   {
     legacyTrackId: string;
     legacyTrack: DocumentUpdate<HomebrewLegacyTrackDocument>;
-  },
+  } & ClientOption,
   void
->((params) => {
-  const { legacyTrackId, legacyTrack } = params;
-  return new Promise((resolve, reject) => {
-    updateDoc(
-      getHomebrewLegacyTrackDoc(legacyTrackId),
-      legacyTrack as UpdateData<HomebrewLegacyTrackDocument>
-    )
-      .then(() => {
-        resolve();
-      })
-      .catch(reject);
+>(async (params) => {
+  await api.update({
+    id: params.legacyTrackId,
+    doc: params.legacyTrack,
+    client: params.client,
   });
 }, "Failed to update legacy track.");
