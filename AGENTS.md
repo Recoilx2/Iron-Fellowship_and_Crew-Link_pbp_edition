@@ -1,3 +1,17 @@
+## Start here
+
+The work is three specs, done in this order:
+
+1. **Spec: Supabase foundation and Docker stack** (#11)
+2. **Spec: Chat-first campaign screen (chat v1)** (#9)
+3. **Spec: GM assistant (v1)** (#10)
+
+To pick a ticket:
+
+- Take the lowest-numbered open issue labelled `ready-for-agent` that has no assignee and no open blockers. Check its blockers with `gh api repos/{owner}/{repo}/issues/<n> --jq .issue_dependencies_summary.blocked_by` (0 means you can start).
+- Never pick up issues labelled `spec` or `wayfinder:*`. Specs are parents, and wayfinder tickets are decisions for the human.
+- Before starting, read the ticket's parent spec, `GLOSSARY.md` and `docs/adr/`.
+
 ## Agent skills
 
 ### Issue tracker
