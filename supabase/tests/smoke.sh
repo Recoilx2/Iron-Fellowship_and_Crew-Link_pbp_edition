@@ -178,12 +178,14 @@ probe_realtime_gateway() {
       if (typeof WebSocket === "undefined") { console.log("PROBE-62 join: no global WebSocket, skipping"); process.exit(0); }
       const gw = process.env.PROBE_GW.replace(/^http/, "ws");
       const anon = process.env.PROBE_ANON;
-      const url = gw + "/realtime/v1/websocket?apikey=" + anon + "&vsn=1.0.0";
+      const url = gw + "/realtime/v1/websocket?apikey=" + anon + "&vsn=2.0.0";
       const ws = new WebSocket(url);
       const timer = setTimeout(() => { console.log("PROBE-62 join: TIMEOUT waiting for reply"); try { ws.close(); } catch (e) {} }, 15000);
+      const baseConfig = { broadcast: { ack: false, self: false }, presence: { key: "" }, private: true };
       ws.onopen = () => {
         console.log("PROBE-62 ws: open (upgrade ok)");
-        ws.send(JSON.stringify(["1", "1", "realtime:probe-62", "phx_join", { config: { broadcast: { ack: false, self: false }, presence: { key: "" }, postgres_changes: [{ event: "*", schema: "public", table: "user_settings" }], private: true }, access_token: anon }]));
+        ws.send(JSON.stringify(["1", "1", "realtime:probe-62-bare", "phx_join", { config: baseConfig, access_token: anon }]));
+        ws.send(JSON.stringify(["2", "2", "realtime:probe-62-pg", "phx_join", { config: Object.assign({}, baseConfig, { postgres_changes: [{ event: "*", schema: "public", table: "user_settings" }] }), access_token: anon }]));
       };
       ws.onmessage = (e) => { console.log("PROBE-62 msg:", String(e.data).slice(0, 400)); };
       ws.onerror = () => { console.log("PROBE-62 ws: error"); };
@@ -195,7 +197,7 @@ probe_realtime_gateway() {
 import base64, json, os, select, socket, struct, sys
 host, port = "localhost", int(os.environ["PROBE_PORT"])
 anon = os.environ["PROBE_ANON"]
-path = "/realtime/v1/websocket?apikey=" + anon + "&vsn=1.0.0"
+path = "/realtime/v1/websocket?apikey=" + anon + "&vsn=2.0.0"
 key = base64.b64encode(os.urandom(16)).decode()
 req = ("GET " + path + " HTTP/1.1\r\nHost: localhost:" + str(port) + "\r\n"
        "Upgrade: websocket\r\nConnection: Upgrade\r\n"
@@ -212,17 +214,23 @@ print("PROBE-62 py: handshake:", resp.split(b"\r\n", 1)[0].decode(errors="replac
 if b" 101 " not in resp:
     print(resp.decode(errors="replace")[:400])
     sys.exit(0)
-join = json.dumps(["1", "1", "realtime:probe-62", "phx_join",
+join_bare = json.dumps(["1", "1", "realtime:probe-62-bare", "phx_join",
+    {"config": {"broadcast": {"ack": False, "self": False}, "presence": {"key": ""},
+     "private": True}, "access_token": anon}]).encode()
+join_pg = json.dumps(["2", "2", "realtime:probe-62-pg", "phx_join",
     {"config": {"broadcast": {"ack": False, "self": False}, "presence": {"key": ""},
      "postgres_changes": [{"event": "*", "schema": "public", "table": "user_settings"}],
      "private": True}, "access_token": anon}]).encode()
-mask = os.urandom(4)
-masked = bytes(b ^ mask[i % 4] for i, b in enumerate(join))
-if len(join) < 126:
-    frame = bytes([0x81, 0x80 | len(join)]) + mask + masked
-else:
-    frame = struct.pack("!BBH", 0x81, 0x80 | 126, len(join)) + mask + masked
-s.sendall(frame)
+def send_frame(payload):
+    mask = os.urandom(4)
+    masked = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
+    if len(payload) < 126:
+        frame = bytes([0x81, 0x80 | len(payload)]) + mask + masked
+    else:
+        frame = struct.pack("!BBH", 0x81, 0x80 | 126, len(payload)) + mask + masked
+    s.sendall(frame)
+send_frame(join_bare)
+send_frame(join_pg)
 s.setblocking(False)
 buf = b""
 deadline = 15
