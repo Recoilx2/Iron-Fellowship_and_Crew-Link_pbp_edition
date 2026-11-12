@@ -97,7 +97,9 @@ describe("listenToRows", () => {
 
     expect(channels).toHaveLength(1);
     expect(channels[0].name).toBe("user-settings:abc");
-    expect(channels[0].options).toEqual({ config: { private: true } });
+    // Subset-match: the installed SDK merges broadcast/presence defaults into
+    // the params in place, so exact equality is brittle. Private must stay true.
+    expect(channels[0].options).toMatchObject({ config: { private: true } });
   });
 
   it("emits the current rows once subscribed", async () => {
