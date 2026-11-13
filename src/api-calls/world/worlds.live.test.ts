@@ -23,7 +23,6 @@ import { getWorldForExport } from "api-calls/world/getWorldForExport";
 import { listenToUsersWorlds } from "api-calls/world/listenToUsersWorlds";
 import { listenToWorld } from "api-calls/world/listenToWorld";
 import { createLocation } from "api-calls/world/locations/createLocation";
-import { deleteLocation } from "api-calls/world/locations/deleteLocation";
 import { listenToLocationGMNotes } from "api-calls/world/locations/listenToLocationGMNotes";
 import { listenToLocationGMProperties } from "api-calls/world/locations/listenToLocationGMProperties";
 import { listenToLocationNotes } from "api-calls/world/locations/listenToLocationNotes";
@@ -39,6 +38,7 @@ import { updateLore } from "api-calls/world/lore/updateLore";
 import { createNPC } from "api-calls/world/npcs/createNPC";
 import { listenToNPCs } from "api-calls/world/npcs/listenToNPCs";
 import { updateNPC } from "api-calls/world/npcs/updateNPC";
+import { encodeNoteContent } from "api-calls/notes/noteContent";
 import {
   getWorldItemNoteIds,
   listenToWorldNoteContent,
@@ -143,15 +143,20 @@ describe.skipIf(!config)("worlds end to end", () => {
     const received: Array<World | undefined> = [];
     await signOut();
     await signInAs(outsider);
-    unsubscribes.push(
-      listenToWorld(
-        worldId,
-        (doc) => received.push(doc),
-        () => {}
-      )
+    const stopOutsiderWorld = listenToWorld(
+      worldId,
+      (doc) => received.push(doc),
+      () => {}
     );
+    unsubscribes.push(stopOutsiderWorld);
     await waitFor(() => (received.length >= 1 ? received : null));
     expect(received.at(-1)).toBeUndefined();
+
+    // The outsider assertions are done: pause that subscription before the
+    // identity switch below, so no channel rides a mid-stream switch
+    // (which stalls the channel or closes it). Unsubscribing is
+    // idempotent, so the afterEach cleanup stays safe.
+    stopOutsiderWorld();
 
     // The owner follows their worlds live, and deleting ends them.
     await signOut();
@@ -396,7 +401,10 @@ describe.skipIf(!config)("worlds end to end", () => {
       location: { name: "Secret room", sharedWithPlayers: false },
     });
 
-    // The player follows the world's locations live.
+    // The player follows the world's locations live. The singleton keeps
+    // the player's session for the whole live phase: the owner acts
+    // through their own client, so the subscription never rides a
+    // mid-stream identity switch (which stalls the channel or closes it).
     await signOut();
     await signInAs(player);
     const tracked: Array<{ id: string; doc: Location }> = [];
@@ -426,22 +434,29 @@ describe.skipIf(!config)("worlds end to end", () => {
       tracked.find((item) => item.id === locationId)
     ).toBeUndefined();
 
-    await signOut();
-    await signInAs(owner);
-    await updateLocation({
-      worldId,
-      locationId,
-      location: { sharedWithPlayers: true },
-    });
+    // The owner shares through their own client — the update touches
+    // only shared_with_players, exactly what updateLocation would send
+    // for this change — while the player still listens.
+    const sharedOn = await owner.client
+      .from("world_locations")
+      .update({ shared_with_players: true })
+      .eq("id", locationId)
+      .eq("world_id", worldId)
+      .select("id");
+    expect(sharedOn.error).toBeNull();
+    expect(sharedOn.data ?? []).not.toEqual([]);
     await waitFor(() =>
       tracked.some((item) => item.id === locationId) ? tracked : null
     );
 
-    await updateLocation({
-      worldId,
-      locationId,
-      location: { sharedWithPlayers: false },
-    });
+    const sharedOff = await owner.client
+      .from("world_locations")
+      .update({ shared_with_players: false })
+      .eq("id", locationId)
+      .eq("world_id", worldId)
+      .select("id");
+    expect(sharedOff.error).toBeNull();
+    expect(sharedOff.data ?? []).not.toEqual([]);
     await waitFor(() =>
       !tracked.some((item) => item.id === locationId) ? tracked : null
     );
@@ -454,8 +469,27 @@ describe.skipIf(!config)("worlds end to end", () => {
 
     await signInAs(owner);
     const locationId = await createLocation({ worldId });
+    // Resolve the location's note rows up front through the owner's own
+    // client: after the switch below the singleton is the player, who
+    // cannot read the GM-only note row.
+    const noteRows = await owner.client
+      .from("world_notes")
+      .select("id, gm_only")
+      .eq("location_id", locationId);
+    expect(noteRows.error).toBeNull();
+    const publicNoteId = (
+      (noteRows.data ?? []) as Array<{ id: string; gm_only: boolean }>
+    ).find((row) => !row.gm_only)?.id;
+    const gmNoteId = (
+      (noteRows.data ?? []) as Array<{ id: string; gm_only: boolean }>
+    ).find((row) => row.gm_only)?.id;
+    expect(publicNoteId).toBeTruthy();
+    expect(gmNoteId).toBeTruthy();
 
-    // The player follows GM details, GM notes and public notes live.
+    // The player follows GM details, GM notes and public notes live. The
+    // singleton keeps the player's session for the whole live phase: the
+    // owner acts through their own client, so the subscriptions never ride
+    // a mid-stream identity switch (which stalls the channel or closes it).
     await signOut();
     await signInAs(player);
     const details: unknown[] = [];
@@ -487,30 +521,33 @@ describe.skipIf(!config)("worlds end to end", () => {
     );
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    // The GM writes every GM-only field; the player still receives nothing
-    // but undefined, while public notes stream.
-    await signOut();
-    await signInAs(owner);
-    await updateLocationGMProperties({
-      worldId,
-      locationId,
-      locationGMProperties: {
+    // The GM writes every GM-only field through their own client while
+    // the player still listens — the GM-details upsert is exactly what
+    // updateLocationGMProperties would send for a fresh row, and the
+    // contents upserts match writeWorldNoteContent — so public notes
+    // stream while GM fields stay undefined.
+    const gmDetails = await owner.client
+      .from("world_location_gm_details")
+      .upsert({
+        location_id: locationId,
+        fields: { climate: "Cold" },
         descriptor: "Secret",
         trouble: "Trouble",
-        locationFeatures: "Features",
-        fields: { climate: "Cold" },
-      },
+        location_features: "Features",
+      });
+    expect(gmDetails.error).toBeNull();
+    const gmBytes = await owner.client.from("world_note_contents").upsert({
+      note_id: gmNoteId as string,
+      content: encodeNoteContent(new Uint8Array([1, 2, 3])),
     });
-    await updateLocationGMNotes({
-      worldId,
-      locationId,
-      notes: new Uint8Array([1, 2, 3]),
-    });
-    await updateLocationNotes({
-      worldId,
-      locationId,
-      notes: new Uint8Array([4, 5, 6]),
-    });
+    expect(gmBytes.error).toBeNull();
+    const publicBytes = await owner.client
+      .from("world_note_contents")
+      .upsert({
+        note_id: publicNoteId as string,
+        content: encodeNoteContent(new Uint8Array([4, 5, 6])),
+      });
+    expect(publicBytes.error).toBeNull();
     await waitFor(() =>
       notes.some((content) => content?.length === 3) ? notes : null
     );
@@ -528,7 +565,7 @@ describe.skipIf(!config)("worlds end to end", () => {
     const gmContents = await player.client
       .from("world_note_contents")
       .select("note_id")
-      .eq("note_id", (await getWorldItemNoteIds("location", locationId)).gmNoteId as string);
+      .eq("note_id", gmNoteId as string);
     expect(gmContents.error).toBeNull();
     expect(gmContents.data ?? []).toEqual([]);
   });
@@ -672,6 +709,10 @@ describe.skipIf(!config)("worlds end to end", () => {
     const { owner, campaignGM, player } = await setUpQuartet();
     const { worldId } = await setUpLinkedWorld({ owner, campaignGM, player });
 
+    // The player follows lore and NPCs live. The singleton keeps the
+    // player's session for the whole live phase: the owner acts through
+    // their own client, so the subscriptions never ride a mid-stream
+    // identity switch (which stalls the channel).
     await signInAs(player);
     const loreNames: string[][] = [];
     const trackedLore: Array<{ id: string; name: string }> = [];
@@ -719,17 +760,51 @@ describe.skipIf(!config)("worlds end to end", () => {
     );
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    await signOut();
-    await signInAs(owner);
-    const loreId = await createLore({ worldId });
-    await updateLore({
-      worldId,
-      loreId,
-      lore: { name: "Shared tale", sharedWithPlayers: true },
+    // The owner stocks shared lore and an NPC through their own client
+    // while the player still listens. Ids are generated client-side and
+    // inserted without RETURNING (the #74 pattern): the lore row carries
+    // its final shared name at once, and each item gets its public +
+    // GM-only note rows like the create functions make.
+    const loreId = crypto.randomUUID();
+    const loreInsert = await owner.client.from("world_lore").insert({
+      id: loreId,
+      world_id: worldId,
+      name: "Shared tale",
+      shared_with_players: true,
     });
-    const npcId = await createNPC({ worldId, npc: { name: "Innkeep" } });
-    const doomedId = await createLocation({ worldId });
-    await deleteLocation({ worldId, locationId: doomedId }).catch(() => {});
+    expect(loreInsert.error).toBeNull();
+    const loreNotes = await owner.client.from("world_notes").insert([
+      { id: crypto.randomUUID(), world_id: worldId, lore_id: loreId, gm_only: false },
+      { id: crypto.randomUUID(), world_id: worldId, lore_id: loreId, gm_only: true },
+    ]);
+    expect(loreNotes.error).toBeNull();
+    const npcId = crypto.randomUUID();
+    const npcInsert = await owner.client.from("world_npcs").insert({
+      id: npcId,
+      world_id: worldId,
+      name: "Innkeep",
+      shared_with_players: true,
+    });
+    expect(npcInsert.error).toBeNull();
+    const npcNotes = await owner.client.from("world_notes").insert([
+      { id: crypto.randomUUID(), world_id: worldId, npc_id: npcId, gm_only: false },
+      { id: crypto.randomUUID(), world_id: worldId, npc_id: npcId, gm_only: true },
+    ]);
+    expect(npcNotes.error).toBeNull();
+    // Location churn does not disturb the lore/NPC streams.
+    const doomedId = crypto.randomUUID();
+    const doomedInsert = await owner.client.from("world_locations").insert({
+      id: doomedId,
+      world_id: worldId,
+      name: "Doomed",
+      shared_with_players: true,
+    });
+    expect(doomedInsert.error).toBeNull();
+    const doomedDelete = await owner.client
+      .from("world_locations")
+      .delete()
+      .eq("id", doomedId);
+    expect(doomedDelete.error).toBeNull();
     await waitFor(() =>
       trackedLore.some((item) => item.id === loreId) &&
       trackedNPCs.some((item) => item.id === npcId)
