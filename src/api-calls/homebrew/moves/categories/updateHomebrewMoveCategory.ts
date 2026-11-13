@@ -1,19 +1,25 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { PartialWithFieldValue, updateDoc } from "firebase/firestore";
-import { getHomebrewMoveCategoryDoc } from "./_getRef";
+import { DocumentUpdate } from "api-calls/helpers.type";
 import { HomebrewMoveCategoryDocument } from "api-calls/homebrew/moves/categories/_homebrewMoveCategory.type";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
+
+const api = createHomebrewContentApi<HomebrewMoveCategoryDocument>(
+  "homebrew_move_categories"
+);
 
 export const updateHomebrewMoveCategory = createApiFunction<
   {
     moveCategoryId: string;
-    moveCategory: PartialWithFieldValue<HomebrewMoveCategoryDocument>;
-  },
+    moveCategory: DocumentUpdate<HomebrewMoveCategoryDocument>;
+  } & ClientOption,
   void
->((params) => {
-  const { moveCategory, moveCategoryId } = params;
-  return new Promise((resolve, reject) => {
-    updateDoc(getHomebrewMoveCategoryDoc(moveCategoryId), moveCategory)
-      .then(() => resolve())
-      .catch(reject);
+>(async (params) => {
+  await api.update({
+    id: params.moveCategoryId,
+    doc: params.moveCategory,
+    client: params.client,
   });
 }, "Failed to update move category.");

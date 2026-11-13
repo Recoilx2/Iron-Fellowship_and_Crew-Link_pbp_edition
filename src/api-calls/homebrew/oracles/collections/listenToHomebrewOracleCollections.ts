@@ -1,6 +1,19 @@
-import { getHomebrewOracleCollectionCollection } from "./_getRef";
-import { createHomebrewListenerFunction } from "api-calls/homebrew/homebrewListenerFunction";
+import { Unsubscribe } from "api-calls/helpers.type";
+import { HomebrewOracleCollectionDocument } from "api-calls/homebrew/oracles/collections/_homebrewOracleCollection.type";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
 
-export const listenToHomebrewOracleCollections = createHomebrewListenerFunction(
-  getHomebrewOracleCollectionCollection()
+const api = createHomebrewContentApi<HomebrewOracleCollectionDocument>(
+  "homebrew_oracle_collections"
 );
+
+export function listenToHomebrewOracleCollections(
+  homebrewId: string,
+  updateData: (data: Record<string, HomebrewOracleCollectionDocument>) => void,
+  onError: (error: unknown) => void,
+  opts?: ClientOption
+): Unsubscribe {
+  return api.listen(homebrewId, updateData, onError, opts);
+}

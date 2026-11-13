@@ -1,0 +1,162 @@
+# Starts both Supabase copies from the template and runs the smoke test, and
+# runs every stack behavior test (*.live.test.ts) against one copy.
+# The sandbox has no Docker, so this runs in GitHub Actions on every pull request.
+name: supabase-smoke
+
+on:
+  pull_request:
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node --test "supabase/tests/*.test.mjs"
+
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: supabase
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate per-copy env files
+        run: |
+          python3 bin/gen-env.py --copy ironsworn --port 8000 --out .env.ironsworn
+          python3 bin/gen-env.py --copy starforged --port 8001 --out .env.starforged
+
+      - name: Validate the template renders
+        run: |
+          ENV_FILE=.env.ironsworn docker compose -p ironsworn --env-file .env.ironsworn -f docker-compose.yml config --quiet
+          ENV_FILE=.env.starforged docker compose -p starforged --env-file .env.starforged -f docker-compose.yml config --quiet
+
+      - name: Run the smoke test (both copies side by side)
+        run: CLEANUP=0 tests/smoke.sh
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: |
+          for copy in ironsworn starforged; do
+            echo "===== $copy ====="
+            ENV_FILE=.env.$copy docker compose -p $copy --env-file .env.$copy -f docker-compose.yml logs --tail 200
+          done
+
+      - name: Bring both copies down
+        if: always()
+        run: |
+          ENV_FILE=.env.ironsworn docker compose -p ironsworn --env-file .env.ironsworn -f docker-compose.yml down -v
+          ENV_FILE=.env.starforged docker compose -p starforged --env-file .env.starforged -f docker-compose.yml down -v
+
+  live:
+    # Runs every src/**/*.live.test.ts against one real stack copy.
+    # tests/live.sh fails the run when any behavior test is skipped, so a
+    # misconfigured job can never pass silently.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate the copy env file
+        working-directory: supabase
+        run: python3 bin/gen-env.py --copy ironsworn --port 8000 --out .env.live
+
+      - name: Mask generated keys in logs
+        working-directory: supabase
+        run: |
+          echo "::add-mask::$(grep -E '^ANON_KEY=' .env.live | cut -d= -f2-)"
+          echo "::add-mask::$(grep -E '^SERVICE_ROLE_KEY=' .env.live | cut -d= -f2-)"
+          echo "::add-mask::$(grep -E '^POSTGRES_PASSWORD=' .env.live | cut -d= -f2-)"
+
+      - name: Validate the template renders
+        working-directory: supabase
+        run: ENV_FILE=.env.live docker compose -p live --env-file .env.live -f docker-compose.yml config --quiet
+
+      - name: Start one stack copy
+        working-directory: supabase
+        run: ENV_FILE=.env.live docker compose -p live --env-file .env.live -f docker-compose.yml up -d
+
+      - name: Wait until the copy is healthy and migrations applied
+        working-directory: supabase
+        run: |
+          get_var() { grep -E "^$2=" "$1" | cut -d= -f2- || true; }
+          PORT="$(get_var .env.live API_GW_HTTP_PORT)"
+          ANON="$(get_var .env.live ANON_KEY)"
+          SERVICE_KEY="$(get_var .env.live SERVICE_ROLE_KEY)"
+          GW="http://localhost:$PORT"
+
+          compose() {
+            ENV_FILE=.env.live \
+              docker compose -p live --env-file .env.live -f docker-compose.yml "$@"
+          }
+
+          wait_for() {
+            local label="$1"
+            shift
+            local deadline=$((SECONDS + 300))
+            until curl -sf "$@" >/dev/null 2>&1; do
+              [ "$SECONDS" -ge "$deadline" ] && { echo "live: timed out waiting for $label" >&2; exit 1; }
+              sleep 5
+            done
+            echo "live: $label up"
+          }
+
+          poll_for() {
+            local label="$1"
+            shift
+            local deadline=$((SECONDS + 300))
+            until "$@" >/dev/null 2>&1; do
+              [ "$SECONDS" -ge "$deadline" ] && { echo "live: timed out waiting for $label" >&2; exit 1; }
+              sleep 5
+            done
+            echo "live: $label ok"
+          }
+
+          realtime_healthy() {
+            compose exec -T realtime \
+              curl -sSfL --head -o /dev/null \
+              -H "Authorization: Bearer $ANON" \
+              http://localhost:4000/api/tenants/realtime-dev/health
+          }
+
+          functions_placeholder_ok() {
+            curl -s -H "apikey: $ANON" "$GW/functions/v1/smoke-probe" | grep -q FUNCTIONS_NOT_CONFIGURED
+          }
+
+          migrate_done() {
+            compose logs migrate 2>/dev/null | grep -q "migrate: done"
+          }
+
+          wait_for "auth" -H "apikey: $ANON" "$GW/auth/v1/health"
+          # The gateway's OpenAPI route only admits the service key; table reads
+          # below go through the anon key like a real client.
+          wait_for "rest" -H "apikey: $SERVICE_KEY" "$GW/rest/v1/"
+          wait_for "storage" "$GW/storage/v1/status"
+          poll_for "realtime" realtime_healthy
+          poll_for "functions" functions_placeholder_ok
+          poll_for "migrations" migrate_done
+
+      - name: Run the stack tests (zero skips allowed)
+        working-directory: supabase
+        run: ENV_FILE=.env.live tests/live.sh
+
+      - name: Dump service logs on failure
+        if: failure()
+        working-directory: supabase
+        run: ENV_FILE=.env.live docker compose -p live --env-file .env.live -f docker-compose.yml logs --tail 200
+
+      - name: Bring the copy down
+        if: always()
+        working-directory: supabase
+        run: ENV_FILE=.env.live docker compose -p live --env-file .env.live -f docker-compose.yml down -v

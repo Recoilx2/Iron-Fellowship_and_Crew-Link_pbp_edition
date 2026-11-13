@@ -1,8 +1,15 @@
-import { constructLocationImagesPath, getLocationDoc } from "./_getRef";
-import { replaceImage } from "lib/storage.lib";
-import { updateDoc } from "firebase/firestore";
+import {
+  removeWorldImageFile,
+  uploadWorldImageFile,
+} from "api-calls/world/worldImageStorage";
+import { updateLocation } from "./updateLocation";
 import { createApiFunction } from "api-calls/createApiFunction";
 
+/**
+ * Uploads a location image, shrinking it in the browser first. The new
+ * file replaces the location's image list; the old file is removed.
+ * Only world GMs may write; the database and the bucket enforce it.
+ */
 export const uploadLocationImage = createApiFunction<
   {
     worldId: string;
@@ -11,25 +18,17 @@ export const uploadLocationImage = createApiFunction<
     oldImageFilename?: string;
   },
   void
->((params) => {
+>(async (params) => {
   const { worldId, locationId, image, oldImageFilename } = params;
-
-  return new Promise((resolve, reject) => {
-    replaceImage(
-      constructLocationImagesPath(worldId, locationId),
-      oldImageFilename,
-      image
-    )
-      .then(() => {
-        const filename = image.name;
-        updateDoc(getLocationDoc(worldId, locationId), {
-          imageFilenames: [filename],
-        })
-          .then(() => {
-            resolve();
-          })
-          .catch(reject);
-      })
-      .catch(reject);
+  const filename = await uploadWorldImageFile(worldId, locationId, image);
+  await updateLocation({
+    worldId,
+    locationId,
+    location: { imageFilenames: [filename] },
   });
+  if (oldImageFilename && oldImageFilename !== filename) {
+    await removeWorldImageFile(worldId, locationId, oldImageFilename).catch(
+      (e) => console.error(e)
+    );
+  }
 }, "Failed to upload image");

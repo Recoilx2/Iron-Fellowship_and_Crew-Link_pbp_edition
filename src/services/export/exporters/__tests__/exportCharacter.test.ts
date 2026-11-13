@@ -3,23 +3,19 @@ import { createExportFilenameTracker } from "services/export/exportFilename";
 import { collectAsyncIterable } from "../../__tests__/testUtils";
 
 const mocks = vi.hoisted(() => ({
-  getDocs: vi.fn(),
+  getCharacterTracksForExport: vi.fn(),
+  getCharacterAssetsForExport: vi.fn(),
   getCharacterForExport: vi.fn(),
-  getCharacterAssetCollection: vi.fn(),
-  getCharacterTracksCollection: vi.fn(),
 }));
 
-vi.mock("firebase/firestore", () => ({
-  getDocs: mocks.getDocs,
+vi.mock("api-calls/tracks/getCharacterTracksForExport", () => ({
+  getCharacterTracksForExport: mocks.getCharacterTracksForExport,
+}));
+vi.mock("api-calls/assets/getCharacterAssetsForExport", () => ({
+  getCharacterAssetsForExport: mocks.getCharacterAssetsForExport,
 }));
 vi.mock("api-calls/character/getCharacterForExport", () => ({
   getCharacterForExport: mocks.getCharacterForExport,
-}));
-vi.mock("api-calls/assets/_getRef", () => ({
-  getCharacterAssetCollection: mocks.getCharacterAssetCollection,
-}));
-vi.mock("api-calls/tracks/_getRef", () => ({
-  getCharacterTracksCollection: mocks.getCharacterTracksCollection,
 }));
 
 import { CharacterExporter } from "../exportCharacter";
@@ -27,12 +23,8 @@ import { CharacterExporter } from "../exportCharacter";
 describe("CharacterExporter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getCharacterTracksCollection.mockImplementation(
-      (characterId: string) => `tracks:${characterId}`
-    );
-    mocks.getCharacterAssetCollection.mockImplementation(
-      (characterId: string) => `assets:${characterId}`
-    );
+    mocks.getCharacterTracksForExport.mockResolvedValue([]);
+    mocks.getCharacterAssetsForExport.mockResolvedValue([]);
   });
 
   it("does not fetch character data just to count one output file", async () => {
@@ -41,7 +33,8 @@ describe("CharacterExporter", () => {
     await expect(exporter.count()).resolves.toBe(1);
 
     expect(mocks.getCharacterForExport).not.toHaveBeenCalled();
-    expect(mocks.getDocs).not.toHaveBeenCalled();
+    expect(mocks.getCharacterTracksForExport).not.toHaveBeenCalled();
+    expect(mocks.getCharacterAssetsForExport).not.toHaveBeenCalled();
   });
 
   it("exports character, tracks, and assets in one name-based JSON file", async () => {
@@ -55,29 +48,16 @@ describe("CharacterExporter", () => {
         profileImage: { filename: "portrait.png", position: { x: 0, y: 0 }, scale: 1 },
       },
     });
-    mocks.getDocs.mockImplementation((collection: string) => {
-      if (collection === "tracks:char-1") {
-        return Promise.resolve({
-          empty: false,
-          docs: [
-            {
-              id: "track-1",
-              data: () => ({
-                label: "Vow",
-                value: 4,
-                createdTimestamp: {
-                  toDate: () => new Date("2026-05-30T05:00:00.000Z"),
-                },
-              }),
-            },
-          ],
-        });
-      }
-      return Promise.resolve({
-        empty: false,
-        docs: [{ id: "asset-1", data: () => ({ name: "Blade" }) }],
-      });
-    });
+    mocks.getCharacterTracksForExport.mockResolvedValue([
+      {
+        id: "track-1",
+        data: { label: "Vow", value: 4 },
+        createdDate: new Date("2026-05-30T05:00:00.000Z"),
+      },
+    ]);
+    mocks.getCharacterAssetsForExport.mockResolvedValue([
+      { id: "asset-1", data: { name: "Blade" } },
+    ]);
 
     const exporter = new CharacterExporter({
       characterId: "char-1",
@@ -103,7 +83,7 @@ describe("CharacterExporter", () => {
     });
   });
 
-  it("exports tracks even when legacy docs are missing createdTimestamp", async () => {
+  it("exports tracks even when legacy docs are missing createdDate", async () => {
     mocks.getCharacterForExport.mockResolvedValue({
       id: "char-1",
       data: {
@@ -113,15 +93,10 @@ describe("CharacterExporter", () => {
         momentum: 0,
       },
     });
-    mocks.getDocs.mockImplementation((collection: string) => {
-      if (collection === "tracks:char-1") {
-        return Promise.resolve({
-          empty: false,
-          docs: [{ id: "track-1", data: () => ({ label: "Old Track", value: 1 }) }],
-        });
-      }
-      return Promise.resolve({ empty: true, docs: [] });
-    });
+    mocks.getCharacterTracksForExport.mockResolvedValue([
+      { id: "track-1", data: { label: "Old Track", value: 1 } },
+    ]);
+    mocks.getCharacterAssetsForExport.mockResolvedValue([]);
 
     const exporter = new CharacterExporter({ characterId: "char-1" });
     const files = await collectAsyncIterable(exporter.run());

@@ -1,21 +1,25 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { PartialWithFieldValue, updateDoc } from "firebase/firestore";
-import { getHomebrewImpactsDoc } from "./_getRef";
+import { DocumentUpdate } from "api-calls/helpers.type";
 import { HomebrewImpactCategoryDocument } from "api-calls/homebrew/rules/impacts/_homebrewImpacts.type";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
+
+const api = createHomebrewContentApi<HomebrewImpactCategoryDocument>(
+  "homebrew_impact_categories"
+);
 
 export const updateHomebrewImpactCategory = createApiFunction<
   {
     impactCategoryId: string;
-    impactCategory: PartialWithFieldValue<HomebrewImpactCategoryDocument>;
-  },
+    impactCategory: DocumentUpdate<HomebrewImpactCategoryDocument>;
+  } & ClientOption,
   void
->((params) => {
-  const { impactCategoryId, impactCategory } = params;
-  return new Promise((resolve, reject) => {
-    updateDoc(getHomebrewImpactsDoc(impactCategoryId), impactCategory)
-      .then(() => {
-        resolve();
-      })
-      .catch(reject);
+>(async (params) => {
+  await api.update({
+    id: params.impactCategoryId,
+    doc: params.impactCategory,
+    client: params.client,
   });
-}, "Failed to update condition meter.");
+}, "Failed to update impact category.");

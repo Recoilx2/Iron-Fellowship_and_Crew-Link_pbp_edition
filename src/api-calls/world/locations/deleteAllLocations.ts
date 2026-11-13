@@ -1,39 +1,25 @@
-import { deleteDoc, getDocs } from "firebase/firestore";
-import {
-  getLocationCollection,
-  getLocationDoc,
-  getPrivateDetailsLocationDoc,
-  getPublicNotesLocationDoc,
-} from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
+import { WORLD_LOCATIONS_TABLE } from "./_getRef";
 
 interface Params {
   worldId: string;
 }
 
-export const deleteAllLocations = createApiFunction<Params, void>((params) => {
-  const { worldId } = params;
-
-  return new Promise((resolve, reject) => {
-    const promises: Promise<unknown>[] = [];
-    getDocs(getLocationCollection(worldId))
-      .then((docs) => {
-        docs.forEach((doc) => {
-          promises.push(deleteDoc(getLocationDoc(worldId, doc.id)));
-          promises.push(
-            deleteDoc(getPrivateDetailsLocationDoc(worldId, doc.id))
-          );
-          promises.push(deleteDoc(getPublicNotesLocationDoc(worldId, doc.id)));
-        });
-      })
-      .catch((e) => {
-        reject(e);
-      });
-
-    Promise.all(promises)
-      .then(() => resolve())
-      .catch((e) => {
-        reject(e);
-      });
-  });
-}, "Failed to delete locations.");
+/**
+ * Deletes every location in a world. GM details and notes follow through
+ * cascade deletes. Only world GMs may delete; the database enforces it.
+ */
+export const deleteAllLocations = createApiFunction<Params, void>(
+  async (params) => {
+    const { worldId } = params;
+    const { error } = await getSupabaseClient()
+      .from(WORLD_LOCATIONS_TABLE)
+      .delete()
+      .eq("world_id", worldId);
+    if (error) {
+      throw error;
+    }
+  },
+  "Failed to delete locations."
+);

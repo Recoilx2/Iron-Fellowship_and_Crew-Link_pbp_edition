@@ -1,17 +1,17 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { deleteDoc } from "firebase/firestore";
-import { getHomebrewMoveCategoryDoc } from "./_getRef";
+import { HomebrewMoveCategoryDocument } from "api-calls/homebrew/moves/categories/_homebrewMoveCategory.type";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
+
+const api = createHomebrewContentApi<HomebrewMoveCategoryDocument>(
+  "homebrew_move_categories"
+);
 
 export const deleteHomebrewMoveCategory = createApiFunction<
-  {
-    moveCategoryId: string;
-  },
+  { moveCategoryId: string } & ClientOption,
   void
->((params) => {
-  const { moveCategoryId } = params;
-  return new Promise((resolve, reject) => {
-    deleteDoc(getHomebrewMoveCategoryDoc(moveCategoryId))
-      .then(resolve)
-      .catch(reject);
-  });
+>(async (params) => {
+  await api.remove({ id: params.moveCategoryId, client: params.client });
 }, "Failed to delete move category.");

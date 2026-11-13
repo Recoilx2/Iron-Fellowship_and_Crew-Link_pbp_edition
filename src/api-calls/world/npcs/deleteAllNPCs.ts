@@ -1,37 +1,25 @@
-import { deleteDoc, getDocs } from "firebase/firestore";
-import {
-  getNPCCollection,
-  getNPCDoc,
-  getPrivateDetailsNPCDoc,
-  getPublicNotesNPCDoc,
-} from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
+import { WORLD_NPCS_TABLE } from "./_getRef";
 
 interface Params {
   worldId: string;
 }
 
-export const deleteAllNPCs = createApiFunction<Params, void>((params) => {
-  const { worldId } = params;
-
-  return new Promise((resolve, reject) => {
-    const promises: Promise<unknown>[] = [];
-    getDocs(getNPCCollection(worldId))
-      .then((docs) => {
-        docs.forEach((doc) => {
-          promises.push(deleteDoc(getNPCDoc(worldId, doc.id)));
-          promises.push(deleteDoc(getPrivateDetailsNPCDoc(worldId, doc.id)));
-          promises.push(deleteDoc(getPublicNotesNPCDoc(worldId, doc.id)));
-        });
-      })
-      .catch((e) => {
-        reject(e);
-      });
-
-    Promise.all(promises)
-      .then(() => resolve())
-      .catch((e) => {
-        reject(e);
-      });
-  });
-}, "Failed to delete npcs.");
+/**
+ * Deletes every NPC in a world. GM details and notes follow through
+ * cascade deletes. Only world GMs may delete; the database enforces it.
+ */
+export const deleteAllNPCs = createApiFunction<Params, void>(
+  async (params) => {
+    const { worldId } = params;
+    const { error } = await getSupabaseClient()
+      .from(WORLD_NPCS_TABLE)
+      .delete()
+      .eq("world_id", worldId);
+    if (error) {
+      throw error;
+    }
+  },
+  "Failed to delete npcs."
+);

@@ -1,0 +1,466 @@
+# Supabase stack template: start one copy per game system (Ironsworn, Starforged).
+#
+# Start a copy (run from this directory):
+#   cp .env.example .env.ironsworn   # then fill in every blank value (or run bin/gen-env.py)
+#   ENV_FILE=.env.ironsworn docker compose -p ironsworn --env-file .env.ironsworn up -d
+#
+# Run both copies side by side on one machine:
+#   ENV_FILE=.env.starforged docker compose -p starforged --env-file .env.starforged up -d
+# Each copy needs its own project name (-p), its own env file with its own
+# secrets, and its own API_GW_HTTP_PORT. Named volumes are prefixed with the
+# project name automatically, so data, accounts and ports never clash.
+#
+# Stop a copy:  ENV_FILE=.env.ironsworn docker compose -p ironsworn down
+#
+# Trimmed from upstream supabase/supabase docker-compose.yml @ 189adda9
+# (Apache-2.0). Dropped: studio, meta, imgproxy, supavisor. The logs/analytics
+# overlay was never added. Removed: fixed container_name values (they must be
+# unique per host, so two copies cannot share them), the fixed project name,
+# and dependencies on the dropped services. Storage image transformation is off.
+
+services:
+  # Applies supabase/migrations/*.sql in filename order, tracking what ran in
+  # supabase_migrations.applied so restarts and upgrades are safe to repeat.
+  # Storage boots first and brings its own schema (storage.buckets), which
+  # the portrait and homebrew migrations need; the remaining data services
+  # wait for this to finish before they boot.
+  migrate:
+    image: supabase/postgres:17.6.1.136
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+    volumes:
+      - ./migrate/apply.sh:/migrate/apply.sh:ro
+      - ./migrations:/migrations:ro
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+    command:
+      - /bin/sh
+      - /migrate/apply.sh
+
+  # Envoy is the API gateway: the browser talks only to this, on one port.
+  api-gw:
+    image: envoyproxy/envoy:v1.39.6
+    restart: unless-stopped
+    networks:
+      default:
+        # Expose `envoy` and `kong` as network aliases, so internal configs
+        # that reference either hostname resolve to the gateway.
+        aliases:
+          - envoy
+          - kong
+    healthcheck:
+      # Using a TCP port check because this image does not include curl or wget.
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/127.0.0.1/8000'"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    ports:
+      - ${API_GW_HTTP_PORT:-8000}:8000/tcp
+    volumes:
+      - ./envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro
+      - ./envoy/cds.yaml:/etc/envoy/cds.yaml:ro
+      - ./envoy/lds.template.yaml:/etc/envoy/lds.template.yaml:ro
+      - ./envoy/docker-entrypoint.sh:/docker-entrypoint.sh:ro
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
+      ANON_KEY_ASYMMETRIC: ${ANON_KEY_ASYMMETRIC:-}
+      SERVICE_ROLE_KEY_ASYMMETRIC: ${SERVICE_ROLE_KEY_ASYMMETRIC:-}
+      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
+    entrypoint: ["/bin/sh", "/docker-entrypoint.sh"]
+
+  auth:
+    image: supabase/gotrue:v2.197.0
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:9999/health"
+        ]
+      timeout: 5s
+      interval: 5s
+      retries: 3
+    depends_on:
+      db:
+        # Disable this if you are using an external Postgres database
+        condition: service_healthy
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL}
+
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+
+      GOTRUE_SITE_URL: ${SITE_URL}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS}
+      GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP}
+
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY}
+
+      # Legacy symmetric HS256 key
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+
+      GOTRUE_JWT_ISSUER: ${API_EXTERNAL_URL}
+
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${ENABLE_EMAIL_SIGNUP}
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: ${ENABLE_ANONYMOUS_USERS}
+      GOTRUE_MAILER_AUTOCONFIRM: ${ENABLE_EMAIL_AUTOCONFIRM}
+
+      GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL}
+      GOTRUE_SMTP_HOST: ${SMTP_HOST}
+      GOTRUE_SMTP_PORT: ${SMTP_PORT}
+      GOTRUE_SMTP_USER: ${SMTP_USER}
+      GOTRUE_SMTP_PASS: ${SMTP_PASS}
+      GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME}
+      GOTRUE_MAILER_URLPATHS_INVITE: ${MAILER_URLPATHS_INVITE}
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: ${MAILER_URLPATHS_CONFIRMATION}
+      GOTRUE_MAILER_URLPATHS_RECOVERY: ${MAILER_URLPATHS_RECOVERY}
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: ${MAILER_URLPATHS_EMAIL_CHANGE}
+
+      GOTRUE_EXTERNAL_PHONE_ENABLED: ${ENABLE_PHONE_SIGNUP}
+      GOTRUE_SMS_AUTOCONFIRM: ${ENABLE_PHONE_AUTOCONFIRM}
+
+  rest:
+    image: postgrest/postgrest:v14.18
+    restart: unless-stopped
+    depends_on:
+      db:
+        # Disable this if you are using an external Postgres database
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "postgrest", "--ready" ]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+      PGRST_DB_SCHEMAS: ${PGRST_DB_SCHEMAS}
+      PGRST_DB_MAX_ROWS: ${PGRST_DB_MAX_ROWS:-1000}
+      PGRST_DB_EXTRA_SEARCH_PATH: ${PGRST_DB_EXTRA_SEARCH_PATH:-public}
+      PGRST_DB_ANON_ROLE: anon
+
+      PGRST_ADMIN_SERVER_PORT: 3001
+      PGRST_ADMIN_SERVER_HOST: localhost
+
+      # PostgREST accepts a plain-text symmetric secret, a single JWK, or a JWKS.
+      PGRST_JWT_SECRET: ${JWT_JWKS:-${JWT_SECRET}}
+
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY}
+    command:
+      [
+        "postgrest"
+      ]
+
+  realtime:
+    image: supabase/realtime:v2.148.3
+    restart: unless-stopped
+    networks:
+      default:
+        # Realtime takes its tenant id from the Host header, so Envoy rewrites
+        # the host to this name. Keep it as a network alias: every Compose
+        # project has its own network, so the aliases do not collide.
+        aliases:
+          - realtime-dev.supabase-realtime
+    depends_on:
+      db:
+        # Disable this if you are using an external Postgres database
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -sSfL --head -o /dev/null -H \"Authorization: Bearer ${ANON_KEY}\" http://localhost:4000/api/tenants/realtime-dev/health"
+        ]
+      timeout: 5s
+      interval: 30s
+      retries: 3
+      start_period: 10s
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      PORT: 4000
+      DB_HOST: ${POSTGRES_HOST}
+      DB_PORT: ${POSTGRES_PORT}
+      DB_USER: supabase_admin
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      DB_AFTER_CONNECT_QUERY: 'SET search_path TO _realtime'
+      # Stored secrets are encrypted with AES-256-GCM. The legacy AES-128-ECB
+      # key (DB_ENC_KEY) is deliberately unset: on a fresh stack there is
+      # nothing old to decrypt, so ECB is never used.
+      DB_ENC_KEY_GCM: ${REALTIME_DB_ENC_KEY_GCM}
+      DB_ENC_WRITE_GCM: "true"
+
+      # Legacy symmetric HS256 key
+      API_JWT_SECRET: ${JWT_SECRET}
+
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      METRICS_JWT_SECRET: ${JWT_SECRET}
+      ERL_AFLAGS: -proto_dist inet_tcp
+      DNS_NODES: "''"
+      RLIMIT_NOFILE: "10000"
+      APP_NAME: realtime
+      SEED_SELF_HOST: "true"
+      RUN_JANITOR: "true"
+      DISABLE_HEALTHCHECK_LOGGING: "true"
+      # Live-update limits, set explicitly (these match the upstream defaults).
+      TENANT_MAX_BYTES_PER_SECOND: ${TENANT_MAX_BYTES_PER_SECOND:-100000}
+      TENANT_MAX_CHANNELS_PER_CLIENT: ${TENANT_MAX_CHANNELS_PER_CLIENT:-100}
+      TENANT_MAX_CONCURRENT_USERS: ${TENANT_MAX_CONCURRENT_USERS:-200}
+      TENANT_MAX_EVENTS_PER_SECOND: ${TENANT_MAX_EVENTS_PER_SECOND:-100}
+      TENANT_MAX_JOINS_PER_SECOND: ${TENANT_MAX_JOINS_PER_SECOND:-100}
+
+  # Authorizes private realtime channels. The realtime.messages table (and
+  # its RLS) is created by the realtime tenant setup at boot, so channel
+  # policies cannot run in the migrate service, which finishes before
+  # realtime starts: this one-shot applies supabase/realtime-auth/*.sql once
+  # realtime is healthy, tracking what ran in supabase_migrations.applied
+  # (same table as migrate) so restarts and upgrades are safe to repeat.
+  realtime-auth:
+    image: supabase/postgres:17.6.1.136
+    restart: "no"
+    depends_on:
+      db:
+        # Disable this if you are using an external Postgres database
+        condition: service_healthy
+      realtime:
+        condition: service_healthy
+    volumes:
+      - ./migrate/apply.sh:/migrate/apply.sh:ro
+      - ./realtime-auth:/realtime-auth:ro
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      MIGRATIONS_DIR: /realtime-auth
+    command:
+      - /bin/sh
+      - /realtime-auth/apply.sh
+
+  # File storage. Uses the local filesystem by default (STORAGE_BACKEND: file).
+  # Image resizing stays off: imgproxy is dropped, so files are served as uploaded.
+  storage:
+    image: supabase/storage-api:v1.89.12
+    restart: unless-stopped
+    depends_on:
+      db:
+        # Disable this if you are using an external Postgres database
+        condition: service_healthy
+      rest:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://storage:5000/status"
+        ]
+      timeout: 5s
+      interval: 5s
+      retries: 3
+      start_period: 10s
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://rest:3000
+
+      # Legacy symmetric HS256 key
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+      STORAGE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
+      REQUEST_ALLOW_X_FORWARDED_PATH: "true"
+      FILE_SIZE_LIMIT: 52428800
+      STORAGE_BACKEND: file
+      # S3 bucket when using S3 backend, directory name when using 'file'
+      GLOBAL_S3_BUCKET: ${GLOBAL_S3_BUCKET}
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: ${STORAGE_TENANT_ID}
+      # TODO: https://github.com/supabase/storage-api/issues/55
+      REGION: ${REGION}
+      ENABLE_IMAGE_TRANSFORMATION: "false"
+      # S3 protocol endpoint configuration
+      S3_PROTOCOL_ACCESS_KEY_ID: ${S3_PROTOCOL_ACCESS_KEY_ID}
+      S3_PROTOCOL_ACCESS_KEY_SECRET: ${S3_PROTOCOL_ACCESS_KEY_SECRET}
+    volumes:
+      - storage-data:/var/lib/storage
+
+  # Server functions (Edge Runtime) for the GM assistant's AI proxy.
+  # Starts with a placeholder main service that answers 404 until later
+  # tickets add real functions under supabase/functions/.
+  functions:
+    image: supabase/edge-runtime:v1.77.9
+    mem_limit: ${FUNCTIONS_MEMORY_LIMIT:-512m}
+    restart: unless-stopped
+    volumes:
+      - ./functions:/home/deno/functions:ro
+      - deno-cache:/root/.cache/deno
+    depends_on:
+      api-gw:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/127.0.0.1/9000'"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      # Legacy symmetric HS256 key
+      JWT_SECRET: ${JWT_SECRET}
+
+      SUPABASE_URL: http://api-gw:8000
+      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
+      # Legacy API keys (HS256-signed JWTs)
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      # New opaque API keys
+      SUPABASE_PUBLISHABLE_KEYS: "{\"default\":\"${SUPABASE_PUBLISHABLE_KEY:-}\"}"
+      SUPABASE_SECRET_KEYS: "{\"default\":\"${SUPABASE_SECRET_KEY:-}\"}"
+      SUPABASE_DB_URL: postgresql://postgres:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+      # TODO: Allow configuring VERIFY_JWT per function.
+      VERIFY_JWT: "${FUNCTIONS_VERIFY_JWT}"
+      # GM assistant LLM proxy (spec #10): blank until the operator sets them.
+      GM_ASSISTANT_ENDPOINT: ${GM_ASSISTANT_ENDPOINT:-}
+      GM_ASSISTANT_API_KEY: ${GM_ASSISTANT_API_KEY:-}
+      GM_ASSISTANT_ALLOWED_MODELS: ${GM_ASSISTANT_ALLOWED_MODELS:-}
+    command:
+      [
+        "start",
+        "--user-worker-request-idle-timeout",
+        "150000",
+        "--main-service",
+        "/home/deno/functions/main"
+      ]
+
+  # Note server: one Hocuspocus v4 process per copy holding the live Yjs
+  # documents for shared note editing. Each document is one content row
+  # (see migration 20261112135000_campaign_notes.sql). Browsers reach it
+  # only through the gateway at /hocuspocus/; the port stays internal.
+  hocuspocus:
+    build:
+      context: ./hocuspocus
+    restart: unless-stopped
+    mem_limit: ${HOCUSPOCUS_MEMORY_LIMIT:-256m}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      PORT: 1234
+      JWT_SECRET: ${JWT_SECRET}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+  # Site: serves the built site for this copy's game system. Built from the
+  # repo with the copy's GAME_SYSTEM (branding and theme baked in) and the
+  # gateway URL and anon key the browser uses. One copy serves one system.
+  site:
+    build:
+      context: ..
+      dockerfile: supabase/site/Dockerfile
+      args:
+        GAME_SYSTEM: ${GAME_SYSTEM}
+        VITE_SUPABASE_URL: ${SUPABASE_PUBLIC_URL}
+        VITE_SUPABASE_ANON_KEY: ${ANON_KEY}
+    restart: unless-stopped
+    ports:
+      - ${SITE_HTTP_PORT:-8080}:80/tcp
+
+  # Comment out everything below this point if you are using an external Postgres database
+  db:
+    # To upgrade an existing Postgres 15 database in place, see utils/upgrade-pg17.sh.
+    image: supabase/postgres:17.6.1.136
+    restart: unless-stopped
+    volumes:
+      - ./db-init/realtime.sql:/docker-entrypoint-initdb.d/migrations/99-realtime.sql:ro
+      # Must be superuser to create event trigger
+      - ./db-init/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:ro
+      # Must be superuser to alter reserved role
+      - ./db-init/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:ro
+      # Initialize the database settings with JWT_EXP
+      - ./db-init/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:ro
+      # PGDATA directory is persisted between restarts
+      - db-data:/var/lib/postgresql/data
+      # Changes required for internal supabase data such as _analytics
+      - ./db-init/_supabase.sql:/docker-entrypoint-initdb.d/migrations/97-_supabase.sql:ro
+      # Use named volume to persist pgsodium decryption key between restarts
+      - db-config:/etc/postgresql-custom
+    healthcheck:
+      test:
+        [
+        "CMD",
+        "pg_isready",
+        "-U",
+        "postgres",
+        "-h",
+        "localhost"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      PGPORT: ${POSTGRES_PORT}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      POSTGRES_DB: ${POSTGRES_DB}
+      JWT_EXP: ${JWT_EXPIRY}
+    command:
+      [
+        "postgres",
+        "-c",
+        "config_file=/etc/postgresql/postgresql.conf",
+        "-c",
+        "log_min_messages=fatal" # prevents Realtime polling queries from appearing in logs
+      ]
+
+volumes:
+  db-data:
+  db-config:
+  storage-data:
+  deno-cache:

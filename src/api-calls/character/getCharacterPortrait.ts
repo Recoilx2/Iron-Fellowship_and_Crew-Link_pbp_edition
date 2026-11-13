@@ -1,5 +1,4 @@
-import { getImageUrl } from "lib/storage.lib";
-import { constructCharacterPortraitPath } from "./_getRef";
+import { getPortraitUrl } from "api-calls/character/portraitStorage";
 import { createApiFunction } from "api-calls/createApiFunction";
 
 export const getCharacterPortraitUrl = createApiFunction<
@@ -9,14 +8,12 @@ export const getCharacterPortraitUrl = createApiFunction<
     filename: string;
   },
   string
->((params) => {
+>(async (params) => {
   const { uid, characterId, filename } = params;
-  return new Promise((resolve, reject) => {
-    getImageUrl(constructCharacterPortraitPath(uid, characterId, filename))
-      .then((url) => resolve(url))
-      .catch((e) => {
-        console.error(e);
-        reject(e);
-      });
-  });
+  try {
+    return await getPortraitUrl(uid, characterId, filename);
+  } catch (e) {
+    console.error(e);
+    throw e;
+  }
 }, "Failed to load character portrait.");

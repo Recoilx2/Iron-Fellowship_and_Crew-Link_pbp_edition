@@ -1,37 +1,12 @@
-import {
-  CollectionReference,
-  DocumentData,
-  onSnapshot,
-  query,
-  where,
-  Unsubscribe,
-} from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 
+/**
+ * Listener shape every homebrew content area keeps: subscribe to one
+ * collection's rows of one type, get the full map on every change, and stop
+ * with a plain unsubscribe.
+ */
 export type HomebrewListenerFunction<T> = (
   homebrewId: string,
   updateData: (data: Record<string, T>) => void,
   onError: (error: unknown) => void
 ) => Unsubscribe;
-
-export function createHomebrewListenerFunction<
-  T extends { collectionId: string }
->(
-  collectionRef: CollectionReference<T, DocumentData>
-): HomebrewListenerFunction<T> {
-  return (homebrewId, updateData, onError) => {
-    return onSnapshot(
-      query(collectionRef, where("collectionId", "==", homebrewId)),
-      (snapshot) => {
-        const data: Record<string, T> = {};
-        snapshot.docs.forEach((doc) => {
-          data[doc.id] = doc.data();
-        });
-        updateData(data);
-      },
-      (error) => {
-        console.error(error);
-        onError(error);
-      }
-    );
-  };
-}

@@ -1,22 +1,25 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { PartialWithFieldValue, updateDoc } from "firebase/firestore";
+import { DocumentUpdate } from "api-calls/helpers.type";
 import { HomebrewOracleCollectionDocument } from "api-calls/homebrew/oracles/collections/_homebrewOracleCollection.type";
-import { getHomebrewOracleCollectionDoc } from "./_getRef";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
+
+const api = createHomebrewContentApi<HomebrewOracleCollectionDocument>(
+  "homebrew_oracle_collections"
+);
 
 export const updateHomebrewOracleCollection = createApiFunction<
   {
     oracleCollectionId: string;
-    oracleCollection: PartialWithFieldValue<HomebrewOracleCollectionDocument>;
-  },
+    oracleCollection: DocumentUpdate<HomebrewOracleCollectionDocument>;
+  } & ClientOption,
   void
->((params) => {
-  const { oracleCollectionId, oracleCollection } = params;
-  return new Promise((resolve, reject) => {
-    updateDoc(
-      getHomebrewOracleCollectionDoc(oracleCollectionId),
-      oracleCollection
-    )
-      .then(() => resolve())
-      .catch(reject);
+>(async (params) => {
+  await api.update({
+    id: params.oracleCollectionId,
+    doc: params.oracleCollection,
+    client: params.client,
   });
 }, "Failed to update oracle collection.");

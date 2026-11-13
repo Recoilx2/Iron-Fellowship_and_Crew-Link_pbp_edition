@@ -1,17 +1,24 @@
-import { getDoc } from "firebase/firestore";
+import { getSupabaseClient } from "config/supabase.config";
 import { CharacterDocument } from "./_character.type";
-import { getCharacterDoc } from "./_getRef";
+import { CHARACTERS_TABLE, characterRowToDocument } from "./_getRef";
 
 /**
  * One-shot fetch of a character document for export purposes.
- * Returns null if the document does not exist.
+ * Returns null when the document does not exist or is not visible.
  */
 export async function getCharacterForExport(
   characterId: string
 ): Promise<{ id: string; data: CharacterDocument } | null> {
-  const snap = await getDoc(getCharacterDoc(characterId));
-  if (!snap.exists()) {
+  const { data, error } = await getSupabaseClient()
+    .from(CHARACTERS_TABLE)
+    .select("*")
+    .eq("id", characterId)
+    .single();
+  if (error || !data) {
     return null;
   }
-  return { id: snap.id, data: snap.data() };
+  return {
+    id: (data as { id: string }).id,
+    data: characterRowToDocument(data as never),
+  };
 }

@@ -1,10 +1,5 @@
-import { Bytes, setDoc } from "firebase/firestore";
-import {
-  constructPublicNotesLocationDocPath,
-  getPublicNotesLocationDoc,
-} from "./_getRef";
-import { projectId } from "config/firebase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
+import { writeWorldNoteContent } from "api-calls/world/worldNotes";
 
 interface Params {
   worldId: string;
@@ -13,52 +8,15 @@ interface Params {
   isBeacon?: boolean;
 }
 
-export const updateLocationNotes = createApiFunction<Params, void>((params) => {
-  const { worldId, locationId, notes, isBeacon } = params;
-
-  return new Promise((resolve, reject) => {
-    if (isBeacon) {
-      const contentPath = `projects/${projectId}/databases/(default)/documents${constructPublicNotesLocationDocPath(
-        worldId,
-        locationId
-      )}`;
-
-      const token = window.sessionStorage.getItem("id-token") ?? "";
-      if (notes) {
-        fetch(
-          `https://firestore.googleapis.com/v1/${contentPath}?updateMask.fieldPaths=notes`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              name: contentPath,
-              fields: {
-                notes: {
-                  bytesValue: Bytes.fromUint8Array(notes).toBase64(),
-                },
-              },
-            }),
-            keepalive: true,
-          }
-        ).catch((e) => console.error(e));
-      }
-
-      resolve();
-    } else {
-      setDoc(
-        getPublicNotesLocationDoc(worldId, locationId),
-        { notes: Bytes.fromUint8Array(notes) },
-        { merge: true }
-      )
-        .then(() => {
-          resolve();
-        })
-        .catch((e) => {
-          reject(e);
-        });
-    }
-  });
-}, "Failed to save changes to notes.");
+/**
+ * Saves a location's public notes bytes. The note server owns the live
+ * document and writes the same row on its debounce; this is the fallback
+ * path. Only world GMs may write; the database enforces it.
+ */
+export const updateLocationNotes = createApiFunction<Params, void>(
+  async (params) => {
+    const { worldId, locationId, notes } = params;
+    await writeWorldNoteContent(worldId, "location", locationId, false, notes);
+  },
+  "Failed to save changes to notes."
+);

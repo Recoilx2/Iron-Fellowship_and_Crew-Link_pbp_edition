@@ -1,4 +1,4 @@
-import { Unsubscribe } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { AssetDocument } from "api-calls/assets/_asset.type";
 
 export interface AssetSliceData {

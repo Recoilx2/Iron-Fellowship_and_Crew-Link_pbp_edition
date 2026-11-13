@@ -1,22 +1,15 @@
-import { Unsubscribe } from "firebase/auth";
-import { onSnapshot } from "firebase/firestore";
-import { getPublicNotesLoreDoc } from "./_getRef";
-import { getErrorMessage } from "functions/getErrorMessage";
+import { Unsubscribe } from "api-calls/helpers.type";
+import { listenToWorldItemNotes } from "api-calls/world/worldNotes";
 
+/**
+ * Follows one lore document's public notes bytes. Viewers of shared lore
+ * receive them; outsiders and viewers of unshared lore receive nothing.
+ */
 export function listenToLoreNotes(
   worldId: string,
   loreId: string,
   updateLoreNotes: (notes: Uint8Array | undefined) => void,
   onError: (error: string) => void
 ): Unsubscribe {
-  return onSnapshot(
-    getPublicNotesLoreDoc(worldId, loreId),
-    (snapshot) => {
-      const notes = snapshot.data()?.notes?.toUint8Array();
-      updateLoreNotes(notes);
-    },
-    (error) => {
-      onError(getErrorMessage(error, "Failed to get lore document notes"));
-    }
-  );
+  return listenToWorldItemNotes("lore", loreId, false, updateLoreNotes, onError);
 }

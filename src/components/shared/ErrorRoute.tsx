@@ -1,39 +1,26 @@
 import { useRouteError } from "react-router-dom";
 import { EmptyState } from "./EmptyState";
 import { useAppName } from "hooks/useAppName";
-import { useEffect, useState } from "react";
-import { reportPageError } from "lib/analytics.lib";
 import { Box } from "@mui/material";
 
 const supportEmail = "support@scottbenton.dev";
 
 export function ErrorRoute() {
   const error = useRouteError();
-  const [errorMessage, setErrorMessage] = useState<string>();
 
   const appName = useAppName();
 
-  useEffect(() => {
-    let errorMessage: string | undefined = undefined;
-    let errorTrace: string | undefined = undefined;
+  let errorMessage: string | undefined = undefined;
 
-    if (typeof error === "string") {
-      errorMessage = error;
-    } else if (error instanceof Error) {
-      errorMessage = error.message;
-      errorTrace = error.stack;
-    }
+  if (typeof error === "string") {
+    errorMessage = error;
+  } else if (error instanceof Error) {
+    errorMessage = error.message;
+  }
 
-    // A chunk missing after a deploy is handled by installStaleChunkReload,
-    // which loads the new build before an error reaches this page. Reloading
-    // here as well would loop when that guard has deliberately let it through.
-    setErrorMessage(errorMessage);
-    reportPageError(
-      errorMessage ?? "Could not extract error message.",
-      errorTrace,
-      location.pathname
-    );
-  }, [error]);
+  // A chunk missing after a deploy is handled by installStaleChunkReload,
+  // which loads the new build before an error reaches this page. Reloading
+  // here as well would loop when that guard has deliberately let it through.
 
   return (
     <EmptyState

@@ -1,25 +1,26 @@
-import { functions } from "config/firebase.config";
-import { httpsCallable } from "firebase/functions";
+import {
+  ClientOption,
+  resolveClient,
+} from "api-calls/homebrew/_supabase";
 import { constructHomebrewEditorInvitePath } from "pages/Homebrew/routes";
 
+/**
+ * Mints an editor invite link for a collection. Only editors can mint;
+ * anyone else gets a rejection. Replaces the old invite-key cloud function.
+ */
 export function getEditorInviteUrl(
-  homebrewCollectionId: string
+  homebrewCollectionId: string,
+  opts?: ClientOption
 ): Promise<string | null> {
-  return new Promise((resolve, reject) => {
-    const getInviteKey = httpsCallable(functions, "getHomebrewEditorInviteKey");
-
-    getInviteKey({ homebrewCollectionId })
-      .then((inviteKey) => {
-        if (inviteKey.data) {
-          resolve(constructHomebrewEditorInvitePath(inviteKey.data as string));
-        } else {
-          console.error("NO INVITE KEY RETURNED");
-          reject(new Error("No invite key was returned"));
-        }
-      })
-      .catch((e) => {
-        console.error(e);
-        reject(e);
-      });
-  });
+  return (async () => {
+    const { data, error } = await resolveClient(opts).rpc(
+      "homebrew_create_invite_key",
+      { p_collection_id: homebrewCollectionId }
+    );
+    if (error || !data) {
+      console.error(error ?? "No invite key was returned");
+      throw new Error("No invite key was returned");
+    }
+    return constructHomebrewEditorInvitePath(data as string);
+  })();
 }

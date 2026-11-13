@@ -1,35 +1,92 @@
-import { PartialWithFieldValue, updateDoc } from "firebase/firestore";
-import { getCampaignAssetDoc, getCharacterAssetDoc } from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
+import { DocumentUpdate } from "api-calls/helpers.type";
+import {
+  CAMPAIGN_ASSETS_TABLE,
+  CHARACTER_ASSETS_TABLE,
+  campaignAssetUpdateToColumns,
+  characterAssetUpdateToColumns,
+  type CampaignAssetRow,
+  type CharacterAssetRow,
+} from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
 import { AssetDocument } from "api-calls/assets/_asset.type";
+
+async function updateSupabaseAsset(
+  characterId: string,
+  assetId: string,
+  asset: DocumentUpdate<AssetDocument>
+): Promise<void> {
+  const client = getSupabaseClient();
+  const { data: row, error: fetchError } = await client
+    .from(CHARACTER_ASSETS_TABLE)
+    .select("*")
+    .eq("id", assetId)
+    .eq("character_id", characterId)
+    .single();
+  if (fetchError || !row) {
+    throw fetchError ?? new Error("Asset not found");
+  }
+  const columns = characterAssetUpdateToColumns(
+    row as CharacterAssetRow,
+    asset
+  );
+  if (Object.keys(columns).length === 0) {
+    return;
+  }
+  const { data, error } = await client
+    .from(CHARACTER_ASSETS_TABLE)
+    .update(columns)
+    .eq("id", assetId)
+    .select("id");
+  if (error || !data || data.length === 0) {
+    throw error ?? new Error("Asset not found");
+  }
+}
 
 export const updateAsset = createApiFunction<
   {
     characterId?: string;
     campaignId?: string;
     assetId: string;
-    asset: PartialWithFieldValue<AssetDocument>;
+    asset: DocumentUpdate<AssetDocument>;
   },
   void
->((params) => {
+>(async (params) => {
   const { characterId, campaignId, assetId, asset } = params;
 
-  return new Promise((resolve, reject) => {
-    if (!characterId && !campaignId) {
-      reject("Either campaign or character ID must be defined.");
+  if (!characterId && !campaignId) {
+    throw new Error("Either campaign or character ID must be defined.");
+  }
+  if (campaignId) {
+    const client = getSupabaseClient();
+    const { data: row, error: fetchError } = await client
+      .from(CAMPAIGN_ASSETS_TABLE)
+      .select("*")
+      .eq("id", assetId)
+      .eq("campaign_id", campaignId)
+      .single();
+    if (fetchError || !row) {
+      throw fetchError ?? new Error("Asset not found");
+    }
+    const columns = campaignAssetUpdateToColumns(
+      row as CampaignAssetRow,
+      asset
+    );
+    if (Object.keys(columns).length === 0) {
       return;
     }
-    updateDoc(
-      characterId
-        ? getCharacterAssetDoc(characterId, assetId)
-        : getCampaignAssetDoc(campaignId as string, assetId),
-      asset
-    )
-      .then(() => {
-        resolve();
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
+    const { data, error } = await client
+      .from(CAMPAIGN_ASSETS_TABLE)
+      .update(columns)
+      .eq("id", assetId)
+      .select("id");
+    if (error || !data || data.length === 0) {
+      throw error ?? new Error("Asset not found");
+    }
+    return;
+  }
+  if (!characterId) {
+    throw new Error("Either campaign or character ID must be defined.");
+  }
+  await updateSupabaseAsset(characterId, assetId, asset);
 }, "Error updating asset.");

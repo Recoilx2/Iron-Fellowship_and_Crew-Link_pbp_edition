@@ -1,59 +1,31 @@
-import { getDocs } from "firebase/firestore";
+import { getSupabaseClient } from "config/supabase.config";
 import { removeNote } from "./removeNote";
-import {
-  getCampaignNoteCollection,
-  getCharacterNoteCollection,
-} from "./_getRef";
+import { CHARACTER_NOTES_TABLE, CAMPAIGN_NOTES_TABLE } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
-
-function getAllNotes(
-  campaignId: string | undefined,
-  characterId: string | undefined
-): Promise<string[]> {
-  return new Promise<string[]>((resolve, reject) => {
-    if (!characterId && !campaignId) {
-      reject(new Error("Either character or campaign ID must be defined."));
-      return;
-    }
-    getDocs(
-      characterId
-        ? getCharacterNoteCollection(characterId)
-        : getCampaignNoteCollection(campaignId as string)
-    )
-      .then((snapshot) => {
-        const ids = snapshot.docs.map((doc) => doc.id);
-        resolve(ids);
-      })
-      .catch(() => {
-        reject("Failed to get notes.");
-      });
-  });
-}
 
 export const deleteNotes = createApiFunction<
   { characterId?: string; campaignId?: string },
   void
->(({ campaignId, characterId }) => {
-  return new Promise<void>((resolve, reject) => {
-    if (!campaignId && !characterId) {
-      reject("Either campaign or character ID must be defined.");
-      return;
-    }
-    getAllNotes(campaignId, characterId)
-      .then((noteIds) => {
-        const promises = noteIds.map((noteId) =>
-          removeNote({ campaignId, characterId, noteId })
-        );
-        Promise.all(promises)
-          .then(() => {
-            resolve();
-          })
-          .catch((e) => {
-            reject(e);
-          });
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
+>(async ({ campaignId, characterId }) => {
+  if (!campaignId && !characterId) {
+    throw new Error("Either campaign or character ID must be defined.");
+  }
+  // Deleting a note fires the database's access-revoked notification, so
+  // the note server closes its connected editors too.
+  const table = characterId ? CHARACTER_NOTES_TABLE : CAMPAIGN_NOTES_TABLE;
+  const parentColumn = characterId ? "character_id" : "campaign_id";
+  const parentId = (characterId ?? campaignId) as string;
+  const { data, error } = await getSupabaseClient()
+    .from(table)
+    .select("id")
+    .eq(parentColumn, parentId);
+  if (error) {
+    throw error;
+  }
+  const noteIds = ((data ?? []) as Array<{ id: string }>).map(
+    (row) => row.id
+  );
+  await Promise.all(
+    noteIds.map((noteId) => removeNote({ campaignId, characterId, noteId }))
+  );
 }, "Failed to delete some or all notes.");

@@ -1,27 +1,19 @@
-import { Unsubscribe } from "firebase/auth";
-import { onSnapshot } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { GMLore } from "types/Lore.type";
-import { getPrivateDetailsLoreDoc } from "./_getRef";
-import { getErrorMessage } from "functions/getErrorMessage";
+import { listenToWorldItemNotes } from "api-calls/world/worldNotes";
 
+/**
+ * Follows one lore document's GM-only properties, which are its GM notes.
+ * Only world GMs receive them; everyone else receives nothing and treats
+ * the lore as having no GM properties.
+ */
 export function listenToLoreGMProperties(
   worldId: string,
   loreId: string,
   updateGMProperties: (properties: GMLore | undefined) => void,
   onError: (error: string) => void
 ): Unsubscribe {
-  return onSnapshot(
-    getPrivateDetailsLoreDoc(worldId, loreId),
-    (snapshot) => {
-      const gmProps = snapshot.data();
-      const newProps: GMLore = {
-        ...gmProps,
-        gmNotes: gmProps?.gmNotes?.toUint8Array(),
-      };
-      updateGMProperties(newProps);
-    },
-    (error) => {
-      onError(getErrorMessage(error, "Failed to get lore document gm notes"));
-    }
-  );
+  return listenToWorldItemNotes("lore", loreId, true, (notes) => {
+    updateGMProperties(notes ? { gmNotes: notes } : undefined);
+  }, onError);
 }

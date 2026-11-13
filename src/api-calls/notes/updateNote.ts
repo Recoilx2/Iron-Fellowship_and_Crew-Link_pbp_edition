@@ -1,16 +1,30 @@
-import { Bytes, setDoc, updateDoc } from "firebase/firestore";
-import {
-  constructCampaignNoteContentPath,
-  constructCampaignNoteDocPath,
-  constructCharacterNoteContentPath,
-  constructCharacterNoteDocPath,
-  getCampaignNoteContentDocument,
-  getCampaignNoteDocument,
-  getCharacterNoteContentDocument,
-  getCharacterNoteDocument,
-} from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
+import { CHARACTER_NOTES_TABLE, CAMPAIGN_NOTES_TABLE } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
-import { projectId } from "config/firebase.config";
+
+/**
+ * Saves the note title. The editor bytes live on the note server
+ * (Hocuspocus), which reads and writes the content rows directly: the
+ * client never writes them, so solo edits cannot clobber a merged document.
+ */
+async function updateSupabaseNote(
+  table: string,
+  parentColumn: string,
+  parentId: string,
+  noteId: string,
+  title: string
+): Promise<void> {
+  const client = getSupabaseClient();
+  const { data: updated, error: titleError } = await client
+    .from(table)
+    .update({ title })
+    .eq("id", noteId)
+    .eq(parentColumn, parentId)
+    .select("id");
+  if (titleError || !updated || updated.length === 0) {
+    throw titleError ?? new Error("Note not found");
+  }
+}
 
 export const updateNote = createApiFunction<
   {
@@ -18,110 +32,33 @@ export const updateNote = createApiFunction<
     characterId: string | undefined;
     noteId: string;
     title: string;
+    // Accepted for the editor's save flow but ignored: the note server owns
+    // the bytes, so content snapshots and beacon retries would only race it.
     content?: Uint8Array;
     isBeaconRequest?: boolean;
   },
   void
->((params) => {
-  const { campaignId, characterId, noteId, title, content, isBeaconRequest } =
-    params;
+>(async (params) => {
+  const { campaignId, characterId, noteId, title } = params;
 
-  return new Promise((resolve, reject) => {
-    if (!campaignId && !characterId) {
-      reject(new Error("Either campaign or character ID must be defined."));
-      return;
-    }
+  if (!campaignId && !characterId) {
+    throw new Error("Either campaign or character ID must be defined.");
+  }
 
-    const noteContentPath = characterId
-      ? constructCharacterNoteContentPath(characterId, noteId)
-      : constructCampaignNoteContentPath(campaignId as string, noteId);
-    const noteDocPath = characterId
-      ? constructCharacterNoteDocPath(characterId, noteId)
-      : constructCampaignNoteDocPath(campaignId as string, noteId);
-
-    // If we are making this call when closing the page, we want to use a fetch call with keepalive
-    if (isBeaconRequest) {
-      const contentPath = `projects/${projectId}/databases/(default)/documents${noteContentPath}`;
-      const titlePath = `projects/${projectId}/databases/(default)/documents${noteDocPath}`;
-
-      const token = window.sessionStorage.getItem("id-token") ?? "";
-
-      if (content) {
-        fetch(
-          `https://firestore.googleapis.com/v1/${contentPath}?updateMask.fieldPaths=notes`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              name: contentPath,
-              fields: {
-                notes: {
-                  bytesValue: Bytes.fromUint8Array(content).toBase64(),
-                },
-              },
-            }),
-            keepalive: true,
-          }
-        ).catch((e) => console.error(e));
-      }
-      fetch(
-        `https://firestore.googleapis.com/v1/${titlePath}?updateMask.fieldPaths=title`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            name: titlePath,
-            fields: {
-              title: {
-                stringValue: title,
-              },
-            },
-          }),
-          keepalive: true,
-        }
-      ).catch((e) => console.error(e));
-
-      resolve();
-    } else {
-      const promises: Promise<unknown>[] = [];
-      promises.push(
-        updateDoc(
-          characterId
-            ? getCharacterNoteDocument(characterId, noteId)
-            : getCampaignNoteDocument(campaignId as string, noteId),
-          {
-            title,
-          }
-        )
-      );
-
-      if (content) {
-        promises.push(
-          setDoc(
-            characterId
-              ? getCharacterNoteContentDocument(characterId, noteId)
-              : getCampaignNoteContentDocument(campaignId as string, noteId),
-            {
-              notes: Bytes.fromUint8Array(content),
-            },
-            { merge: true }
-          )
-        );
-      }
-
-      Promise.all(promises)
-        .then(() => {
-          resolve();
-        })
-        .catch((e) => {
-          reject(e);
-        });
-    }
-  });
+  if (characterId) {
+    return updateSupabaseNote(
+      CHARACTER_NOTES_TABLE,
+      "character_id",
+      characterId,
+      noteId,
+      title
+    );
+  }
+  return updateSupabaseNote(
+    CAMPAIGN_NOTES_TABLE,
+    "campaign_id",
+    campaignId as string,
+    noteId,
+    title
+  );
 }, "Failed to update note.");

@@ -1,34 +1,44 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { addDoc } from "firebase/firestore";
+import { getSupabaseClient } from "config/supabase.config";
 import { Roll } from "types/DieRolls.type";
 import {
-  convertRollToGameLogDocument,
-  getCampaignGameLogCollection,
-  getCharacterGameLogCollection,
+  CHARACTER_ROLLS_TABLE,
+  CAMPAIGN_ROLLS_TABLE,
+  characterRollToColumns,
+  campaignRollToColumns,
 } from "./_getRef";
 
 export const addRoll = createApiFunction<
   { roll: Roll; campaignId?: string; characterId?: string },
   string
->((params) => {
+>(async (params) => {
   const { characterId, campaignId, roll } = params;
 
-  return new Promise((resolve, reject) => {
-    if (!characterId && !campaignId) {
-      reject(new Error("Either campaign or character ID must be defined."));
-    }
+  if (!characterId && !campaignId) {
+    throw new Error("Either campaign or character ID must be defined.");
+  }
 
-    addDoc(
-      campaignId
-        ? getCampaignGameLogCollection(campaignId)
-        : getCharacterGameLogCollection(characterId as string),
-      convertRollToGameLogDocument(roll)
-    )
-      .then((doc) => {
-        resolve(doc.id);
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
+  if (campaignId) {
+    const { data, error } = await getSupabaseClient()
+      .from(CAMPAIGN_ROLLS_TABLE)
+      .insert(campaignRollToColumns(campaignId, roll))
+      .select("id")
+      .single();
+    if (error || !data) {
+      throw error ?? new Error("Failed to add roll to log.");
+    }
+    return (data as { id: string }).id;
+  }
+  if (!characterId) {
+    throw new Error("Either campaign or character ID must be defined.");
+  }
+  const { data, error } = await getSupabaseClient()
+    .from(CHARACTER_ROLLS_TABLE)
+    .insert(characterRollToColumns(characterId, roll))
+    .select("id")
+    .single();
+  if (error || !data) {
+    throw error ?? new Error("Failed to add roll to log.");
+  }
+  return (data as { id: string }).id;
 }, "Failed to add roll to log.");

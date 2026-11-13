@@ -1,8 +1,11 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { constructLoreImagesPath } from "./_getRef";
-import { deleteImage } from "lib/storage.lib";
+import { removeWorldImageFile } from "api-calls/world/worldImageStorage";
 import { updateLore } from "./updateLore";
 
+/**
+ * Removes a lore image, clearing the lore's image list. Only world GMs
+ * may write; the database and the bucket enforce it.
+ */
 export const removeLoreImage = createApiFunction<
   {
     worldId: string;
@@ -10,21 +13,14 @@ export const removeLoreImage = createApiFunction<
     filename: string;
   },
   void
->((params) => {
+>(async (params) => {
   const { worldId, loreId, filename } = params;
-
-  return new Promise((resolve, reject) => {
-    updateLore({
-      worldId,
-      loreId,
-      lore: { imageFilenames: [] },
-    })
-      .then(() => {
-        deleteImage(constructLoreImagesPath(worldId, loreId), filename).catch(
-          () => console.error("Failed to remove image from storage.")
-        );
-        resolve();
-      })
-      .catch(reject);
+  await updateLore({
+    worldId,
+    loreId,
+    lore: { imageFilenames: [] },
   });
+  await removeWorldImageFile(worldId, loreId, filename).catch((e) =>
+    console.error(e)
+  );
 }, "Failed to delete lore image.");

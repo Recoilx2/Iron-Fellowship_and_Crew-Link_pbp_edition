@@ -1,17 +1,8 @@
 import { createApiFunction } from "api-calls/createApiFunction";
 import { removeCharacterFromCampaign } from "api-calls/campaign/removeCharacterFromCampaign";
-import { firebaseAuth } from "config/firebase.config";
-import { deleteDoc } from "firebase/firestore";
-import { deleteNotes } from "api-calls/notes/deleteNotes";
-import { getCharacterSettingsDoc } from "api-calls/character-campaign-settings/_getRef";
-import {
-  constructCharacterPortraitFolderPath,
-  getCharacterDoc,
-} from "./_getRef";
-import { deleteAllLogs } from "api-calls/game-log/deleteAllLogs";
-import { deleteAllProgressTracks } from "api-calls/tracks/deleteAllProgressTracks";
-import { deleteAllAssets } from "api-calls/assets/deleteAllAssets";
-import { deleteImage } from "lib/storage.lib";
+import { getSupabaseClient } from "config/supabase.config";
+import { CHARACTERS_TABLE } from "./_getRef";
+import { removePortraitFile } from "./portraitStorage";
 
 export const deleteCharacter = createApiFunction<
   {
@@ -21,57 +12,33 @@ export const deleteCharacter = createApiFunction<
     portraitFilename?: string;
   },
   void
->((params) => {
-  return new Promise((resolve, reject) => {
-    const { uid, characterId, campaignId, portraitFilename } = params;
+>(async (params) => {
+  const { characterId, campaignId, portraitFilename, uid } = params;
 
-    let removeCharacterFromCampaignPromise: Promise<void> = Promise.resolve();
-    if (campaignId) {
-      removeCharacterFromCampaignPromise = removeCharacterFromCampaign({
-        uid: firebaseAuth.currentUser?.uid ?? "",
-        campaignId,
-        characterId,
-      });
-    }
+  if (campaignId) {
+    await removeCharacterFromCampaign({
+      uid,
+      campaignId,
+      characterId,
+    });
+  }
 
-    removeCharacterFromCampaignPromise
-      .then(() => {
-        const promises: Promise<unknown>[] = [];
+  if (portraitFilename) {
+    await removePortraitFile(uid, characterId, portraitFilename);
+  }
 
-        if (portraitFilename) {
-          promises.push(
-            deleteImage(
-              constructCharacterPortraitFolderPath(uid, characterId),
-              portraitFilename
-            )
-          );
-        }
-
-        promises.push(deleteNotes({ characterId }));
-        promises.push(deleteDoc(getCharacterSettingsDoc(characterId)));
-        promises.push(deleteAllAssets({ characterId }));
-        promises.push(deleteAllLogs({ characterId }));
-        promises.push(deleteAllProgressTracks({ characterId }));
-
-        Promise.all(promises)
-          .then(() => {
-            deleteDoc(getCharacterDoc(characterId))
-              .then(() => {
-                resolve();
-              })
-              .catch((e) => {
-                reject(e);
-                console.error(e);
-              });
-          })
-          .catch((e) => {
-            reject(e);
-            console.error(e);
-          });
-      })
-      .catch((e) => {
-        console.error(e);
-        reject(e);
-      });
-  });
+  // Assets, tracks, notes, settings and the solo roll log follow the row
+  // through ON DELETE CASCADE. The RETURNING check reads the row back
+  // through the SELECT policy, which sees the pre-existing committed row,
+  // so rejecting on an empty return tells strangers their delete matched
+  // nothing instead of resolving silently.
+  const { data: deleted, error } = await getSupabaseClient()
+    .from(CHARACTERS_TABLE)
+    .delete()
+    .eq("id", characterId)
+    .select("id");
+  if (error || !deleted || deleted.length === 0) {
+    console.error(error);
+    throw error ?? new Error("Character not found");
+  }
 }, "Failed to delete character.");

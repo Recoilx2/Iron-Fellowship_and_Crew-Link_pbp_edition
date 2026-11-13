@@ -1,15 +1,16 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { deleteDoc } from "firebase/firestore";
-import { getHomebrewMoveDoc } from "./_getRef";
+import { HomebrewMoveDocument } from "api-calls/homebrew/moves/moves/_homebrewMove.type";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
+
+const api =
+  createHomebrewContentApi<HomebrewMoveDocument>("homebrew_moves");
 
 export const deleteHomebrewMove = createApiFunction<
-  {
-    moveId: string;
-  },
+  { moveId: string } & ClientOption,
   void
->((params) => {
-  const { moveId } = params;
-  return new Promise((resolve, reject) => {
-    deleteDoc(getHomebrewMoveDoc(moveId)).then(resolve).catch(reject);
-  });
+>(async (params) => {
+  await api.remove({ id: params.moveId, client: params.client });
 }, "Failed to delete move.");

@@ -1,22 +1,23 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { deleteField, updateDoc } from "firebase/firestore";
-import { getHomebrewImpactsDoc } from "./_getRef";
+import {
+  ClientOption,
+  modifyContentData,
+} from "api-calls/homebrew/_supabase";
 
 export const deleteHomebrewImpact = createApiFunction<
-  {
-    impactCategoryId: string;
-    impactId: string;
-  },
+  { impactCategoryId: string; impactId: string } & ClientOption,
   void
->((params) => {
-  const { impactCategoryId, impactId } = params;
-  return new Promise((resolve, reject) => {
-    updateDoc(getHomebrewImpactsDoc(impactCategoryId), {
-      [`contents.${impactId}`]: deleteField(),
-    })
-      .then(() => {
-        resolve();
-      })
-      .catch(reject);
-  });
+>(async (params) => {
+  await modifyContentData(
+    "homebrew_impact_categories",
+    params.impactCategoryId,
+    (data) => {
+      const contents = {
+        ...((data.contents ?? {}) as Record<string, unknown>),
+      };
+      delete contents[params.impactId];
+      data.contents = contents;
+    },
+    { client: params.client }
+  );
 }, "Failed to delete impact.");

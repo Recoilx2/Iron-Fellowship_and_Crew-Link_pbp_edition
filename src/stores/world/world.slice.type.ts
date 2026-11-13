@@ -1,4 +1,4 @@
-import { Unsubscribe } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { World } from "api-calls/world/_world.type";
 import { CurrentWorldSlice } from "./currentWorld/currentWorld.slice.type";
 

@@ -16,7 +16,10 @@ import { useSnackbar } from "providers/SnackbarProvider/useSnackbar";
 import ZoomInIcon from "@mui/icons-material/ZoomIn";
 import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import { LoadingButton } from "@mui/lab";
-import { MAX_FILE_SIZE, MAX_FILE_SIZE_LABEL } from "lib/storage.lib";
+import {
+  MAX_PORTRAIT_SELECTION_BYTES,
+  MAX_PORTRAIT_SELECTION_LABEL,
+} from "api-calls/character/portraitStorage";
 
 export interface PortraitUploaderDialogProps {
   open: boolean;
@@ -68,9 +71,9 @@ export function PortraitUploaderDialog(props: PortraitUploaderDialogProps) {
     const files = evt.currentTarget.files;
 
     if (files && files.length > 0) {
-      if (files[0].size > MAX_FILE_SIZE) {
+      if (files[0].size > MAX_PORTRAIT_SELECTION_BYTES) {
         error(
-          `File is too large. The max file size is ${MAX_FILE_SIZE_LABEL}.`
+          `File is too large. The max file size is ${MAX_PORTRAIT_SELECTION_LABEL}.`
         );
         evt.target.value = "";
         return;

@@ -6,7 +6,7 @@ import { getErrorMessage } from "functions/getErrorMessage";
 import { createHomebrewExpansion } from "api-calls/homebrew/createHomebrewExpansion";
 import { updateHomebrewExpansion } from "api-calls/homebrew/updateHomebrewExpansion";
 import { deleteHomebrewExpansion } from "api-calls/homebrew/deleteHomebrewExpansion";
-import { Unsubscribe } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { listenToHomebrewStats } from "api-calls/homebrew/rules/stats/listenToHomebrewStats";
 import { createHomebrewStat } from "api-calls/homebrew/rules/stats/createHomebrewStat";
 import { updateHomebrewStat } from "api-calls/homebrew/rules/stats/updateHomebrewStat";

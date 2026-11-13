@@ -23,8 +23,11 @@ dist-ssr
 *.sln
 *.sw?
 
-# Project Specific
-.firebase/*
+# Per-copy Supabase stack env files (secrets - never commit; see supabase/.env.example)
+supabase/.env
+supabase/.env.ironsworn
+supabase/.env.starforged
+supabase/.env.live
 
 # @3d-dice/dice-box install script generates unused copies here.
 /public/assets/ammo/
@@ -32,3 +35,5 @@ dist-ssr
 
 # AI
 .claude/*
+.opencode/worktrees/
+.opencode/archive/

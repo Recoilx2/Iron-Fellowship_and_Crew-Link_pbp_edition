@@ -1,8 +1,9 @@
-import { getDocs } from "firebase/firestore";
 import { getCharacterForExport } from "api-calls/character/getCharacterForExport";
-import { getCharacterAssetCollection } from "api-calls/assets/_getRef";
-import { getCharacterTracksCollection } from "api-calls/tracks/_getRef";
-import { TrackDocument } from "api-calls/tracks/_track.type";
+import { getCharacterAssetsForExport } from "api-calls/assets/getCharacterAssetsForExport";
+import {
+  CharacterTrackExportRecord,
+  getCharacterTracksForExport,
+} from "api-calls/tracks/getCharacterTracksForExport";
 import { ExportAbortedError } from "services/export/zipBundle";
 import {
   buildUniqueExportPath,
@@ -19,13 +20,14 @@ function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw new ExportAbortedError();
 }
 
-function serializeTrackForExport(track: TrackDocument): Record<string, unknown> {
-  const { createdTimestamp, ...rest } = track;
-  const createdDate = createdTimestamp?.toDate?.();
+function serializeTrackForExport(
+  track: CharacterTrackExportRecord
+): Record<string, unknown> {
+  const { data, createdDate } = track;
 
   return createdDate != null
-    ? { ...rest, createdDate: createdDate.toISOString() }
-    : rest;
+    ? { ...data, createdDate: createdDate.toISOString() }
+    : { ...data };
 }
 
 export interface CharacterExporterParams {
@@ -41,8 +43,7 @@ export interface CharacterExporterParams {
  * The profile-image *binary* is never included; only the filename string
  * already present on the character document is kept.
  *
- * Character Notes (from the /notes Firestore collection) are NOT exported
- * here — they belong to a separate exporter.
+ * Character notes are NOT exported here — they belong to a separate exporter.
  *
  * Access check: the character's `uid` field must match `userId`. Characters
  * are owned resources and are not granularly shared, so a mismatch is a
@@ -70,12 +71,8 @@ export class CharacterExporter implements Exporter {
     throwIfAborted(signal);
 
     const characterPromise = getCharacterForExport(this.characterId);
-    const tracksPromise = getDocs(
-      getCharacterTracksCollection(this.characterId)
-    );
-    const assetsPromise = getDocs(
-      getCharacterAssetCollection(this.characterId)
-    );
+    const tracksPromise = getCharacterTracksForExport(this.characterId);
+    const assetsPromise = getCharacterAssetsForExport(this.characterId);
 
     const result = await characterPromise;
     throwIfAborted(signal);
@@ -117,25 +114,24 @@ export class CharacterExporter implements Exporter {
       characterJson.profileImageFilename = doc.profileImage.filename;
     }
 
-    const tracksSnap = await tracksPromise;
+    const tracks = await tracksPromise;
     throwIfAborted(signal);
 
-    const tracks: Record<string, unknown> = {};
-    if (!tracksSnap.empty) {
-      tracksSnap.docs.forEach((d) => {
-        tracks[d.id] = { ...serializeTrackForExport(d.data()), id: d.id };
-      });
-    }
+    const tracksRecord: Record<string, unknown> = {};
+    tracks.forEach((track) => {
+      tracksRecord[track.id] = {
+        ...serializeTrackForExport(track),
+        id: track.id,
+      };
+    });
 
-    const assetsSnap = await assetsPromise;
+    const assets = await assetsPromise;
     throwIfAborted(signal);
 
-    const assets: Record<string, unknown> = {};
-    if (!assetsSnap.empty) {
-      assetsSnap.docs.forEach((d) => {
-        assets[d.id] = { ...d.data(), id: d.id };
-      });
-    }
+    const assetsRecord: Record<string, unknown> = {};
+    assets.forEach((asset) => {
+      assetsRecord[asset.id] = { ...asset.data, id: asset.id };
+    });
 
     yield {
       path: buildUniqueExportPath({
@@ -148,8 +144,8 @@ export class CharacterExporter implements Exporter {
       contents: JSON.stringify(
         {
           ...characterJson,
-          tracks,
-          assets,
+          tracks: tracksRecord,
+          assets: assetsRecord,
         },
         null,
         2

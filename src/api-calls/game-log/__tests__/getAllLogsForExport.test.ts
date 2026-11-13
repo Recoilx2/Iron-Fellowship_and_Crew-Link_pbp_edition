@@ -1,92 +1,31 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  getDocs: vi.fn(),
-  orderBy: vi.fn(),
-  query: vi.fn(),
-  where: vi.fn(),
-  getCampaignGameLogCollection: vi.fn(),
-  getCharacterGameLogCollection: vi.fn(),
-}));
+import {
+  characterRollRowToExportRecord,
+  type CharacterRollRow,
+} from "../_getRef";
 
-vi.mock("firebase/firestore", () => ({
-  getDocs: mocks.getDocs,
-  orderBy: mocks.orderBy,
-  query: mocks.query,
-  where: mocks.where,
-}));
-vi.mock("../_getRef", () => ({
-  getCampaignGameLogCollection: mocks.getCampaignGameLogCollection,
-  getCharacterGameLogCollection: mocks.getCharacterGameLogCollection,
-}));
+function makeRow(overrides: Partial<CharacterRollRow> = {}): CharacterRollRow {
+  return {
+    id: "log-1",
+    character_id: "char-1",
+    roll: { type: 0, timestamp: "2026-05-30T05:00:00.000Z", gmsOnly: false },
+    gms_only: false,
+    created_at: "2026-05-30T05:00:00.000Z",
+    updated_at: "2026-05-30T05:00:00.000Z",
+    ...overrides,
+  };
+}
 
-import { getAllLogsForExport } from "../getAllLogsForExport";
-
-describe("getAllLogsForExport", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.orderBy.mockImplementation(
-      (field: string, direction: string) => `order:${field}:${direction}`
-    );
-    mocks.where.mockImplementation(
-      (field: string, operator: string, value: unknown) =>
-        `where:${field}:${operator}:${String(value)}`
-    );
-    mocks.query.mockImplementation((collection: string, ...constraints: string[]) => ({
-      collection,
-      constraints,
-    }));
-    mocks.getCampaignGameLogCollection.mockReturnValue("campaign-logs");
-    mocks.getCharacterGameLogCollection.mockReturnValue("character-logs");
-    mocks.getDocs.mockResolvedValue({
-      docs: [
-        {
-          id: "log-1",
-          data: () => ({
-            roll: 42,
-            timestamp: {
-              toDate: () => new Date("2026-05-30T05:00:00.000Z"),
-            },
-          }),
-        },
-      ],
-    });
-  });
-
-  it("reads all GM-visible campaign logs in timestamp order", async () => {
-    const logs = await getAllLogsForExport({ campaignId: "camp-1", isGM: true });
-
-    expect(mocks.getCampaignGameLogCollection).toHaveBeenCalledWith("camp-1");
-    expect(mocks.query).toHaveBeenCalledWith(
-      "campaign-logs",
-      "order:timestamp:asc"
-    );
-    expect(logs).toEqual([
-      {
-        id: "log-1",
-        roll: { roll: 42, timestamp: "2026-05-30T05:00:00.000Z" },
+describe("character roll export", () => {
+  it("exports the stored roll document untouched", () => {
+    expect(characterRollRowToExportRecord(makeRow())).toEqual({
+      id: "log-1",
+      roll: {
+        type: 0,
+        timestamp: "2026-05-30T05:00:00.000Z",
+        gmsOnly: false,
       },
-    ]);
-  });
-
-  it("filters non-GM exports to player-visible logs", async () => {
-    await getAllLogsForExport({ characterId: "char-1", isGM: false });
-
-    expect(mocks.getCharacterGameLogCollection).toHaveBeenCalledWith("char-1");
-    expect(mocks.query).toHaveBeenCalledWith(
-      "character-logs",
-      "where:gmsOnly:==:false",
-      "order:timestamp:asc"
-    );
-  });
-
-  it("serializes legacy logs with missing timestamps without crashing", async () => {
-    mocks.getDocs.mockResolvedValue({
-      docs: [{ id: "log-1", data: () => ({ roll: 42 }) }],
     });
-
-    const logs = await getAllLogsForExport({ characterId: "char-1", isGM: true });
-
-    expect(logs).toEqual([{ id: "log-1", roll: { roll: 42, timestamp: null } }]);
   });
 });

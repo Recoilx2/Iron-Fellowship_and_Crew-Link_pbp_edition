@@ -1,10 +1,12 @@
-import { Unsubscribe } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { GMNPC, NPC } from "types/NPCs.type";
 
 export type NPCDocumentWithGMProperties = NPC & {
   gmProperties?: GMNPC | null;
   notes?: Uint8Array | null;
   imageUrl?: string;
+  publicNoteId?: string;
+  gmNoteId?: string;
 };
 
 export interface NPCsSliceData {
@@ -16,7 +18,7 @@ export interface NPCsSliceData {
 }
 
 export interface NPCsSliceActions {
-  subscribe: (worldId: string, worldOwnerIds: string[]) => Unsubscribe;
+  subscribe: (worldId: string) => Unsubscribe;
   setOpenNPCId: (npcId?: string) => void;
   setNPCSearch: (search: string) => void;
 

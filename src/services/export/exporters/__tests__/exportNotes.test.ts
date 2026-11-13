@@ -6,20 +6,8 @@ const mocks = vi.hoisted(() => ({
   yjsUpdateToMarkdown: vi.fn(),
 }));
 
-// Mock Firestore and Firebase deps before importing the exporter module,
-// since the notes API calls import firebase.config which requires `location`
-// (a browser global unavailable in the Node test environment).
-vi.mock("config/firebase.config", () => ({
-  firestore: {},
-}));
-vi.mock("firebase/firestore", () => ({
-  collection: vi.fn(),
-  doc: vi.fn(),
-  getDocs: vi.fn(),
-  getDoc: vi.fn(),
-  query: vi.fn(),
-  where: vi.fn(),
-}));
+// The data-layer module below is fully mocked, so this test exercises the
+// exporter against the new Supabase-backed data layer's interface.
 vi.mock("api-calls/notes/getAllNotesWithContent", () => ({
   getAllNotesWithContent: mocks.getAllNotesWithContent,
 }));

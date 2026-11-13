@@ -1,16 +1,17 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { addDoc } from "firebase/firestore";
 import { HomebrewOracleTableDocument } from "api-calls/homebrew/oracles/tables/_homebrewOracleTable.type";
-import { getHomebrewOracleTableCollection } from "./_getRef";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
+
+const api = createHomebrewContentApi<HomebrewOracleTableDocument>(
+  "homebrew_oracle_tables"
+);
 
 export const createHomebrewOracleTable = createApiFunction<
-  { oracleTable: HomebrewOracleTableDocument },
+  { oracleTable: HomebrewOracleTableDocument } & ClientOption,
   void
->((params) => {
-  const { oracleTable } = params;
-  return new Promise((resolve, reject) => {
-    addDoc(getHomebrewOracleTableCollection(), oracleTable)
-      .then(() => resolve())
-      .catch(reject);
-  });
+>(async (params) => {
+  await api.create({ doc: params.oracleTable, client: params.client });
 }, "Failed to create oracle table.");

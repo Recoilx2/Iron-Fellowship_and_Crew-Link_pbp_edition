@@ -1,7 +1,11 @@
+import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
-import { updateDoc } from "firebase/firestore";
-import { getNPCDoc } from "./_getRef";
 
+/**
+ * Toggles one character's bond to an NPC. World GMs may set any bond;
+ * other world viewers may set only their own characters'. The database
+ * function enforces both.
+ */
 export const updateNPCCharacterBond = createApiFunction<
   {
     worldId: string;
@@ -10,15 +14,16 @@ export const updateNPCCharacterBond = createApiFunction<
     bonded: boolean;
   },
   void
->((params) => {
-  const { worldId, npcId, characterId, bonded } = params;
-
-  return new Promise((resolve, reject) => {
-    updateDoc(getNPCDoc(worldId, npcId), {
-      [`characterBonds.${characterId}`]: bonded,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
-      .then(() => resolve())
-      .catch(reject);
+>(async (params) => {
+  const { npcId, characterId, bonded } = params;
+  const { error } = await getSupabaseClient().rpc("set_world_item_bond", {
+    kind: "npc",
+    item_id: npcId,
+    character_id: characterId,
+    field: "character_bonds",
+    value: bonded,
   });
+  if (error) {
+    throw error;
+  }
 }, "Error updating npc bonds.");

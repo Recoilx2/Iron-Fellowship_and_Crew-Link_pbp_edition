@@ -1,17 +1,17 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { deleteDoc } from "firebase/firestore";
-import { getHomebrewOracleTableDoc } from "./_getRef";
+import { HomebrewOracleTableDocument } from "api-calls/homebrew/oracles/tables/_homebrewOracleTable.type";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
+
+const api = createHomebrewContentApi<HomebrewOracleTableDocument>(
+  "homebrew_oracle_tables"
+);
 
 export const deleteHomebrewOracleTable = createApiFunction<
-  {
-    oracleTableId: string;
-  },
+  { oracleTableId: string } & ClientOption,
   void
->((params) => {
-  const { oracleTableId } = params;
-  return new Promise((resolve, reject) => {
-    deleteDoc(getHomebrewOracleTableDoc(oracleTableId))
-      .then(resolve)
-      .catch(reject);
-  });
+>(async (params) => {
+  await api.remove({ id: params.oracleTableId, client: params.client });
 }, "Failed to delete oracle table.");

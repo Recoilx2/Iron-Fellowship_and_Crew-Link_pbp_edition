@@ -1,6 +1,4 @@
-import { getErrorMessage } from "functions/getErrorMessage";
-import { reportApiError } from "lib/analytics.lib";
-import { createErrorSnackbar } from "providers/SnackbarProvider";
+import { createErrorSnackbar } from "providers/SnackbarProvider/useSnackbar";
 
 export type ApiFunction<Params, ReturnType> = (
   params: Params
@@ -15,10 +13,22 @@ export function createApiFunction<Params, Result>(
       apiFunction(params)
         .then(resolve)
         .catch((e) => {
-          console.error(e);
-          const apiErrorMessage = getErrorMessage(e, friendlyErrorMessage);
-          reportApiError(friendlyErrorMessage, apiErrorMessage);
-          createErrorSnackbar(friendlyErrorMessage);
+          // Short reference code per failure (story 38): the user sees only
+          // the generic message plus this code, while details stay in logs.
+          const referenceCode = Math.random()
+            .toString(36)
+            .slice(2, 8)
+            .toUpperCase()
+            .padEnd(6, "0");
+          console.error(`API call failed (ref: ${referenceCode})`, e);
+          try {
+            createErrorSnackbar(
+              `${friendlyErrorMessage} (ref: ${referenceCode})`
+            );
+          } catch {
+            // No SnackbarProvider mounted (e.g. vitest): the toast cannot be
+            // shown, but the caller must still get the rejection below.
+          }
           reject(e);
         });
     });

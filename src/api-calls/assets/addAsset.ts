@@ -1,7 +1,9 @@
-import { addDoc } from "firebase/firestore";
+import { getSupabaseClient } from "config/supabase.config";
 import {
-  getCampaignAssetCollection,
-  getCharacterAssetCollection,
+  CAMPAIGN_ASSETS_TABLE,
+  CHARACTER_ASSETS_TABLE,
+  campaignAssetDocumentToColumns,
+  characterAssetDocumentToColumns,
 } from "./_getRef";
 import { AssetDocument } from "api-calls/assets/_asset.type";
 import { createApiFunction } from "api-calls/createApiFunction";
@@ -12,25 +14,37 @@ interface AddAssetParams {
   asset: AssetDocument;
 }
 
-export const addAsset = createApiFunction<AddAssetParams, void>((params) => {
-  const { characterId, campaignId, asset } = params;
+async function addSupabaseAsset(
+  characterId: string,
+  asset: AssetDocument
+): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from(CHARACTER_ASSETS_TABLE)
+    .insert(characterAssetDocumentToColumns(characterId, asset));
+  if (error) {
+    throw error;
+  }
+}
 
-  return new Promise((resolve, reject) => {
+export const addAsset = createApiFunction<AddAssetParams, void>(
+  async (params) => {
+    const { characterId, campaignId } = params;
     if (!characterId && !campaignId) {
-      reject("Either character or campaign ID must be defined.");
+      throw new Error("Either campaign or character ID must be defined.");
+    }
+    if (campaignId) {
+      const { error } = await getSupabaseClient()
+        .from(CAMPAIGN_ASSETS_TABLE)
+        .insert(campaignAssetDocumentToColumns(campaignId, params.asset));
+      if (error) {
+        throw error;
+      }
       return;
     }
-    addDoc(
-      characterId
-        ? getCharacterAssetCollection(characterId)
-        : getCampaignAssetCollection(campaignId as string),
-      asset
-    )
-      .then(() => {
-        resolve();
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
-}, "Error creating your asset");
+    if (!characterId) {
+      throw new Error("Either campaign or character ID must be defined.");
+    }
+    await addSupabaseAsset(characterId, params.asset);
+  },
+  "Error creating your asset"
+);

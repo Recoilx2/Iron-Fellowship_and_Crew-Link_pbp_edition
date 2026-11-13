@@ -1,7 +1,11 @@
+import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
-import { updateDoc } from "firebase/firestore";
-import { getLocationDoc } from "./_getRef";
 
+/**
+ * Toggles one character's bond to a location. World GMs may set any bond;
+ * other world viewers may set only their own characters'. The database
+ * function enforces both.
+ */
 export const updateLocationCharacterBond = createApiFunction<
   {
     worldId: string;
@@ -10,14 +14,16 @@ export const updateLocationCharacterBond = createApiFunction<
     bonded: boolean;
   },
   void
->((params) => {
-  const { worldId, locationId, characterId, bonded } = params;
-
-  return new Promise((resolve, reject) => {
-    updateDoc(getLocationDoc(worldId, locationId), {
-      [`characterBonds.${characterId}`]: bonded,
-    })
-      .then(() => resolve())
-      .catch(reject);
+>(async (params) => {
+  const { locationId, characterId, bonded } = params;
+  const { error } = await getSupabaseClient().rpc("set_world_item_bond", {
+    kind: "location",
+    item_id: locationId,
+    character_id: characterId,
+    field: "character_bonds",
+    value: bonded,
   });
+  if (error) {
+    throw error;
+  }
 }, "Error updating location bonds.");

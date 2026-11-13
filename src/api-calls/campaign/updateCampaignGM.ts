@@ -1,8 +1,13 @@
-import { arrayUnion, arrayRemove, updateDoc } from "firebase/firestore";
-import { getCampaignDoc } from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
+import { CAMPAIGN_MEMBERS_TABLE } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
-import { getWorldDoc } from "api-calls/world/_getRef";
 
+/**
+ * Adds a co-GM, or demotes one back to player. Only existing GMs change the
+ * roster; demoting keeps the person as a campaign member. World access
+ * follows the roster through private.is_world_gm, so no world-side write
+ * is needed when GMs change.
+ */
 export const updateCampaignGM = createApiFunction<
   {
     campaignId: string;
@@ -11,53 +16,26 @@ export const updateCampaignGM = createApiFunction<
     shouldRemove?: boolean;
   },
   void
->((params) => {
-  const { campaignId, worldId, gmId, shouldRemove } = params;
-
-  // Add user to world
-  if (!shouldRemove && worldId) {
-    return new Promise((resolve, reject) => {
-      updateDoc(getWorldDoc(worldId), { ownerIds: arrayUnion(gmId) })
-        .then(() => {
-          updateDoc(
-            getCampaignDoc(campaignId),
-            !shouldRemove
-              ? {
-                  gmIds: arrayUnion(gmId),
-                }
-              : {
-                  gmIds: arrayRemove(gmId),
-                }
-          )
-            .then(() => {
-              resolve();
-            })
-            .catch((e) => {
-              reject(e);
-            });
-        })
-        .catch((e) => {
-          reject(e);
-        });
-    });
+>(async (params) => {
+  const { campaignId, gmId, shouldRemove } = params;
+  const client = getSupabaseClient();
+  if (!shouldRemove) {
+    const { error } = await client.from(CAMPAIGN_MEMBERS_TABLE).upsert(
+      { campaign_id: campaignId, user_id: gmId, role: "gm" },
+      { onConflict: "campaign_id,user_id" }
+    );
+    if (error) {
+      throw error;
+    }
+    return;
   }
-
-  return new Promise((resolve, reject) => {
-    updateDoc(
-      getCampaignDoc(campaignId),
-      !shouldRemove
-        ? {
-            gmIds: arrayUnion(gmId),
-          }
-        : {
-            gmIds: arrayRemove(gmId),
-          }
-    )
-      .then(() => {
-        resolve();
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
+  const { data, error } = await client
+    .from(CAMPAIGN_MEMBERS_TABLE)
+    .update({ role: "player" })
+    .eq("campaign_id", campaignId)
+    .eq("user_id", gmId)
+    .select("user_id");
+  if (error || !data || data.length === 0) {
+    throw error ?? new Error("GM not found");
+  }
 }, "Failed to update GM.");
