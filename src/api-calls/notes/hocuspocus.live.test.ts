@@ -176,16 +176,17 @@ describe.skipIf(!config)("shared note editing on the note server", () => {
 
     // The server writes the document to the note's content row on its
     // debounce; the row is the proof the bytes reached Postgres.
-    const stored = await waitFor(async () => {
+    const stored = await waitFor<string>(async () => {
       const read = await owner.client
         .from("character_note_contents")
         .select("content")
         .eq("note_id", noteId)
         .maybeSingle();
-      return read.data?.content ? (read.data.content as string) : null;
+      const content: unknown = read.data?.content;
+      return typeof content === "string" && content ? content : null;
     }, 60000);
     const fresh = new Y.Doc();
-    Y.applyUpdate(fresh, decodeNoteContent(stored as string));
+    Y.applyUpdate(fresh, decodeNoteContent(stored));
     expect(fresh.getText("body").toString()).toBe("A lone player writes.");
   });
 
@@ -313,8 +314,9 @@ describe.skipIf(!config)("shared note editing on the note server", () => {
     connected.splice(connected.indexOf(note), 1);
 
     if (!tryRestartHocuspocus()) {
-      console.warn("hocuspocus restart test skipped: no container found");
-      return;
+      throw new Error(
+        "hocuspocus restart test requires a running hocuspocus container (no container found)"
+      );
     }
     await waitForGatewayHealthy(cfg);
 
