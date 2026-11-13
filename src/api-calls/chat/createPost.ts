@@ -1,24 +1,34 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
-import { CHAT_POSTS_TABLE } from "./_postRef";
+import type { Roll } from "types/DieRolls.type";
+import { CHAT_POSTS_TABLE, postDocumentToColumns } from "./_postRef";
 
 /**
  * Posts formatted text to a channel as the speaker the interface chose: one
  * of the author's characters in the campaign, or nobody for posting as
- * self (players out of character, GMs everywhere). Members post into open
- * channels only; the post access rules refuse outsiders, foreign speakers
- * and archived channels, and the caller sees the failure.
+ * self (players out of character, GMs everywhere). A roll from the composer
+ * travels with the post in the app's existing roll shape and stands in for
+ * the words, so a roll-only post carries empty text. Members post into open
+ * channels only; the post access rules refuse outsiders, foreign speakers,
+ * archived channels and non-GM GM-only posts, and the caller sees the
+ * failure.
  */
 export const createPost = createApiFunction<
-  { channelId: string; text: string; speakerCharacterId?: string | null },
+  {
+    channelId: string;
+    text: string;
+    speakerCharacterId?: string | null;
+    roll?: Roll | null;
+    gmsOnly?: boolean;
+  },
   string
 >(async (params) => {
-  const { channelId, text, speakerCharacterId } = params;
+  const { channelId, text, speakerCharacterId, roll, gmsOnly } = params;
   if (!channelId) {
     throw new Error("A channel is required to post.");
   }
   const trimmed = text.trim();
-  if (trimmed.length === 0) {
+  if (trimmed.length === 0 && !roll) {
     throw new Error("Post text is required.");
   }
   const { data: sessionData, error: sessionError } =
@@ -36,7 +46,7 @@ export const createPost = createApiFunction<
     channel_id: channelId,
     author_id: authorId,
     speaker_character_id: speakerCharacterId ?? null,
-    text: trimmed,
+    ...postDocumentToColumns({ text: trimmed, roll, gmsOnly }),
   });
   if (error) {
     throw error;

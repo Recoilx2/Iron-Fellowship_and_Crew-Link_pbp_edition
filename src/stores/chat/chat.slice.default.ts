@@ -10,4 +10,5 @@ export const defaultChatSlice: ChatSliceData = {
   postsLoading: false,
   postsError: undefined,
   drafts: {},
+  pendingRolls: {},
 };

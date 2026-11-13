@@ -10,6 +10,7 @@ import { createChatSlice } from "stores/chat/chat.slice";
 import type { ChatSlice, ChatSliceData } from "stores/chat/chat.slice.type";
 import type { IStore } from "stores/store.type";
 import type { PostWithId } from "api-calls/chat/listenToChannelPosts";
+import { ROLL_TYPE } from "types/DieRolls.type";
 
 vi.mock("api-calls/chat/listenToChannelPosts");
 vi.mock("api-calls/chat/listenToCampaignChannels");
@@ -33,8 +34,24 @@ function posts(count: number, start = 0): PostWithId[] {
     authorId: "player-1",
     speakerCharacterId: null,
     text: `post ${start + i}`,
+    roll: null,
+    gmsOnly: false,
     createdAt: new Date(Date.now() + (start + i) * 1000).toISOString(),
   }));
+}
+
+function oracleRoll(): PostWithId["roll"] {
+  return {
+    type: ROLL_TYPE.ORACLE_TABLE,
+    rollLabel: "Action",
+    oracleCategoryName: "Ask the Oracle",
+    roll: 47,
+    result: "Reveal",
+    timestamp: new Date(),
+    characterId: null,
+    uid: "player-1",
+    gmsOnly: false,
+  };
 }
 
 function setUpSlice() {
@@ -44,6 +61,7 @@ function setUpSlice() {
     postsByChannel: {},
     hasOlderByChannel: {},
     drafts: {},
+    pendingRolls: {},
   };
   const set = (fn: (store: { chat: ChatSliceData }) => void) => {
     fn({ chat });
@@ -152,6 +170,18 @@ describe("chat slice posts", () => {
     expect(draft().drafts["channel-2"]).toBe("other channel draft");
   });
 
+  it("keeps a pending roll per channel until it posts", () => {
+    const { slice, draft } = setUpSlice();
+    const roll = oracleRoll();
+    slice.setPendingRoll("channel-1", roll);
+    slice.setPendingRoll("channel-2", oracleRoll());
+    expect(draft().pendingRolls["channel-1"]).toBe(roll);
+
+    slice.setPendingRoll("channel-1", null);
+    expect(draft().pendingRolls["channel-1"]).toBeUndefined();
+    expect(draft().pendingRolls["channel-2"]).not.toBeUndefined();
+  });
+
   it("reports post load errors", () => {
     const { slice, draft } = setUpSlice();
     const fail = vi.mocked(listenToChannelPosts).mock.calls;
@@ -199,12 +229,34 @@ describe("chat slice posts", () => {
         authorId: "player-1",
         speakerCharacterId: null,
         text: "A new post arrives.",
+        roll: null,
+        gmsOnly: false,
         createdAt: new Date(Date.now() + 60_000).toISOString(),
       },
     ]);
     expect(announce).toHaveBeenCalledWith(
       "New post in # In character: A new post arrives."
     );
+
+    // A roll-only post arrives with no text, so the roll speaks for it.
+    announce.mockClear();
+    captured?.onPosts([
+      ...posts(2),
+      {
+        id: "post-3",
+        channelId: "channel-1",
+        authorId: "player-1",
+        speakerCharacterId: null,
+        text: "",
+        roll: oracleRoll(),
+        gmsOnly: false,
+        createdAt: new Date(Date.now() + 120_000).toISOString(),
+      },
+    ]);
+    expect(announce).toHaveBeenCalledWith(
+      expect.stringContaining("New post in # In character: ")
+    );
+    expect(announce).toHaveBeenCalledWith(expect.stringContaining("Reveal"));
 
     // Paging back re-emits the window with older posts only: silence.
     announce.mockClear();
@@ -215,6 +267,8 @@ describe("chat slice posts", () => {
         authorId: "player-1",
         speakerCharacterId: null,
         text: "An older post pages in.",
+        roll: null,
+        gmsOnly: false,
         createdAt: new Date(Date.now() - 60_000).toISOString(),
       },
       ...posts(2),
@@ -224,6 +278,8 @@ describe("chat slice posts", () => {
         authorId: "player-1",
         speakerCharacterId: null,
         text: "A new post arrives.",
+        roll: null,
+        gmsOnly: false,
         createdAt: new Date(Date.now() + 60_000).toISOString(),
       },
     ]);

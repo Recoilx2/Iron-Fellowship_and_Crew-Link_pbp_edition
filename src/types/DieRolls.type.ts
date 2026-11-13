@@ -74,6 +74,12 @@ export interface CustomDiceRoll extends BaseRoll {
   dieValues: number[];
   modifier: number;
   total: number;
+  /**
+   * Per-group breakdown for mixed notation such as 2d6+1d8, in rolled
+   * order. Single-group rolls omit it: dieSides and dieValues already say
+   * everything, so old rolls keep their shape and still render.
+   */
+  dieGroups?: { dieSides: number; dieValues: number[] }[];
 }
 
 export type Roll =
