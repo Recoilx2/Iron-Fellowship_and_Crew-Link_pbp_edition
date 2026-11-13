@@ -12,6 +12,14 @@ import type { Unsubscribe } from "api-calls/helpers.type";
  * for shared campaign data. Neither mechanism delivers an initial snapshot
  * or replays missed events, so the fetch-on-subscribe (and re-fetch on every
  * later subscribe) is what keeps subscribers current.
+ *
+ * Two more guards keep subscribers correct when the server stays silent:
+ * rows are canonicalized before signing so logically-identical snapshots
+ * (realtime and REST serialize the same row differently, e.g. `updated_at`
+ * formatting) share one signature and never emit duplicates, and a
+ * reconcile timer re-fetches on a modest interval so withheld or lost
+ * events self-heal. The timer is silent on transient failure and stops on
+ * unsubscribe.
  */
 
 export type RowChange<T> =
@@ -44,6 +52,14 @@ export interface BroadcastBinding<T> {
 
 export type RowBinding<T> = PostgresChangesBinding<T> | BroadcastBinding<T>;
 
+/**
+ * How often a settled listener re-fetches to heal events the server
+ * withheld (rows the subscriber cannot SELECT never arrive) or dropped.
+ * Ten seconds bounds the heal time well inside the live tests' `waitFor`
+ * windows while keeping each active listener to six small SELECTs a minute.
+ */
+export const RECONCILE_INTERVAL_MS = 10_000;
+
 export interface ListenToRowsParams<T> {
   client: SupabaseClient;
   channelName: string;
@@ -55,15 +71,28 @@ export interface ListenToRowsParams<T> {
   onError?: (error: unknown) => void;
 }
 
+function toEpochMillis(
+  value: string | number | null | undefined
+): number | null {
+  if (value == null) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  // Only ISO-date-like strings are timestamps; anything else (ids, free
+  // text) passes through untouched so the signature never conflates them.
+  if (!/^\d{4}-\d{2}-\d{2}/.test(value)) return null;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
 function isStale(
   incoming: string | number | null | undefined,
   existing: string | number | null | undefined
 ): boolean {
-  if (incoming == null || existing == null) return false;
-  if (typeof incoming === "number" && typeof existing === "number") {
-    return incoming < existing;
-  }
-  return String(incoming) < String(existing);
+  const incomingMs = toEpochMillis(incoming);
+  const existingMs = toEpochMillis(existing);
+  // Unparseable or missing stamps carry no ordering info: keep the event
+  // rather than risk dropping a fresh row on a formatting skew.
+  if (incomingMs == null || existingMs == null) return false;
+  return incomingMs < existingMs;
 }
 
 export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
@@ -89,6 +118,31 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
   let removed = false;
   let refreshing = false;
   let lastEmittedSignature: string | undefined;
+  let timer: ReturnType<typeof setInterval> | undefined;
+
+  const canonicalJson = (row: T): string =>
+    JSON.stringify(row, (_key, value: unknown) =>
+      typeof value === "string" ? (toEpochMillis(value) ?? value) : value
+    );
+
+  const signature = (): string => {
+    // Sorted by key so merge order (realtime-first vs snapshot-first) never
+    // changes the signature; timestamps normalized to epoch millis so
+    // realtime and REST serializations of the same row sign identically.
+    const entries = [...rows.keys()]
+      .sort()
+      .map(
+        (key) =>
+          [
+            key,
+            getUpdatedAt
+              ? toEpochMillis(getUpdatedAt(rows.get(key) as T))
+              : null,
+            canonicalJson(rows.get(key) as T),
+          ] as const
+      );
+    return JSON.stringify(entries);
+  };
 
   const applyChange = (change: RowChange<T>): boolean => {
     if (change.kind === "remove") {
@@ -110,17 +164,18 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
 
   const emit = () => {
     // Snapshots carry plain row data, so identical content serializes
-    // identically. A refresh that changed nothing (double SUBSCRIBED, a
-    // reconnect with no missed events) must not re-notify: subscribers diff
-    // against these emissions, and a duplicate snapshot looks like every row
-    // arriving twice.
-    const signature = JSON.stringify([...rows.entries()]);
-    if (signature === lastEmittedSignature) return;
-    lastEmittedSignature = signature;
+    // identically — after canonicalization (timestamps to epoch millis,
+    // keys sorted). A refresh that changed nothing (double SUBSCRIBED, a
+    // reconnect with no missed events, a realtime echo of the REST row)
+    // must not re-notify: subscribers diff against these emissions, and a
+    // duplicate snapshot looks like every row arriving twice.
+    const next = signature();
+    if (next === lastEmittedSignature) return;
+    lastEmittedSignature = next;
     onRows([...rows.values()]);
   };
 
-  const refresh = async () => {
+  const refresh = async (options?: { silent?: boolean }) => {
     // A fetch is already running (double SUBSCRIBED, reconnect storm): the
     // in-flight fetch already reads the latest rows, and events that land
     // meanwhile buffer into `pending` and merge on completion. A second fetch
@@ -140,7 +195,10 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
         settled = true;
         emit();
       } catch (error) {
-        if (my === epoch && !removed) onError?.(error);
+        // Background reconcile ticks stay silent on transient failure: the
+        // next tick retries, and surfacing every blip as onError would toast
+        // the user for a poll they never asked for.
+        if (!options?.silent && my === epoch && !removed) onError?.(error);
       }
     } finally {
       refreshing = false;
@@ -190,6 +248,15 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
     // the fresh select is what catches the subscriber up after a reconnect.
     if (status === "SUBSCRIBED") {
       void refresh();
+      // The reconcile timer starts with the first live subscription, not at
+      // construction: polling REST before the channel is live serves
+      // nothing. Guarded exactly like refresh (epoch/removed/refreshing)
+      // and cleared below.
+      if (timer === undefined) {
+        timer = setInterval(() => {
+          if (!removed) void refresh({ silent: true });
+        }, RECONCILE_INTERVAL_MS);
+      }
       return;
     }
     // SUBSCRIBED is the only success signal. Anything else means the channel
@@ -218,6 +285,10 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
     if (removed) return;
     removed = true;
     epoch += 1;
+    if (timer !== undefined) {
+      clearInterval(timer);
+      timer = undefined;
+    }
     void client.removeChannel(channel);
   };
 }

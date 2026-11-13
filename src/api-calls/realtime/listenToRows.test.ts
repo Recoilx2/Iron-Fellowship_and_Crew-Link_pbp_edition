@@ -1,6 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { listenToRows } from "api-calls/realtime/listenToRows";
+import {
+  listenToRows,
+  RECONCILE_INTERVAL_MS,
+} from "api-calls/realtime/listenToRows";
 import type { PostgresChangePayload } from "api-calls/realtime/listenToRows";
 
 interface Row {
@@ -522,5 +525,194 @@ describe("listenToRows", () => {
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError).toHaveBeenCalledWith(failure);
     expect(onRows).not.toHaveBeenCalled();
+  });
+
+  describe("canonical signature and reconcile (issue #92)", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("does not re-emit when realtime and REST rows differ only by timestamp format", async () => {
+      const { client, channels } = makeFakeRealtime();
+      const onRows = vi.fn();
+
+      listenToRows<Row>({
+        client: client as never,
+        channelName: "rows",
+        bindings: [
+          postgresChanges<Row>("user_settings", (payload) =>
+            payload.new?.id ? { kind: "upsert", row: payload.new } : null
+          ),
+        ],
+        fetchRows: () =>
+          Promise.resolve([
+            {
+              id: "a",
+              value: "one",
+              updated_at: "2026-11-12T00:00:01+00:00",
+            },
+          ]),
+        getKey: keyOf,
+        getUpdatedAt: stampOf,
+        onRows,
+      });
+      settle(channels);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(onRows).toHaveBeenCalledTimes(1);
+
+      // Same instant, realtime's `Z` serialization vs REST's `+00:00`.
+      emitPostgres(channels, {
+        new: {
+          id: "a",
+          value: "one",
+          updated_at: "2026-11-12T00:00:01Z",
+        },
+        old: null,
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(onRows).toHaveBeenCalledTimes(1);
+
+      // A genuinely newer row still emits.
+      emitPostgres(channels, {
+        new: { id: "a", value: "two", updated_at: "2026-11-12T00:00:02Z" },
+        old: null,
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(onRows).toHaveBeenCalledTimes(2);
+      expect(onRows).toHaveBeenLastCalledWith([
+        { id: "a", value: "two", updated_at: "2026-11-12T00:00:02Z" },
+      ]);
+    });
+
+    it("applies a newer numeric timestamp that string comparison would drop as stale", async () => {
+      const { client, channels } = makeFakeRealtime();
+      const seen: Row[][] = [];
+
+      listenToRows<Row>({
+        client: client as never,
+        channelName: "rows",
+        bindings: [
+          postgresChanges<Row>("user_settings", (payload) =>
+            payload.new?.id ? { kind: "upsert", row: payload.new } : null
+          ),
+        ],
+        fetchRows: () =>
+          Promise.resolve([
+            { id: "a", value: "old", updated_at: "2026-11-12T00:00:02Z" },
+          ]),
+        getKey: keyOf,
+        // Realtime may carry epoch millis while REST carries an ISO string.
+        getUpdatedAt: (row) =>
+          (row as unknown as { updated_at: string | number }).updated_at,
+        onRows: (rows) => seen.push(rows as Row[]),
+      });
+      settle(channels);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(seen).toHaveLength(1);
+
+      // String comparison would read "1794…" < "2026…" and drop this
+      // strictly newer row; numeric comparison must keep it.
+      const newerAt = Date.parse("2026-11-12T00:00:09Z");
+      emitPostgres(channels, {
+        new: { id: "a", value: "new", updated_at: newerAt },
+        old: null,
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(seen).toHaveLength(2);
+      expect(seen[1]).toEqual([{ id: "a", value: "new", updated_at: newerAt }]);
+    });
+
+    it("re-fetches on an interval so a withheld event self-heals", async () => {
+      const { client, channels } = makeFakeRealtime();
+      const seen: Row[][] = [];
+      let current: Row[] = [];
+
+      listenToRows<Row>({
+        client: client as never,
+        channelName: "rows",
+        bindings: [postgresChanges<Row>("user_settings", () => null)],
+        fetchRows: () => Promise.resolve(current),
+        getKey: keyOf,
+        getUpdatedAt: stampOf,
+        onRows: (rows) => seen.push(rows),
+      });
+      settle(channels);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(seen).toEqual([[]]);
+
+      // The server withholds the INSERT (RLS-drop): no realtime event
+      // arrives, but the row is visible to REST.
+      current = [
+        { id: "a", value: "healed", updated_at: "2026-11-12T00:00:03Z" },
+      ];
+      await vi.advanceTimersByTimeAsync(RECONCILE_INTERVAL_MS);
+
+      expect(seen.at(-1)).toEqual(current);
+    });
+
+    it("stays silent when a reconcile re-fetch fails transiently", async () => {
+      const { client, channels } = makeFakeRealtime();
+      const seen: Row[][] = [];
+      const onError = vi.fn();
+      let failNext = false;
+      let current: Row[] = [];
+
+      listenToRows<Row>({
+        client: client as never,
+        channelName: "rows",
+        bindings: [postgresChanges<Row>("user_settings", () => null)],
+        fetchRows: () =>
+          failNext
+            ? Promise.reject(new Error("transient"))
+            : Promise.resolve(current),
+        getKey: keyOf,
+        getUpdatedAt: stampOf,
+        onRows: (rows) => seen.push(rows),
+        onError,
+      });
+      settle(channels);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(seen).toEqual([[]]);
+
+      failNext = true;
+      await vi.advanceTimersByTimeAsync(RECONCILE_INTERVAL_MS);
+      expect(onError).not.toHaveBeenCalled();
+      expect(seen).toEqual([[]]);
+
+      // The listener keeps working after the transient failure.
+      failNext = false;
+      current = [
+        { id: "a", value: "recovered", updated_at: "2026-11-12T00:00:04Z" },
+      ];
+      await vi.advanceTimersByTimeAsync(RECONCILE_INTERVAL_MS);
+      expect(onError).not.toHaveBeenCalled();
+      expect(seen.at(-1)).toEqual(current);
+    });
+
+    it("clears the reconcile timer on unsubscribe", async () => {
+      const { client, channels } = makeFakeRealtime();
+      const fetchRows = vi.fn(() => Promise.resolve([]));
+
+      const unsubscribe = listenToRows<Row>({
+        client: client as never,
+        channelName: "rows",
+        bindings: [],
+        fetchRows,
+        getKey: keyOf,
+        onRows: () => {},
+      });
+      settle(channels);
+      await vi.advanceTimersByTimeAsync(0);
+      const callsWhileSubscribed = fetchRows.mock.calls.length;
+      expect(callsWhileSubscribed).toBeGreaterThan(0);
+
+      unsubscribe();
+      await vi.advanceTimersByTimeAsync(RECONCILE_INTERVAL_MS * 3);
+      expect(fetchRows.mock.calls.length).toBe(callsWhileSubscribed);
+    });
   });
 });
