@@ -22,6 +22,7 @@ import { rollOracle } from "./rollers/rollOracle";
 import { idMap } from "data/idMap";
 import { Datasworn, IdParser } from "@datasworn-community/core";
 import { rollDice } from "./rollers/rollDice";
+import { scoreStatRoll } from "./rollers/scoreStatRoll";
 import { useHide3dDice } from "hooks/useHide3dDice";
 import { Theme, useTheme } from "@mui/material";
 
@@ -79,23 +80,14 @@ export function useRoller() {
       const challenge2 = results[1].value;
       const action = results[2].value;
 
-      let matchedNegativeMomentum = false;
-      if (momentum < 0 && Math.abs(momentum) === action) {
-        matchedNegativeMomentum = true;
-      }
-
-      const actionTotal = Math.min(
-        10,
-        (matchedNegativeMomentum ? 0 : action) + (modifier ?? 0) + (adds ?? 0)
-      );
-
-      let result: ROLL_RESULT = ROLL_RESULT.WEAK_HIT;
-      if (actionTotal > challenge1 && actionTotal > challenge2) {
-        result = ROLL_RESULT.HIT;
-        // Strong Hit
-      } else if (actionTotal <= challenge1 && actionTotal <= challenge2) {
-        result = ROLL_RESULT.MISS;
-      }
+      const { result, matchedNegativeMomentum } = scoreStatRoll({
+        action,
+        modifier,
+        adds,
+        challenge1,
+        challenge2,
+        momentum,
+      });
       const statRoll: StatRoll = {
         type: ROLL_TYPE.STAT,
         action,

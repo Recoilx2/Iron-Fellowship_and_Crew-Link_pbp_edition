@@ -4,13 +4,13 @@ import { idMap } from "data/idMap";
 import {
   CustomDiceRoll,
   OracleTableRoll,
-  ROLL_RESULT,
   ROLL_TYPE,
   Roll,
   StatRoll,
 } from "types/DieRolls.type";
 import { getRollResultLabel } from "components/features/charactersAndCampaigns/RollDisplay/getRollResultLabel";
 import { markdownToPlainText } from "functions/rollText";
+import { scoreStatRoll } from "stores/appState/rollers/scoreStatRoll";
 
 /**
  * The composer's rolls (spec #9): move, stat, ask-the-oracle, oracle table
@@ -141,26 +141,14 @@ export async function rollChatStat(
   ]);
   const [challenge1, challenge2, action] = values;
 
-  let matchedNegativeMomentum = false;
-  if (
-    context.momentum !== undefined &&
-    context.momentum < 0 &&
-    Math.abs(context.momentum) === action
-  ) {
-    matchedNegativeMomentum = true;
-  }
-
-  const total = Math.min(
-    10,
-    (matchedNegativeMomentum ? 0 : action) + modifier + (adds ?? 0)
-  );
-
-  let result: ROLL_RESULT = ROLL_RESULT.WEAK_HIT;
-  if (total > challenge1 && total > challenge2) {
-    result = ROLL_RESULT.HIT;
-  } else if (total <= challenge1 && total <= challenge2) {
-    result = ROLL_RESULT.MISS;
-  }
+  const { result, matchedNegativeMomentum } = scoreStatRoll({
+    action,
+    modifier,
+    adds,
+    challenge1,
+    challenge2,
+    momentum: context.momentum,
+  });
 
   const roll: StatRoll = {
     type: ROLL_TYPE.STAT,
