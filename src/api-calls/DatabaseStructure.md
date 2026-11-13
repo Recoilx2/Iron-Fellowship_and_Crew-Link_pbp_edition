@@ -6,23 +6,47 @@ migration per area); each data area's `api-calls/<area>/_getRef.ts` names its
 tables, live-update channels and row mappings. Stores, pages and components
 never name tables directly.
 
+Chat splits that convention across two ref files: `chat/_getRef.ts` names
+the channels and roster tables (`chat_channels`, `chat_channel_members`)
+with their live-update channels, while `chat/_postRef.ts` names the posts
+table (`chat_posts`) with its own channel and row mapping. The campaign
+roll-log listener (`chat/listenToCampaignRollPosts.ts`) builds its own
+live-update channel (`campaign:<campaignId>:rolls`), because one binding
+cannot name every channel of a campaign.
+
 ```
 profiles                     one row per person (display name)
 user_settings                one row per person (accessibility, oracle pins)
 characters                   one row per character (+ assets, tracks, notes,
                              note contents, settings, solo roll log)
 campaigns                    one row per campaign (+ members, assets, tracks,
-                             notes, note contents, settings, roll log,
+                             notes, note contents, settings,
                              chat channels)
-chat_channels                one row per channel in a campaign (kind IC/OOC,
-                             starting flag, archived flag; posts arrive
-                             with ticket #26)
+chat_channels                one row per channel in a campaign (kind IC/OOC;
+                             visibility public, private or dm; starting
+                             flag, archived flag)
+chat_posts                   one row per post in a channel (text, image
+                             paths, roll in its existing shape, speaker,
+                             GM-only flag, edited/deleted markers; the
+                             campaign roll log is a view over roll posts,
+                             ticket #30, so the old campaign_rolls table
+                             is gone)
+chat_channel_members         one roster row per person in a private channel
+                             or direct message (public channels need none:
+                             every campaign member is already in them)
 worlds                       one row per world (+ locations, lore, npcs,
                              notes, images metadata; no sectors: Starforged
                              locations replaced them, see ticket #21)
 homebrew_collections         one row per collection (+ stats, moves, oracles,
                              assets, editors, viewers, invite keys)
 ```
+
+Images live in the private `chat-images` storage bucket, one folder per
+campaign and post (`chat-images/<campaignId>/<postId>/<filename>`); posts
+carry their attachments as `image_paths` beside the text (ticket #28). The
+bucket rules today check campaign membership, so any campaign member can
+read a campaign's images; per-post scoping (private channels, direct
+messages, GM-only rolls) is still open in ticket #118.
 
 ## Type Links
 
@@ -33,6 +57,7 @@ homebrew_collections         one row per collection (+ stats, moves, oracles,
 | AssetDocument                | [\_asset.type](./assets/_asset.type.ts)                                                                  |
 | NoteDocument                 | [\_notes.type](./notes/_notes.type.ts)                                                                   |
 | ChannelDocument              | [\_chat.type](./chat/_chat.type.ts)                                                                     |
+| PostDocument                 | [\_chat.type](./chat/_chat.type.ts)                                                                     |
 | SettingsDocument             | [\_character-campaign-settings.type](./character-campaign-settings/_character-campaign-settings.type.ts) |
 | **Worlds**                   |                                                                                                          |
 | WorldDocument                | [\_world.type](./world/_world.type.ts)                                                                   |
