@@ -7,6 +7,7 @@ import {
   postDocumentToColumns,
   postPayloadToChange,
   postRowToDocument,
+  postRowToLogRoll,
   type PostRow,
 } from "api-calls/chat/_postRef";
 import { ROLL_RESULT, ROLL_TYPE, type Roll } from "types/DieRolls.type";
@@ -209,5 +210,44 @@ describe("chat post mapping", () => {
     expect(
       postPayloadToChange({ eventType: "INSERT", new: {}, old: null })
     ).toBeNull();
+  });
+
+  it("names the roll log's roller from the post, not from the roll", () => {
+    // A stored roll claiming another character (or author) still reads
+    // back under the post's own speaker and author: the database refuses
+    // such rows at insert, and the log never trusts the JSON regardless.
+    const stored = {
+      ...statRoll(),
+      characterId: "character-9",
+      uid: "player-9",
+      timestamp: "2026-11-13T12:00:00.000Z",
+    };
+    const logRoll = postRowToLogRoll(
+      row({
+        author_id: "player-2",
+        speaker_character_id: "character-2",
+        roll: stored,
+      })
+    );
+    expect(logRoll).toMatchObject({
+      characterId: "character-2",
+      uid: "player-2",
+      action: 4,
+      challenge1: 3,
+      challenge2: 8,
+    });
+    // Posting as oneself (or as an NPC) names nobody: a claimed character
+    // still reads back empty.
+    expect(
+      postRowToLogRoll(
+        row({
+          author_id: "player-2",
+          speaker_character_id: null,
+          roll: stored,
+        })
+      )
+    ).toMatchObject({ characterId: null, uid: "player-2" });
+    // A text-only post has no roll for the log.
+    expect(postRowToLogRoll(row({ roll: null }))).toBeNull();
   });
 });

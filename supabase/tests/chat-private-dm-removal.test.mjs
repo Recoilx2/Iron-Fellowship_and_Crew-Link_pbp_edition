@@ -26,8 +26,12 @@ describe("removed campaign members keep no private access migration (#117)", () 
     const mine = accessFile();
     const stamp = mine.slice(0, 14);
     // Migrations that landed after #117 (e.g. #118 chat image access,
-    // 20261114000000) sort later by design, so they are excluded here.
-    const landedLater = new Set(["20261114000000_chat_image_access.sql"]);
+    // 20261114000000, and #120 roll cleanup, 20261115000000) sort later by
+    // design, so they are excluded here.
+    const landedLater = new Set([
+      "20261114000000_chat_image_access.sql",
+      "20261115000000_chat_roll_cleanup.sql",
+    ]);
     const others = readdirSync(dir).filter(
       (f) => /^\d{14}_.*\.sql$/.test(f) && f !== mine && !landedLater.has(f)
     );
