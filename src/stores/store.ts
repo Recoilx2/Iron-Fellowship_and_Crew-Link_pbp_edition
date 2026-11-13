@@ -9,6 +9,7 @@ import { createWorldSlice } from "./world/world.slice";
 import { shallow } from "zustand/shallow";
 import { createSettingsSlice } from "./settings/settings.slice";
 import { createNotesSlice } from "./notes/notes.slice";
+import { createChatSlice } from "./chat/chat.slice";
 import { createGameLogSlice } from "./gameLog/gameLog.slice";
 import { createAccessibilitySettingsSlice } from "./accessibilitySettings/accessibilitySettings.slice";
 import { createAppStateSlice } from "./appState/appState.slice";
@@ -25,6 +26,7 @@ export const useStore = createWithEqualityFn<IStore>()(
     users: createUsersSlice(...params),
     settings: createSettingsSlice(...params),
     notes: createNotesSlice(...params),
+  chat: createChatSlice(...params),
     gameLog: createGameLogSlice(...params),
     accessibilitySettings: createAccessibilitySettingsSlice(...params),
     homebrew: createHomebrewSlice(...params),
