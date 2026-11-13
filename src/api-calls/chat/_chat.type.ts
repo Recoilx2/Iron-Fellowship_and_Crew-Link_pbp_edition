@@ -1,3 +1,5 @@
+import type { Roll } from "types/DieRolls.type";
+
 export type ChannelKind = "IC" | "OOC";
 
 /**
@@ -16,17 +18,18 @@ export interface ChannelDocument {
 }
 
 /**
- * A text post in a channel. The speaker is one of the author's characters
- * in the campaign (in character), one of the campaign world's NPCs (a GM
- * voice), or nobody (posting as themselves, the GM included). One voice per
- * post: never both a character and an NPC. Images ride along as storage
- * paths in the chat-images bucket beside the text (#28). Rolls, threads and
- * whispers extend this shape in later tickets; nothing here may change its
- * meaning. Edits stamp editedAt and show the new text with an edited
- * marker; a soft delete clears the text and stamps deletedAt, keeping the
- * row so the feed shows a "post deleted" marker. Rows are never
- * hard-deleted: under postgres_changes a SQL DELETE bypasses row-level
- * security, so deletes stay UPDATEs the access rules can filter per reader.
+ * A post in a channel: text, a roll, or both. The speaker is one of the
+ * author's characters in the campaign (in character), one of the campaign
+ * world's NPCs (a GM voice), or nobody (posting as themselves, the GM
+ * included). One voice per post: never both a character and an NPC. Images
+ * ride along as storage paths in the chat-images bucket beside the text
+ * (#28). Threads and whispers extend this shape in later tickets; nothing
+ * here may change its meaning. Edits stamp editedAt and show the new text
+ * with an edited marker; a soft delete clears the text and stamps
+ * deletedAt, keeping the row so the feed shows a "post deleted" marker.
+ * Rows are never hard-deleted: under postgres_changes a SQL DELETE
+ * bypasses row-level security, so deletes stay UPDATEs the access rules
+ * can filter per reader.
  */
 export interface PostDocument {
   channelId: string;
@@ -38,6 +41,13 @@ export interface PostDocument {
   text: string;
   /** Storage paths of the post's image attachments, oldest-first. */
   imagePaths: string[];
+  /**
+   * The attached roll in the app's existing roll shape (dice immutable),
+   * or null for a text-only post. A roll-only post carries empty text.
+   */
+  roll: Roll | null;
+  /** GM-only roll posts reach GMs alone; text-only posts stay open. */
+  gmsOnly: boolean;
   createdAt: string;
   /** When the author changed the text after posting, or null. */
   editedAt: string | null;

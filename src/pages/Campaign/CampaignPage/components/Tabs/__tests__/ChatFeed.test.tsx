@@ -18,6 +18,8 @@ function post(overrides: Partial<PostWithId> = {}): PostWithId {
     speakerNpcId: null,
     text: "We push on through the bog.",
     imagePaths: [],
+    roll: null,
+    gmsOnly: false,
     createdAt: "2026-11-13T12:00:00.000Z",
     editedAt: null,
     deletedAt: null,

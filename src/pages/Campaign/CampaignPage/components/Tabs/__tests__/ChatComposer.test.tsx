@@ -11,6 +11,7 @@ const removeChatImage: Mock = vi.fn(() => Promise.resolve());
 
 const state = {
   auth: { uid: "player-1", user: { displayName: "Sam" } },
+  accessibilitySettings: { settings: { verboseRollResults: false } },
   campaigns: {
     currentCampaign: {
       characters: {
@@ -33,11 +34,19 @@ const state = {
   },
   chat: {
     drafts: {} as Record<string, string>,
+    pendingRolls: {} as Record<string, unknown>,
     setDraft: (channelId: string, text: string) => {
       if (text.length === 0) {
         delete state.chat.drafts[channelId];
       } else {
         state.chat.drafts[channelId] = text;
+      }
+    },
+    setPendingRoll: (channelId: string, roll: unknown) => {
+      if (roll === null || roll === undefined) {
+        delete state.chat.pendingRolls[channelId];
+      } else {
+        state.chat.pendingRolls[channelId] = roll;
       }
     },
   },
@@ -102,6 +111,9 @@ describe("ChatComposer", () => {
     state.campaigns.currentCampaign.currentCampaign.worldId = undefined;
     state.worlds.currentWorld.currentWorldNPCs.npcMap = {};
     state.chat.drafts = {};
+    state.chat.pendingRolls = {};
+    state.auth.uid = "player-1";
+    state.campaigns.currentCampaign.currentCampaign.gmIds = [];
     vi.clearAllMocks();
   });
 
@@ -196,6 +208,8 @@ describe("ChatComposer", () => {
       speakerCharacterId: "kira",
       speakerNpcId: null,
       imagePaths: [],
+      roll: null,
+      gmsOnly: undefined,
     });
     expect(state.chat.drafts["ic"]).toBeUndefined();
   });
@@ -259,6 +273,8 @@ describe("ChatComposer", () => {
       speakerCharacterId: null,
       speakerNpcId: "elder",
       imagePaths: [],
+      roll: null,
+      gmsOnly: undefined,
     });
   });
 
@@ -287,6 +303,8 @@ describe("ChatComposer", () => {
       speakerCharacterId: null,
       speakerNpcId: null,
       imagePaths: [],
+      roll: null,
+      gmsOnly: undefined,
     });
   });
 
@@ -507,5 +525,38 @@ describe("ChatComposer", () => {
       close.click();
     });
     expect(view.textContent).not.toContain("10 MB");
+  });
+
+  it("offers the player move and stat rolls beside the oracle buttons", () => {
+    const view = render(ic);
+    for (const label of ["Move", "Stat", "Ask the Oracle", "Oracles", "Dice"]) {
+      const button = Array.from(view.querySelectorAll("button")).find(
+        (candidate) => candidate.textContent === label
+      );
+      if (!button) {
+        throw new Error(`no ${label} roll button`);
+      }
+    }
+  });
+
+  it("offers the GM only oracle buttons behind the eye toggle", () => {
+    state.auth.uid = "gm-1";
+    state.campaigns.currentCampaign.currentCampaign.gmIds = ["gm-1"];
+    const view = render(ic);
+    const labels = Array.from(view.querySelectorAll("button")).map(
+      (button) => button.textContent
+    );
+    expect(labels).not.toContain("Move");
+    expect(labels).not.toContain("Stat");
+    for (const label of ["Ask the Oracle", "Oracles", "Dice"]) {
+      expect(labels).toContain(label);
+    }
+    // The eye toggle starts open: the GM's rolls reach the players.
+    const toggle = view.querySelector(
+      'button[aria-label="Hide my rolls from players"]'
+    );
+    if (!toggle) {
+      throw new Error("no GM eye toggle");
+    }
   });
 });

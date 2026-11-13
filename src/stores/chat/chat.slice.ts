@@ -9,6 +9,7 @@ import {
   listenToChannelPosts,
 } from "api-calls/chat/listenToChannelPosts";
 import type { Unsubscribe } from "api-calls/helpers.type";
+import { getRollDescription } from "functions/rollText";
 
 // The live post window per channel: paging back grows the limit one page
 // at a time up to the cap, so the shared listener's reconcile re-fetch
@@ -66,10 +67,14 @@ function startPosts(channelId: string, set: ChatSet, get: ChatGet): void {
           );
           const where = channel ? ` in # ${channel.name}` : "";
           const latestPost = arrivals[arrivals.length - 1];
-          const latestText = latestPost.text.slice(0, 140);
+          // A roll-only post carries no text, so the roll speaks for it;
+          // an image-only post arrives with no words at all.
+          const words =
+            latestPost.text ||
+            (latestPost.roll ? getRollDescription(latestPost.roll) : "");
           const latest =
-            latestText.trim().length > 0
-              ? latestText
+            words.trim().length > 0
+              ? words.slice(0, 140)
               : `${latestPost.imagePaths.length} image${
                   latestPost.imagePaths.length === 1 ? "" : "s"
                 }`;
@@ -217,6 +222,16 @@ export const createChatSlice: CreateSliceType<ChatSlice> = (set, get) => ({
         delete store.chat.drafts[channelId];
       } else {
         store.chat.drafts[channelId] = text;
+      }
+    });
+  },
+
+  setPendingRoll: (channelId, roll) => {
+    set((store) => {
+      if (roll === null) {
+        delete store.chat.pendingRolls[channelId];
+      } else {
+        store.chat.pendingRolls[channelId] = roll;
       }
     });
   },

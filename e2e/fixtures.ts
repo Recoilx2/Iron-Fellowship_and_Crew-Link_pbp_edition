@@ -125,11 +125,14 @@ export async function deletePerson(
  */
 export async function createCampaignAs(
   person: E2EPerson,
-  name: string
+  name: string,
+  // Guided by default (the founder plays); co-op makes the founder a GM,
+  // which the GM-only roll tests need for the eye toggle.
+  ctype = "guided"
 ): Promise<string> {
   const { data, error } = await person.client.rpc("create_campaign", {
     cname: name,
-    ctype: "guided",
+    ctype,
   });
   if (error || !data) {
     throw new Error(`e2e: could not create campaign: ${error?.message}`);

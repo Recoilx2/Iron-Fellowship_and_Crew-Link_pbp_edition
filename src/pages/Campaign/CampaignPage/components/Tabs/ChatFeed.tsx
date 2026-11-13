@@ -32,13 +32,16 @@ function timeLabel(iso: string): string {
   });
 }
 
+import { ChatRollPost } from "./ChatRollPost";
+
 /**
  * The channel's flat feed (spec #9, prototype variant D): avatar, name
  * line, time, formatted text. In IC channels the name line leads with the
  * character, then the player; in OOC channels it leads with the player's
  * display name, then their character. A GM's NPC voice leads with the NPC's
  * name and portrait in any channel. GMs carry a GM tag. Older posts page
- * in from the top; new posts arrive live at the bottom.
+ * in from the top; new posts arrive live at the bottom. A roll post shows
+ * its text with a dark one-line summary that expands the roll card.
  */
 export function ChatFeed(props: { channel: ChannelWithId }) {
   const { channel } = props;
@@ -337,10 +340,11 @@ function ChatPost(props: {
           </Stack>
         ) : (
           <>
-            <MarkdownRenderer markdown={post.text} />
+            {post.text && <MarkdownRenderer markdown={post.text} />}
             {post.imagePaths.length > 0 && (
               <ChatPostImages paths={post.imagePaths} />
             )}
+            {post.roll && <ChatRollPost post={{ ...post, roll: post.roll }} />}
           </>
         )}
         {(canEdit || showDelete) && !editing && (

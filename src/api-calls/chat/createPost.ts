@@ -1,16 +1,19 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
-import { CHAT_POSTS_TABLE } from "./_postRef";
+import type { Roll } from "types/DieRolls.type";
+import { CHAT_POSTS_TABLE, postDocumentToColumns } from "./_postRef";
 
 /**
  * Posts formatted text to a channel as the speaker the interface chose: one
  * of the author's characters in the campaign, one of the campaign world's
  * NPCs (GMs alone), or nobody for posting as self (players out of
- * character, GMs everywhere). Image attachments ride along as chat-images
- * storage paths, uploaded when attached (#28); a post needs text, images,
- * or both. Members post into open channels only; the post access rules
- * refuse outsiders, foreign speakers and archived channels, and the caller
- * sees the failure.
+ * character, GMs everywhere). A roll from the composer travels with the
+ * post in the app's existing roll shape and stands in for the words, so a
+ * roll-only post carries empty text. Image attachments ride along as
+ * chat-images storage paths, uploaded when attached (#28); a post needs
+ * text, images, or a roll. Members post into open channels only; the post
+ * access rules refuse outsiders, foreign speakers, archived channels and
+ * non-GM GM-only posts, and the caller sees the failure.
  */
 export const createPost = createApiFunction<
   {
@@ -20,17 +23,28 @@ export const createPost = createApiFunction<
     speakerNpcId?: string | null;
     imagePaths?: string[];
     postId?: string;
+    roll?: Roll | null;
+    gmsOnly?: boolean;
   },
   string
 >(async (params) => {
-  const { channelId, text, speakerCharacterId, speakerNpcId, imagePaths, postId } = params;
+  const {
+    channelId,
+    text,
+    speakerCharacterId,
+    speakerNpcId,
+    imagePaths,
+    postId,
+    roll,
+    gmsOnly,
+  } = params;
   if (!channelId) {
     throw new Error("A channel is required to post.");
   }
   const trimmed = text.trim();
   const paths = imagePaths ?? [];
-  if (trimmed.length === 0 && paths.length === 0) {
-    throw new Error("Post text or images are required.");
+  if (trimmed.length === 0 && paths.length === 0 && !roll) {
+    throw new Error("Post text, images, or a roll are required.");
   }
   const { data: sessionData, error: sessionError } =
     await getSupabaseClient().auth.getSession();
@@ -50,8 +64,7 @@ export const createPost = createApiFunction<
     author_id: authorId,
     speaker_character_id: speakerCharacterId ?? null,
     speaker_npc_id: speakerNpcId ?? null,
-    text: trimmed,
-    image_paths: paths,
+    ...postDocumentToColumns({ text: trimmed, imagePaths: paths, roll, gmsOnly }),
   });
   if (error) {
     throw error;
