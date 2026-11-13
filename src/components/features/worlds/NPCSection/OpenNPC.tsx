@@ -30,6 +30,7 @@ import { useSnackbar } from "providers/SnackbarProvider";
 import { mergeIcons } from "components/shared/GameIcons/mergeIcons";
 import { IconColors } from "types/Icon.type";
 import { PageWithImage } from "../common/PageWithImage";
+import { VisibilityToggleButton } from "../common/VisibilityToggleButton";
 
 const defaultNPCSpeciesOptions: {
   enum: DefaultNPCSpecies;
@@ -248,6 +249,16 @@ export function OpenNPC(props: OpenNPCProps) {
       icon={icon}
       actions={
         <>
+          {isGuidedGame && showGMFields && (
+            <VisibilityToggleButton
+              sharedWithPlayers={npc.sharedWithPlayers}
+              onToggle={() =>
+                updateNPC(npcId, {
+                  sharedWithPlayers: !npc.sharedWithPlayers,
+                }).catch(() => {})
+              }
+            />
+          )}
           {showGMFields && (
             <Tooltip title={"Delete"}>
               <IconButton onClick={() => handleNPCDelete()}>

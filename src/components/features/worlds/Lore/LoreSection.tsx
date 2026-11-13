@@ -13,6 +13,7 @@ import { OpenLore } from "./OpenLore";
 import { useFilterLore } from "./useFilterLore";
 import { WorldEmptyState } from "components/features/worlds/WorldEmptyState";
 import { FilterBar } from "components/features/worlds/FilterBar";
+import { useWorldPermissions } from "../useWorldPermissions";
 import { LoreCard } from "./LoreCard";
 import { useStore } from "stores/store";
 import { useState } from "react";
@@ -25,6 +26,9 @@ export interface LoreSectionProps {
 
 export function LoreSection(props: LoreSectionProps) {
   const { isSinglePlayer, showHiddenTag, hideSidebar } = props;
+
+  const { showGMFields, isGuidedGame } = useWorldPermissions();
+  const canToggleVisibility = showGMFields && isGuidedGame;
 
   const worldId = useStore((store) => store.worlds.currentWorld.currentWorldId);
   const isWorldOwner = useStore(
@@ -53,6 +57,9 @@ export function LoreSection(props: LoreSectionProps) {
   const [createLoreLoading, setCreateLoreLoading] = useState(false);
   const createLore = useStore(
     (store) => store.worlds.currentWorld.currentWorldLore.createLore
+  );
+  const updateLore = useStore(
+    (store) => store.worlds.currentWorld.currentWorldLore.updateLore
   );
 
   const handleCreateLore = () => {
@@ -154,10 +161,16 @@ export function LoreSection(props: LoreSectionProps) {
       >
         {filteredLoreIds.map((loreId) => (
           <Grid item xs={12} md={6} lg={4} key={loreId}>
-            <LoreCard
+          <LoreCard
               lore={lore[loreId]}
               openLore={() => setOpenLoreId(loreId)}
               showHiddenTag={showHiddenTag}
+              showVisibilityToggle={canToggleVisibility}
+              onVisibilityToggle={() =>
+                updateLore(loreId, {
+                  sharedWithPlayers: !lore[loreId].sharedWithPlayers,
+                }).catch(() => {})
+              }
             />
           </Grid>
         ))}

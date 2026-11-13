@@ -13,6 +13,7 @@ import {
 } from "@mui/material";
 import { WorldEmptyState } from "components/features/worlds/WorldEmptyState";
 import AddNPCIcon from "@mui/icons-material/PersonAdd";
+import { useWorldPermissions } from "../useWorldPermissions";
 import { useStore } from "stores/store";
 import { useState } from "react";
 import { useGameSystemValue } from "hooks/useGameSystemValue";
@@ -27,6 +28,9 @@ export interface NPCSectionProps {
 
 export function NPCSection(props: NPCSectionProps) {
   const { isSinglePlayer, showHiddenTag, hideSidebar } = props;
+
+  const { showGMFields, isGuidedGame } = useWorldPermissions();
+  const canToggleVisibility = showGMFields && isGuidedGame;
 
   const defaultNPC = useGameSystemValue<Partial<NPC>>({
     [GAME_SYSTEMS.IRONSWORN]: { species: DefaultNPCSpecies.Ironlander },
@@ -68,6 +72,9 @@ export function NPCSection(props: NPCSectionProps) {
   const [createNPCLoading, setCreateNPCLoading] = useState<boolean>(false);
   const createNPC = useStore(
     (store) => store.worlds.currentWorld.currentWorldNPCs.createNPC
+  );
+  const updateNPC = useStore(
+    (store) => store.worlds.currentWorld.currentWorldNPCs.updateNPC
   );
   const handleCreateNPC = () => {
     setCreateNPCLoading(true);
@@ -154,6 +161,12 @@ export function NPCSection(props: NPCSectionProps) {
         locations={locations}
         openNPC={setOpenNPCId}
         showHiddenTag={showHiddenTag}
+        showVisibilityToggle={canToggleVisibility}
+        onVisibilityToggle={(npcId) =>
+          updateNPC(npcId, {
+            sharedWithPlayers: !npcs[npcId].sharedWithPlayers,
+          }).catch(() => {})
+        }
       />
     </>
   );
