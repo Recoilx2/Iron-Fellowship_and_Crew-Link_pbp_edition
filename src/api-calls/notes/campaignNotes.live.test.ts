@@ -421,17 +421,20 @@ describe.skipIf(!config)("campaign notes end to end", () => {
     const noteId = await addNote({ campaignId, order: 0 });
 
     // While still a member the author may retitle their own unshared draft.
+    // The player's own returning SELECT stays empty (unshared notes are
+    // invisible to players), so the GM re-reads to prove the write landed.
     const allowedWhileMember = await player.client
       .from("campaign_notes")
       .update({ title: "Draft" })
-      .eq("id", noteId)
-      .select("id");
+      .eq("id", noteId);
     expect(allowedWhileMember.error).toBeNull();
-    expect(
-      ((allowedWhileMember.data ?? []) as Array<{ id: string }>).map(
-        (row) => row.id
-      )
-    ).toEqual([noteId]);
+    const draftRead = await gm.client
+      .from("campaign_notes")
+      .select("id, title")
+      .eq("id", noteId)
+      .single();
+    expect(draftRead.error).toBeNull();
+    expect(draftRead.data?.title).toBe("Draft");
 
     // The GM removes the author from the campaign.
     const kicked = await gm.client.rpc("remove_campaign_member", {
@@ -441,7 +444,8 @@ describe.skipIf(!config)("campaign notes end to end", () => {
     expect(kicked.error).toBeNull();
 
     // The removed author can no longer update, share, or delete, even
-    // though they wrote the note.
+    // though they wrote the note. Returning SELECTs stay empty for lack
+    // of read access too, so the GM re-reads to prove nothing changed.
     const deniedUpdate = await player.client
       .from("campaign_notes")
       .update({ title: "Hijacked" })
@@ -461,14 +465,16 @@ describe.skipIf(!config)("campaign notes end to end", () => {
       .select("id");
     expect(deniedDelete.error ? [] : (deniedDelete.data ?? [])).toEqual([]);
 
-    // The note is still there for the GM.
+    // The note is still there for the GM, unchanged.
     const gmRead = await gm.client
       .from("campaign_notes")
-      .select("id")
-      .eq("id", noteId);
-    expect(
-      ((gmRead.data ?? []) as Array<{ id: string }>).map((row) => row.id)
-    ).toEqual([noteId]);
+      .select("id, title, shared")
+      .eq("id", noteId)
+      .single();
+    expect(gmRead.error).toBeNull();
+    expect(gmRead.data?.id).toBe(noteId);
+    expect(gmRead.data?.title).toBe("Draft");
+    expect(gmRead.data?.shared).toBe(false);
   });
 
   it("deleting an author's account keeps the note and clears the author (#106)", { timeout: 90000 }, async () => {
