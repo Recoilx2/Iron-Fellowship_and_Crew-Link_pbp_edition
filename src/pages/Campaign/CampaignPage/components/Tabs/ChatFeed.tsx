@@ -16,6 +16,7 @@ import { deletePost } from "api-calls/chat/deletePost";
 import { MarkdownRenderer } from "components/shared/MarkdownRenderer";
 import { PortraitAvatar } from "components/features/characters/PortraitAvatar/PortraitAvatar";
 import { UserAvatar } from "components/shared/UserAvatar";
+import { ChatPostImages } from "./ChatPostImages";
 import type { CharacterDocument } from "api-calls/character/_character.type";
 import type { NPCDocumentWithGMProperties } from "stores/world/currentWorld/npcs/npcs.slice.type";
 
@@ -335,7 +336,12 @@ function ChatPost(props: {
             </Stack>
           </Stack>
         ) : (
-          <MarkdownRenderer markdown={post.text} />
+          <>
+            <MarkdownRenderer markdown={post.text} />
+            {post.imagePaths.length > 0 && (
+              <ChatPostImages paths={post.imagePaths} />
+            )}
+          </>
         )}
         {(canEdit || showDelete) && !editing && (
           <Stack direction={"row"} spacing={1} sx={{ pt: 0.5 }}>

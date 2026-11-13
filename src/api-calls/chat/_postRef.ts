@@ -19,6 +19,7 @@ export interface PostRow {
   speaker_character_id: string | null;
   speaker_npc_id: string | null;
   text: string;
+  image_paths: string[];
   created_at: string;
   updated_at: string;
   edited_at: string | null;
@@ -40,6 +41,7 @@ export function postRowToDocument(row: PostRow): PostDocument {
     speakerCharacterId: row.speaker_character_id,
     speakerNpcId: row.speaker_npc_id,
     text: row.text,
+    imagePaths: row.image_paths ?? [],
     createdAt: row.created_at,
     editedAt: row.edited_at,
     deletedAt: row.deleted_at,

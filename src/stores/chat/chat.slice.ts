@@ -65,7 +65,14 @@ function startPosts(channelId: string, set: ChatSet, get: ChatGet): void {
             (row) => row.id === channelId
           );
           const where = channel ? ` in # ${channel.name}` : "";
-          const latest = arrivals[arrivals.length - 1].text.slice(0, 140);
+          const latestPost = arrivals[arrivals.length - 1];
+          const latestText = latestPost.text.slice(0, 140);
+          const latest =
+            latestText.trim().length > 0
+              ? latestText
+              : `${latestPost.imagePaths.length} image${
+                  latestPost.imagePaths.length === 1 ? "" : "s"
+                }`;
           get().appState.announce(`New post${where}: ${latest}`);
         }
       },

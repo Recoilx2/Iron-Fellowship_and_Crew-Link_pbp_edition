@@ -1,10 +1,13 @@
 /** @vitest-environment jsdom */
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Mock } from "vitest";
 import { act } from "react";
 import { createRoot, Root } from "react-dom/client";
 import { ThemeProvider, createTheme } from "@mui/material";
 
 const createPost = vi.fn();
+const uploadChatImage = vi.fn();
+const removeChatImage: Mock = vi.fn(() => Promise.resolve());
 
 const state = {
   auth: { uid: "player-1", user: { displayName: "Sam" } },
@@ -46,6 +49,10 @@ vi.mock("stores/store", () => ({
 vi.mock("api-calls/chat/createPost", () => ({
   createPost: (...args: unknown[]) => createPost(...args),
 }));
+vi.mock("api-calls/chat/chatImages", () => ({
+  uploadChatImage: (...args: unknown[]) => uploadChatImage(...args),
+  removeChatImage: (...args: unknown[]) => removeChatImage(...args),
+}));
 
 import { ChatComposer } from "../ChatComposer";
 import type { ChannelWithId } from "api-calls/chat/listenToCampaignChannels";
@@ -76,9 +83,11 @@ const ooc = {
 // Seam under test: the composer artists see. The channel kind picks the
 // speaker (players have no picker), and the text box keeps its unsent
 // draft per channel for the session. GMs alone get a simple picker over
-// the campaign world's NPC list. Posting itself is covered by the
-// data-layer live tests and the browser test; here the composer is a stub
-// around a mocked post call.
+// the campaign world's NPC list. Images attach by drop, paste or picker,
+// preview above the text box, and go up with the post; removing one before
+// posting discards its upload. Posting itself is covered by the
+// data-layer live tests and the browser test; here the composer and the
+// storage calls are stubs around mocked functions.
 describe("ChatComposer", () => {
   let root: Root | undefined;
   let container: HTMLDivElement | undefined;
@@ -105,7 +114,7 @@ describe("ChatComposer", () => {
     act(() => {
       root?.render(
         <ThemeProvider theme={theme}>
-          <ChatComposer channel={channel} />
+          <ChatComposer channel={channel} campaignId={"campaign-1"} />
         </ThemeProvider>
       );
     });
@@ -182,9 +191,11 @@ describe("ChatComposer", () => {
 
     expect(createPost).toHaveBeenCalledWith({
       channelId: "ic",
+      postId: undefined,
       text: "we push on",
       speakerCharacterId: "kira",
       speakerNpcId: null,
+      imagePaths: [],
     });
     expect(state.chat.drafts["ic"]).toBeUndefined();
   });
@@ -243,9 +254,11 @@ describe("ChatComposer", () => {
 
     expect(createPost).toHaveBeenCalledWith({
       channelId: "ic",
+      postId: undefined,
       text: "the bog remembers",
       speakerCharacterId: null,
       speakerNpcId: "elder",
+      imagePaths: [],
     });
   });
 
@@ -269,9 +282,11 @@ describe("ChatComposer", () => {
 
     expect(createPost).toHaveBeenCalledWith({
       channelId: "ic",
+      postId: undefined,
       text: "a wonder",
       speakerCharacterId: null,
       speakerNpcId: null,
+      imagePaths: [],
     });
   });
 
@@ -312,5 +327,185 @@ describe("ChatComposer", () => {
     render(ooc);
     expect(voicePicker(view).value).toBe("");
     expect(view.textContent).toContain("Posting as Sam");
+  });
+
+  function imageFile(name = "lantern.png"): File {
+    return new File(["fake-bytes"], name, { type: "image/png" });
+  }
+
+  function dropFiles(view: HTMLDivElement, files: File[]) {
+    const target = view.firstElementChild;
+    if (!target) {
+      throw new Error("no composer drop target");
+    }
+    const event = new Event("drop", { bubbles: true });
+    Object.defineProperty(event, "dataTransfer", {
+      value: { files, types: ["Files"] },
+    });
+    act(() => {
+      target.dispatchEvent(event);
+    });
+  }
+
+  function pasteFiles(box: HTMLTextAreaElement, files: File[]) {
+    const event = new Event("paste", { bubbles: true });
+    Object.defineProperty(event, "clipboardData", { value: { files } });
+    act(() => {
+      box.dispatchEvent(event);
+    });
+  }
+
+  function pickFiles(view: HTMLDivElement, files: File[]) {
+    const input = view.querySelector(
+      'input[aria-label="Attach images"]'
+    ) as HTMLInputElement | null;
+    if (!input) {
+      throw new Error("no file picker");
+    }
+    Object.defineProperty(input, "files", { value: files, configurable: true });
+    act(() => {
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+
+  async function flushUploads() {
+    await act(async () => {});
+  }
+
+  function removeButton(view: HTMLDivElement, name: string) {
+    const button = view.querySelector(
+      `button[aria-label="Remove ${name}"]`
+    ) as HTMLButtonElement | null;
+    if (!button) {
+      throw new Error(`no remove button for ${name}`);
+    }
+    return button;
+  }
+
+  it("attaches a dropped image and previews it", async () => {
+    uploadChatImage.mockResolvedValue("campaign-1/post-1/lantern.png");
+    const view = render(ic);
+    dropFiles(view, [imageFile()]);
+
+    expect(uploadChatImage).toHaveBeenCalledWith(
+      "campaign-1",
+      expect.any(String),
+      expect.objectContaining({ name: "lantern.png" })
+    );
+    await flushUploads();
+    expect(
+      view.querySelector('img[alt="lantern.png"]')
+    ).not.toBeNull();
+  });
+
+  it("attaches a pasted image", async () => {
+    uploadChatImage.mockResolvedValue("campaign-1/post-1/pasted.png");
+    const view = render(ic);
+    pasteFiles(textBox(view), [imageFile("pasted.png")]);
+
+    await flushUploads();
+    expect(uploadChatImage).toHaveBeenCalledWith(
+      "campaign-1",
+      expect.any(String),
+      expect.objectContaining({ name: "pasted.png" })
+    );
+    expect(
+      view.querySelector('img[alt="pasted.png"]')
+    ).not.toBeNull();
+  });
+
+  it("attaches a picked image", async () => {
+    uploadChatImage.mockResolvedValue("campaign-1/post-1/picked.png");
+    const view = render(ic);
+    pickFiles(view, [imageFile("picked.png")]);
+
+    await flushUploads();
+    expect(uploadChatImage).toHaveBeenCalledWith(
+      "campaign-1",
+      expect.any(String),
+      expect.objectContaining({ name: "picked.png" })
+    );
+    expect(
+      view.querySelector('img[alt="picked.png"]')
+    ).not.toBeNull();
+  });
+
+  it("removing an image before posting discards its upload", async () => {
+    uploadChatImage.mockResolvedValue("campaign-1/post-1/lantern.png");
+    removeChatImage.mockResolvedValue(undefined);
+    const view = render(ic);
+    dropFiles(view, [imageFile()]);
+    await flushUploads();
+    expect(
+      view.querySelector('img[alt="lantern.png"]')
+    ).not.toBeNull();
+
+    act(() => {
+      removeButton(view, "lantern.png").click();
+    });
+
+    expect(removeChatImage).toHaveBeenCalledWith(
+      "campaign-1/post-1/lantern.png"
+    );
+    expect(view.querySelector('img[alt="lantern.png"]')).toBeNull();
+  });
+
+  it("sends attached images with the post", async () => {
+    uploadChatImage.mockResolvedValue("campaign-1/post-1/lantern.png");
+    createPost.mockResolvedValue("post-1");
+    const view = render(ic);
+    dropFiles(view, [imageFile()]);
+    await flushUploads();
+    typeText(textBox(view), "see this");
+    render(ic);
+
+    const send = view.querySelector(
+      'button[aria-label="Send"]'
+    ) as HTMLButtonElement | null;
+    if (!send) {
+      throw new Error("no send button");
+    }
+    await act(async () => {
+      send.click();
+    });
+
+    expect(createPost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channelId: "ic",
+        text: "see this",
+        imagePaths: ["campaign-1/post-1/lantern.png"],
+      })
+    );
+    // Sent attachments leave with the post: no upload is discarded after.
+    expect(removeChatImage).not.toHaveBeenCalled();
+    expect(view.querySelector('img[alt="lantern.png"]')).toBeNull();
+  });
+
+  it("refuses oversized and foreign images with a clear error", async () => {
+    const view = render(ic);
+    const big = new File(["x"], "huge.png", { type: "image/png" });
+    Object.defineProperty(big, "size", { value: 11 * 1024 * 1024 });
+    const svg = new File(["<svg/>"], "sketch.svg", {
+      type: "image/svg+xml",
+    });
+    dropFiles(view, [big]);
+    expect(view.textContent).toContain("10 MB");
+    expect(uploadChatImage).not.toHaveBeenCalled();
+
+    dropFiles(view, [svg]);
+    expect(view.textContent).toMatch(/PNG, JPEG, GIF or WebP/);
+    expect(uploadChatImage).not.toHaveBeenCalled();
+
+    // The error clears so the next attempt starts clean.
+    const close = view.querySelector(
+      ".MuiAlert-action button"
+    ) as HTMLButtonElement | null;
+    if (!close) {
+      throw new Error("no error dismiss button");
+    }
+    act(() => {
+      close.click();
+    });
+    expect(view.textContent).not.toContain("10 MB");
   });
 });
