@@ -43,6 +43,16 @@ export function AddCharacterDialog(props: AddCharacterDialogProps) {
     });
   };
 
+  // One character per player per campaign (#109): the player's character
+  // already in this campaign is the current one, and picking another swaps
+  // it out instead of adding a second.
+  const currentCharacterId = Object.keys(characters).find(
+    (characterId) => characters[characterId].campaignId === campaignId
+  );
+  const currentCharacter = currentCharacterId
+    ? characters[currentCharacterId]
+    : undefined;
+
   return (
     <Dialog open={open} onClose={() => handleClose()} aria-labelledby={titleId}>
       <DialogTitle
@@ -70,23 +80,33 @@ export function AddCharacterDialog(props: AddCharacterDialogProps) {
             sx={{ mb: 1 }}
             color={(theme) => theme.palette.text.secondary}
           >
-            Add an existing character
+            {currentCharacter
+              ? `${currentCharacter.name} is your character in this campaign. Choosing another swaps them out.`
+              : "Add an existing character"}
           </Typography>
         )}
         {!isLoading && (
           <CharacterList
             characters={characters}
             maxColumns={1}
-            actions={(characterId) => (
-              <Button
-                disabled={
-                  !!characters[characterId].campaignId || addCharacterLoading
-                }
-                onClick={() => addCharacter(characterId)}
-              >
-                {characters[characterId].campaignId ? "Selected" : "Select"}
-              </Button>
-            )}
+            actions={(characterId) => {
+              if (characterId === currentCharacterId) {
+                return <Button disabled>Current</Button>;
+              }
+              const inAnotherCampaign = !!characters[characterId].campaignId;
+              return (
+                <Button
+                  disabled={inAnotherCampaign || addCharacterLoading}
+                  onClick={() => addCharacter(characterId)}
+                >
+                  {inAnotherCampaign
+                    ? "Selected"
+                    : currentCharacter
+                      ? "Swap"
+                      : "Select"}
+                </Button>
+              );
+            }}
           />
         )}
         {Object.keys(characters).length > 0 && (
