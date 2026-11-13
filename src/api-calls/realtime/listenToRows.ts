@@ -62,6 +62,19 @@ export type RowBinding<T> = PostgresChangesBinding<T> | BroadcastBinding<T>;
  */
 export const RECONCILE_INTERVAL_MS = 10_000;
 
+// Every subscription joins its own realtime topic (issue #116):
+// supabase-js channel() creates-OR-REUSES by topic, so two listenToRows
+// calls with the same channelName (campaign screen Active + Completed
+// tracks on character-tracks:<id>; character sheet + campaign screen on
+// one character) would otherwise share one channel, and realtime-js throws
+// on the second postgres_changes .on() after subscribe(). The suffix keeps
+// the requested channel name as a prefix, so the realtime-auth LIKE
+// allowlist (character%, campaign:%, world%, ...) still matches and no
+// auth change is needed. The counter is module-scoped, so topics are
+// unique per runtime; the salt keeps them unique across module reloads.
+let nextSubscriptionId = 0;
+const subscriptionSalt = Math.random().toString(36).slice(2, 10);
+
 export interface ListenToRowsParams<T> {
   client: SupabaseClient;
   channelName: string;
@@ -110,8 +123,11 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
   } = params;
 
   // Channels are always private: database broadcasts only reach private
-  // topics, so a public channel would silently receive nothing.
-  const channel = client.channel(channelName, { config: { private: true } });
+  // topics, so a public channel would silently receive nothing. The topic
+  // is unique per subscription (see nextSubscriptionId above): sharing one
+  // topic across subscriptions throws once the channel is subscribed.
+  const topic = `${channelName}:sub-${subscriptionSalt}-${++nextSubscriptionId}`;
+  const channel = client.channel(topic, { config: { private: true } });
 
   let rows = new Map<string, T>();
   let pending: Array<RowChange<T>> = [];
