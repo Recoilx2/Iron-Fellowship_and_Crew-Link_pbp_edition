@@ -19,7 +19,7 @@ export function listenToOracleSettings(
   const client = getSupabaseClient();
   return listenToRows<UserSettingsRow>({
     client,
-    channelName: constructUserSettingsChannelName(uid),
+    channelName: constructUserSettingsChannelName(uid, "oracle"),
     bindings: [
       {
         type: "postgres_changes",
