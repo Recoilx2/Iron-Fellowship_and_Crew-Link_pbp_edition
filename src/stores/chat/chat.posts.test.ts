@@ -181,6 +181,7 @@ describe("chat slice posts", () => {
         id: "channel-1",
         name: "In character",
         kind: "IC",
+        visibility: "public",
         isStarting: true,
         archived: false,
       },

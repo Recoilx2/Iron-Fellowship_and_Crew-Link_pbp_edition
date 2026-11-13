@@ -1,8 +1,16 @@
 export type ChannelKind = "IC" | "OOC";
 
+/**
+ * Who a channel belongs to: every campaign member (public, including the
+ * two starting channels), its roster plus the campaign's GMs (private),
+ * or its two members alone (dm, blind even to GMs who are not in it).
+ */
+export type ChannelVisibility = "public" | "private" | "dm";
+
 export interface ChannelDocument {
   name: string;
   kind: ChannelKind;
+  visibility: ChannelVisibility;
   isStarting: boolean;
   archived: boolean;
 }

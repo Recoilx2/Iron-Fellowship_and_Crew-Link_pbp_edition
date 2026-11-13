@@ -1,20 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { listenToCampaignChannels } from "api-calls/chat/listenToCampaignChannels";
+import { listenToCampaignChannelMembers } from "api-calls/chat/listenToCampaignChannelMembers";
 import { defaultChatSlice } from "stores/chat/chat.slice.default";
 import { createChatSlice } from "stores/chat/chat.slice";
 import type { ChatSlice, ChatSliceData } from "stores/chat/chat.slice.type";
 import type { IStore } from "stores/store.type";
 
 vi.mock("api-calls/chat/listenToCampaignChannels");
+vi.mock("api-calls/chat/listenToCampaignChannelMembers");
 
 const mockedListen = vi.mocked(listenToCampaignChannels);
+const mockedListenMembers = vi.mocked(listenToCampaignChannelMembers);
 
 // Seam under test: the chat slice turns the channel listener's rows into the
 // tab's channel list and keeps the open channel selected. The listener
 // itself is covered by the live access-rule tests; here it is a stub.
 type CapturedHandler = {
   onChannels: (channels: never[]) => void;
+  onLoaded: () => void;
+};
+type CapturedMembersHandler = {
+  onMembers: (rows: never[]) => void;
   onLoaded: () => void;
 };
 type CapturedFail = (error: unknown) => void;
@@ -41,14 +48,21 @@ function setUpSlice(campaignId: string | undefined = "campaign-1") {
 describe("chat slice channel list", () => {
   let captured: CapturedHandler | undefined;
   let capturedFail: CapturedFail | undefined;
+  let capturedMembers: CapturedMembersHandler | undefined;
 
   beforeEach(() => {
     captured = undefined;
     capturedFail = undefined;
+    capturedMembers = undefined;
     mockedListen.mockClear();
     mockedListen.mockImplementation((_campaignId, handler, fail) => {
       captured = handler as unknown as CapturedHandler;
       capturedFail = fail as unknown as CapturedFail;
+      return () => {};
+    });
+    mockedListenMembers.mockClear();
+    mockedListenMembers.mockImplementation((_campaignId, handler) => {
+      capturedMembers = handler as unknown as CapturedMembersHandler;
       return () => {};
     });
   });
@@ -140,10 +154,38 @@ describe("chat slice channel list", () => {
     expect(draft().error).toBe("Failed to load channels.");
   });
 
+  it("stores the visible roster keyed by channel", () => {
+    const { slice, draft } = setUpSlice();
+    slice.subscribe("campaign-1");
+    capturedMembers?.onMembers([
+      {
+        channel_id: "quest",
+        user_id: "player-2",
+        created_at: "2026-11-13T12:00:00.000Z",
+      },
+      {
+        channel_id: "quest",
+        user_id: "player-1",
+        created_at: "2026-11-13T12:00:00.000Z",
+      },
+      {
+        channel_id: "dm-1",
+        user_id: "player-1",
+        created_at: "2026-11-13T12:00:00.000Z",
+      },
+    ] as never[]);
+    capturedMembers?.onLoaded();
+    expect(draft().membersByChannel).toEqual({
+      quest: ["player-1", "player-2"],
+      "dm-1": ["player-1"],
+    });
+  });
+
   it("does nothing without a campaign", () => {
     const { slice, draft } = setUpSlice(undefined);
     const unsubscribe = slice.subscribe(undefined);
     expect(mockedListen).not.toHaveBeenCalled();
+    expect(mockedListenMembers).not.toHaveBeenCalled();
     expect(draft().loading).toBe(false);
     unsubscribe();
   });

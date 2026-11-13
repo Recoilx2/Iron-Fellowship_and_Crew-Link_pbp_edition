@@ -3,6 +3,7 @@ import { ChatSliceData } from "./chat.slice.type";
 export const defaultChatSlice: ChatSliceData = {
   channels: [],
   openChannelId: undefined,
+  membersByChannel: {},
   loading: false,
   error: undefined,
   postsByChannel: {},

@@ -2,6 +2,7 @@ import { CreateSliceType } from "stores/store.type";
 import { ChatSlice } from "./chat.slice.type";
 import { defaultChatSlice } from "./chat.slice.default";
 import { listenToCampaignChannels } from "api-calls/chat/listenToCampaignChannels";
+import { listenToCampaignChannelMembers } from "api-calls/chat/listenToCampaignChannelMembers";
 import {
   CHAT_POST_MAX_WINDOW,
   CHAT_POST_PAGE_SIZE,
@@ -101,7 +102,30 @@ export const createChatSlice: CreateSliceType<ChatSlice> = (set, get) => ({
       store.chat.loading = true;
       store.chat.error = undefined;
     });
-    return listenToCampaignChannels(
+    const stopMembers = listenToCampaignChannelMembers(
+      campaignId,
+      {
+        onMembers: (rows) => {
+          const byChannel: Record<string, string[]> = {};
+          for (const row of rows) {
+            const list = byChannel[row.channel_id] ?? [];
+            list.push(row.user_id);
+            byChannel[row.channel_id] = list;
+          }
+          for (const list of Object.values(byChannel)) {
+            list.sort();
+          }
+          set((store) => {
+            store.chat.membersByChannel = byChannel;
+          });
+        },
+        onLoaded: () => {},
+      },
+      (error) => {
+        console.error(error);
+      }
+    );
+    const stopChannels = listenToCampaignChannels(
       campaignId,
       {
         onChannels: (channels) => {
@@ -137,6 +161,10 @@ export const createChatSlice: CreateSliceType<ChatSlice> = (set, get) => ({
         });
       }
     );
+    return () => {
+      stopChannels();
+      stopMembers();
+    };
   },
 
   setOpenChannelId: (channelId) => {

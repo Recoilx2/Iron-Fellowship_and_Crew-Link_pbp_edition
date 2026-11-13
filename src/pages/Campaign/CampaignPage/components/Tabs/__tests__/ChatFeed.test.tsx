@@ -91,6 +91,7 @@ const ic: ChannelWithId = {
   id: "ic",
   name: "In character",
   kind: "IC",
+  visibility: "public",
   isStarting: true,
   archived: false,
 };
