@@ -7,9 +7,6 @@ import { createApiFunction } from "api-calls/createApiFunction";
  * roll log and the roster follow through foreign keys, and characters
  * unlink instead of vanishing. Only GMs and the founding creator delete;
  * anyone else reads back zero rows and fails here.
- *
- * Campaign notes still live in Firebase until the notes ticket ports them,
- * so their cleanup belongs to that ticket.
  */
 export const deleteCampaign = createApiFunction<{ campaignId: string }, void>(
   async (params) => {

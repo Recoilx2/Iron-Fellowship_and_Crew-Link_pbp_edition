@@ -16,8 +16,9 @@ module.exports = {
       { allowConstantExport: true },
     ],
     "react/react-in-jsx-scope": 0,
-    // Firebase and Supabase are implementation details of the data layer.
-    // Stores, pages, components and other app code must use app-owned types
+    // Firebase was removed (spec #11): no Firebase import may return.
+    // Supabase is an implementation detail of the data layer. Stores, pages,
+    // components and other app code must use app-owned types
     // (see src/api-calls/helpers.type.ts) — the data layer converts at its
     // edge.
     "no-restricted-imports": [
@@ -25,9 +26,9 @@ module.exports = {
       {
         patterns: [
           {
-            group: ["firebase/*"],
+            group: ["firebase", "firebase/*"],
             message:
-              "Firebase imports are only allowed in the data layer (src/api-calls) and src/config/firebase.config.ts. Use app-owned types instead.",
+              "Firebase was removed. Use the Supabase-backed data layer (src/api-calls) instead.",
           },
           {
             group: ["@supabase/*"],
@@ -40,12 +41,23 @@ module.exports = {
   },
   overrides: [
     {
-      files: [
-        "src/api-calls/**/*",
-        "src/config/firebase.config.ts",
-        "src/config/supabase.config.ts",
-      ],
-      rules: { "no-restricted-imports": "off" },
+      // The data layer may use Supabase, but Firebase stays banned
+      // everywhere (spec #11 removed it completely).
+      files: ["src/api-calls/**/*", "src/config/supabase.config.ts"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            patterns: [
+              {
+                group: ["firebase", "firebase/*"],
+                message:
+                  "Firebase was removed. Use the Supabase-backed data layer (src/api-calls) instead.",
+              },
+            ],
+          },
+        ],
+      },
     },
   ],
   settings: {

@@ -43,8 +43,7 @@ export interface CharacterExporterParams {
  * The profile-image *binary* is never included; only the filename string
  * already present on the character document is kept.
  *
- * Character Notes (from the /notes Firestore collection) are NOT exported
- * here — they belong to a separate exporter.
+ * Character notes are NOT exported here — they belong to a separate exporter.
  *
  * Access check: the character's `uid` field must match `userId`. Characters
  * are owned resources and are not granularly shared, so a mismatch is a

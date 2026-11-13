@@ -20,6 +20,22 @@ Featuring clean character sheets, campaigns with shared assets and tracks, and c
 - Write notes
 - Keep track of locations, NPCs, and lore within your world
 
+## Self-hosting with Docker Compose
+
+This fork runs on self-hosted Supabase: one Docker Compose template started
+once per game system (Ironsworn, Starforged), each copy fully separate with
+its own data, accounts, ports and volumes. No cloud account is needed.
+
+```sh
+cd supabase
+python3 bin/gen-env.py --copy ironsworn --port 8000
+ENV_FILE=.env.ironsworn docker compose -p ironsworn --env-file .env.ironsworn up -d
+```
+
+Sign in with an email magic link (see `SETUP.md` for the mail-server setup,
+local development, and verification). Operator docs — backups, restore, admin
+without the dashboard — live in `supabase/README.md`.
+
 ### Campaigns
 
 ![Character Sheet Screenshot](./readme_assets/CampaignView.png)

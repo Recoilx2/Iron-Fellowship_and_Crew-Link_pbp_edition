@@ -1,26 +1,8 @@
-import { firestore } from "config/firebase.config";
-import { doc, DocumentReference } from "firebase/firestore";
 import type {
   PostgresChangePayload,
   RowChange,
 } from "api-calls/realtime/listenToRows";
 import { SettingsDocument } from "api-calls/character-campaign-settings/_character-campaign-settings.type";
-
-export function constructCampaignSettingsDocPath(campaignId: string) {
-  return `/campaigns/${campaignId}/settings/settings`;
-}
-
-export function getCampaignSettingsDoc(campaignId: string) {
-  return doc(
-    firestore,
-    constructCampaignSettingsDocPath(campaignId)
-  ) as DocumentReference<SettingsDocument>;
-}
-
-// ---------------------------------------------------------------------------
-// Supabase (character scope). Campaign settings stay on Firebase until the
-// campaigns ticket ports them.
-// ---------------------------------------------------------------------------
 
 export const CHARACTER_SETTINGS_TABLE = "character_settings";
 
@@ -110,17 +92,6 @@ export function characterSettingsPayloadToChange(
   return row && typeof row.character_id === "string"
     ? { kind: "upsert", row: row as CharacterSettingsRow }
     : null;
-}
-
-export function constructCharacterSettingsDocPath(characterId: string) {
-  return `/characters/${characterId}/settings/settings`;
-}
-
-export function getCharacterSettingsDoc(characterId: string) {
-  return doc(
-    firestore,
-    constructCharacterSettingsDocPath(characterId)
-  ) as DocumentReference<SettingsDocument>;
 }
 
 // ---------------------------------------------------------------------------

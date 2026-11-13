@@ -3,7 +3,7 @@ import { collectAsyncIterable } from "../../__tests__/testUtils";
 
 // Format-comparison goldens for #23: the exporters read through the new
 // Supabase-backed data layer, but the files they produce must stay
-// byte-identical to the current (Firebase-era) format. These tests pin the
+// byte-identical to the previous format. These tests pin the
 // exact file bytes — path and contents — for one representative fixture per
 // exporter, using the real yjsToMarkdown so the embedded markdown is covered
 // too. The only accepted delta from the old format is world.json no longer

@@ -22,7 +22,7 @@ describe("campaigns migration", () => {
     assert.match(campaignsFile(), /^\d{14}_campaigns\.sql$/);
   });
 
-  it("creates public.campaigns with the Firebase document fields as columns", () => {
+  it("creates public.campaigns with the previous document fields as columns", () => {
     const sql = text();
     assert.ok(/CREATE TABLE/i.test(sql), "no CREATE TABLE");
     assert.ok(/public\.campaigns\b/.test(sql), "not in the public schema");

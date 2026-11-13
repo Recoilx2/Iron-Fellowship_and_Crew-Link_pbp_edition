@@ -4,8 +4,8 @@ import { USER_SETTINGS_TABLE } from "./_getRef";
 
 /**
  * Pins or unpins a single oracle section. Oracle ids are stored as plain
- * JSON keys: unlike the Firestore map they replaced, Postgres jsonb accepts
- * any string, so no id encoding is needed at the edge.
+ * JSON keys: Postgres jsonb accepts any string, so no id encoding is needed
+ * at the edge.
  */
 export const updatePinnedOracle = createApiFunction<
   { uid: string; oracleId: string; pinned: boolean },

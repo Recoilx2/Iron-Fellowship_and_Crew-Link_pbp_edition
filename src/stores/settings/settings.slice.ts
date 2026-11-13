@@ -1,21 +1,17 @@
 import { CreateSliceType } from "stores/store.type";
 import { SettingsSlice } from "./settings.slice.type";
 import { defaultSettings } from "./settings.slice.default";
-import { Unsubscribe } from "api-calls/helpers.type";
-import { listenToCustomMoves } from "api-calls/user/custom-moves/listenToCustomMoves";
-import { listenToCustomOracles } from "api-calls/user/custom-oracles/listenToCustomOracles";
 import { listenToSettings } from "api-calls/character-campaign-settings/listenToSettings";
 import { listenToOracleSettings } from "api-calls/user/settings/listenToOracleSettings";
 import { showOrHideCustomMove } from "api-calls/character-campaign-settings/showOrHideCustomMove";
 import { showOrHideCustomOracle } from "api-calls/character-campaign-settings/showOrHideCustomOracle";
-import { addCustomMove } from "api-calls/user/custom-moves/addCustomMove";
-import { updateCustomMove } from "api-calls/user/custom-moves/updateCustomMove";
-import { removeCustomMove } from "api-calls/user/custom-moves/removeCustomMove";
-import { addCustomOracle } from "api-calls/user/custom-oracles/addCustomOracle";
-import { updateCustomOracle } from "api-calls/user/custom-oracles/updateCustomOracle";
-import { removeCustomOracle } from "api-calls/user/custom-oracles/removeCustomOracle";
 import { updatePinnedOracle } from "api-calls/user/settings/updatePinnedOracle";
 import { updateSettings } from "api-calls/character-campaign-settings/updateSettings";
+
+// Per-user custom moves and oracles lived in Firebase and were not carried
+// over (spec #11): homebrew collections are their replacement. This slice
+// keeps only the visibility toggles for built-in moves/oracles (backed by
+// character/campaign settings rows) and the per-user oracle pins.
 
 export const createSettingsSlice: CreateSliceType<SettingsSlice> = (
   set,
@@ -25,39 +21,7 @@ export const createSettingsSlice: CreateSliceType<SettingsSlice> = (
 
   subscribe: (uids) => {
     getState().users.loadUserDocuments(uids);
-    const unsubscribes: Unsubscribe[] = [];
-
-    uids.forEach((uid) => {
-      unsubscribes.push(
-        listenToCustomMoves(
-          uid,
-          (moves) => {
-            set((store) => {
-              store.settings.customMoves[uid] = moves;
-            });
-          },
-          (error) => {
-            console.error(error);
-          }
-        )
-      );
-
-      unsubscribes.push(
-        listenToCustomOracles(
-          uid,
-          (oracles) => {
-            set((store) => {
-              store.settings.customOracles[uid] = oracles;
-            });
-          },
-          (error) => {
-            console.error(error);
-          }
-        )
-      );
-    });
     return () => {
-      unsubscribes.forEach((unsubscribe) => unsubscribe());
       getState().settings.resetStore();
     };
   },
@@ -123,37 +87,6 @@ export const createSettingsSlice: CreateSliceType<SettingsSlice> = (
     });
   },
 
-  addCustomMove: (customMove) => {
-    const uid = getState().auth.uid;
-
-    return addCustomMove({ uid, customMove });
-  },
-  updateCustomMove: (moveId, customMove) => {
-    const uid = getState().auth.uid;
-
-    return updateCustomMove({ uid, moveId, customMove });
-  },
-  removeCustomMove: (moveId) => {
-    const uid = getState().auth.uid;
-
-    return removeCustomMove({ uid, moveId });
-  },
-
-  addCustomOracle: (customOracle) => {
-    const uid = getState().auth.uid;
-
-    return addCustomOracle({ uid, customOracle });
-  },
-  updateCustomOracle: (oracleId, customOracle) => {
-    const uid = getState().auth.uid;
-
-    return updateCustomOracle({ uid, oracleId, customOracle });
-  },
-  removeCustomOracle: (oracleId) => {
-    const uid = getState().auth.uid;
-
-    return removeCustomOracle({ uid, oracleId });
-  },
   togglePinnedOracle: (oracleId, pinned) => {
     const uid = getState().auth.uid;
 

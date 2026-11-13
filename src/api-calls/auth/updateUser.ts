@@ -1,16 +1,13 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { upsertProfile } from "api-calls/profiles/upsertProfile";
-import { UserDocument } from "api-calls/user/_user.type";
-import { updateUserDoc } from "api-calls/user/updateUserDoc";
 
 /**
  * Saves the signed-in person's display name. The `profiles` table is the
  * source of truth; the auth user's metadata is kept in sync so future
- * sessions carry the name, and the legacy user document keeps a copy until
- * the data-area tickets read names from profiles instead.
+ * sessions carry the name.
  */
-export function updateUser(userDoc: UserDocument): Promise<void> {
-  const { displayName } = userDoc;
+export function updateUser(params: { displayName: string }): Promise<void> {
+  const { displayName } = params;
   return getSupabaseClient()
     .auth.getSession()
     .then(({ data, error }) => {
@@ -25,12 +22,7 @@ export function updateUser(userDoc: UserDocument): Promise<void> {
             console.error(metadataError);
             return Promise.reject("Failed to update user name.");
           }
-          return upsertProfile({ uid, displayName })
-            .then(() =>
-              // Legacy copy for the Firestore-backed name displays.
-              updateUserDoc({ uid, user: userDoc })
-            )
-            .then(() => undefined);
+          return upsertProfile({ uid, displayName }).then(() => undefined);
         });
     });
 }
