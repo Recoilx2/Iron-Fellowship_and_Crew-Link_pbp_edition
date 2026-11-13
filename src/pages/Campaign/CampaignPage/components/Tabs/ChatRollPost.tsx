@@ -5,7 +5,7 @@ import type { PostWithId } from "api-calls/chat/listenToChannelPosts";
 import type { Roll } from "types/DieRolls.type";
 import { RollDisplay } from "components/features/charactersAndCampaigns/RollDisplay";
 import { getRollTitle } from "functions/rollText";
-import { getChatRollSummary } from "./chatRolls";
+import { getChatRollSummary } from "functions/chatRolls";
 
 /**
  * A roll post in the feed (spec #9, prototype variant D): a dark one-line

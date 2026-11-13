@@ -271,6 +271,43 @@ describe("chat slice posts", () => {
     );
     expect(announce).toHaveBeenCalledWith(expect.stringContaining("Reveal"));
 
+    // An image-only post arrives with no words at all: the count speaks.
+    announce.mockClear();
+    captured?.onPosts([
+      ...posts(2),
+      {
+        id: "post-2",
+        channelId: "channel-1",
+        authorId: "player-1",
+        speakerCharacterId: null,
+    speakerNpcId: null,
+        text: "A new post arrives.",
+        imagePaths: [],
+        roll: null,
+        gmsOnly: false,
+        createdAt: new Date(Date.now() + 60_000).toISOString(),
+        editedAt: null,
+        deletedAt: null,
+      },
+      {
+        id: "post-4",
+        channelId: "channel-1",
+        authorId: "player-1",
+        speakerCharacterId: null,
+    speakerNpcId: null,
+        text: "",
+        imagePaths: ["campaign-1/post-4/lantern.png"],
+        roll: null,
+        gmsOnly: false,
+        createdAt: new Date(Date.now() + 180_000).toISOString(),
+        editedAt: null,
+        deletedAt: null,
+      },
+    ]);
+    expect(announce).toHaveBeenCalledWith(
+      "New post in # In character: 1 image"
+    );
+
     // Paging back re-emits the window with older posts only: silence.
     announce.mockClear();
     captured?.onPosts([

@@ -79,7 +79,7 @@ test.describe("chat images", () => {
       await signInAs(playerPage, config, player, campaignUrl(campaignId));
 
       await expect(
-        playerPage.getByRole("textbox", { name: /Message #/ })
+        playerPage.getByRole("textbox", { name: /Post in #/ })
       ).toBeVisible();
 
       // The player picks an image and sees its preview above the text box.
@@ -96,7 +96,7 @@ test.describe("chat images", () => {
       ).toBeVisible();
 
       await playerPage
-        .getByRole("textbox", { name: /Message #/ })
+        .getByRole("textbox", { name: /Post in #/ })
         .fill(text);
       await playerPage.getByRole("button", { name: "Send" }).click();
 

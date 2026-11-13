@@ -1,4 +1,5 @@
 import { createErrorSnackbar } from "providers/SnackbarProvider/useSnackbar";
+import { mintErrorReference } from "functions/errorReference";
 
 export type ApiFunction<Params, ReturnType> = (
   params: Params
@@ -15,11 +16,7 @@ export function createApiFunction<Params, Result>(
         .catch((e) => {
           // Short reference code per failure (story 38): the user sees only
           // the generic message plus this code, while details stay in logs.
-          const referenceCode = Math.random()
-            .toString(36)
-            .slice(2, 8)
-            .toUpperCase()
-            .padEnd(6, "0");
+          const referenceCode = mintErrorReference();
           console.error(`API call failed (ref: ${referenceCode})`, e);
           try {
             createErrorSnackbar(

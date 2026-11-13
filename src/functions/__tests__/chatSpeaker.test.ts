@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { defaultChatSpeaker } from "pages/Campaign/CampaignPage/components/Tabs/chatSpeaker";
+import { defaultChatSpeaker } from "functions/chatSpeaker";
 
 // Seam under test: the composer's speaker line. Players have no picker (one
 // character per campaign), so the channel kind picks the speaker: IC means

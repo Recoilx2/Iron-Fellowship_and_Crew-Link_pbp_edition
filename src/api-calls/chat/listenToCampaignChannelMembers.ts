@@ -10,8 +10,9 @@ import {
 
 /**
  * Follows the roster of every visible channel in one campaign. Private
- * channel members and GMs see private rosters; a DM's two members alone see
- * theirs, so a GM who is not in a DM never learns it exists. Members join
+ * channel members and GMs see private rosters; a direct channel's two
+ * members alone see theirs, so a GM who is not in one never learns it
+ * exists. Members join
  * and leave live; outsiders see nothing, because the roster access rules
  * (not an interface filter) decide which rows arrive. Returns a plain
  * unsubscribe function.

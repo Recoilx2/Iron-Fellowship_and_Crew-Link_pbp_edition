@@ -8,7 +8,7 @@ import {
   stripDataswornLinks,
   type ChatRollContext,
   type DiceRoller,
-} from "./chatRolls";
+} from "../chatRolls";
 import { ROLL_RESULT, ROLL_TYPE } from "types/DieRolls.type";
 
 // Seam under test: the composer's roll math before a roll attaches to the

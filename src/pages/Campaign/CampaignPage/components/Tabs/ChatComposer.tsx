@@ -21,6 +21,7 @@ import type { ChannelKind } from "api-calls/chat/_chat.type";
 import type { ChannelWithId } from "api-calls/chat/listenToCampaignChannels";
 import { createPost } from "api-calls/chat/createPost";
 import { validateChatImageFile } from "api-calls/chat/chatImageLimits";
+import { mintErrorReference } from "functions/errorReference";
 import {
   removeChatImage,
   uploadChatImage,
@@ -29,9 +30,9 @@ import { rollDice } from "stores/appState/rollers/rollDice";
 import { rollDie } from "stores/appState/rollers/rollDie";
 import type { Roll } from "types/DieRolls.type";
 import { RollDisplay } from "components/features/charactersAndCampaigns/RollDisplay";
-import type { ChatRollContext, DiceRoller } from "./chatRolls";
+import type { ChatRollContext, DiceRoller } from "functions/chatRolls";
 import { ChatRollPicker, type ChatRollKind } from "./ChatRollPickers";
-import { defaultChatSpeaker } from "./chatSpeaker";
+import { defaultChatSpeaker } from "functions/chatSpeaker";
 
 interface PendingAttachment {
   key: string;
@@ -232,7 +233,9 @@ export function ChatComposer(props: {
           setAttachments((current) =>
             current.filter((attachment) => attachment.key !== key)
           );
-          setAttachError("Could not attach that image. Try again.");
+          setAttachError(
+            `Could not attach that image. Try again. (ref: ${mintErrorReference()})`
+          );
         }
       );
     }
@@ -332,6 +335,9 @@ export function ChatComposer(props: {
       .catch(() => {
         for (const path of paths) {
           sentPathsRef.current.delete(path);
+          // The post never landed, so its staged uploads are orphans:
+          // remove them best-effort so a failed send leaves no files behind.
+          removeChatImage(path).catch(() => {});
         }
       })
       .finally(() => {
@@ -473,8 +479,8 @@ export function ChatComposer(props: {
           maxRows={8}
           size={"small"}
           fullWidth
-          placeholder={`Message # ${channel.name}`}
-          inputProps={{ "aria-label": `Message # ${channel.name}` }}
+          placeholder={`Post in # ${channel.name}`}
+          inputProps={{ "aria-label": `Post in # ${channel.name}` }}
           value={draft}
           onChange={(e) => setDraft(channelId, e.target.value)}
           onKeyDown={(e) => {

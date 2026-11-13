@@ -30,13 +30,13 @@ import { MarkdownRenderer } from "components/shared/MarkdownRenderer";
 import { CollapsibleSectionHeader } from "components/features/charactersAndCampaigns/CollapsibleSectionHeader";
 import type { StatsMap } from "api-calls/character/_character.type";
 import type { Roll } from "types/DieRolls.type";
-import type { ChatRollContext, DiceRoller } from "./chatRolls";
+import type { ChatRollContext, DiceRoller } from "functions/chatRolls";
 import {
   parseMixedDiceNotation,
   rollChatCustomDice,
   rollChatOracleTable,
   rollChatStat,
-} from "./chatRolls";
+} from "functions/chatRolls";
 
 /**
  * What each roll button under the composer opens (spec #9, prototype

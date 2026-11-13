@@ -2,7 +2,7 @@ import { CreateSliceType } from "stores/store.type";
 import { GameLogSlice } from "./gameLog.slice.type";
 import { addRoll } from "api-calls/game-log/addRoll";
 import { postCampaignRoll } from "api-calls/chat/postCampaignRoll";
-import { defaultChatSpeaker } from "pages/Campaign/CampaignPage/components/Tabs/chatSpeaker";
+import { defaultChatSpeaker } from "functions/chatSpeaker";
 import { defaultGameLogSlice } from "./gameLog.slice.default";
 import { removeLog } from "api-calls/game-log/removeLog";
 import { updateLog } from "api-calls/game-log/updateLog";

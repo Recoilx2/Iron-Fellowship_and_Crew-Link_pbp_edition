@@ -86,7 +86,7 @@ test.describe("chat post edits and deletes", () => {
       // The player posts; both browsers show the post.
       const text = `Draft ${Date.now()}`;
       await playerPage
-        .getByRole("textbox", { name: /Message #/ })
+        .getByRole("textbox", { name: /Post in #/ })
         .fill(text);
       await playerPage.getByRole("button", { name: "Send" }).click();
       await expect(
@@ -135,7 +135,7 @@ test.describe("chat post edits and deletes", () => {
       // The player posts; both browsers show the post.
       const text = `Take this back ${Date.now()}`;
       await playerPage
-        .getByRole("textbox", { name: /Message #/ })
+        .getByRole("textbox", { name: /Post in #/ })
         .fill(text);
       await playerPage.getByRole("button", { name: "Send" }).click();
       await expect(
