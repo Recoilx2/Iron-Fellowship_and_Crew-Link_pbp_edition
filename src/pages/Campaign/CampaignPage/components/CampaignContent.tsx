@@ -21,7 +21,7 @@ export interface CampaignContentProps {
 
 export function CampaignContent(props: CampaignContentProps) {
   const { openInviteDialog } = props;
-  const { showGuidedPlayerView, showGuideTips } = useCampaignType();
+  const { showGuideTips } = useCampaignType();
 
   const [searchParams] = useSearchParams();
   const [selectedTab, setSelectedTab] = useState<CampaignTabs>(
@@ -71,9 +71,9 @@ export function CampaignContent(props: CampaignContentProps) {
         <StyledTab label="Chat" value={CampaignTabs.Chat} />
         <StyledTab label="Characters" value={CampaignTabs.Characters} />
         <StyledTab label="Tracks" value={CampaignTabs.Tracks} />
-        {!showGuidedPlayerView && (
-          <StyledTab label="My notes" value={CampaignTabs.Notes} />
-        )}
+        {/* My notes is personal (spec #9, ticket #31): every campaign
+            member gets the tab, including guided players. */}
+        <StyledTab label="My notes" value={CampaignTabs.Notes} />
         <StyledTab label="World" value={CampaignTabs.World} />
         <StyledTab label="Locations" value={CampaignTabs.Locations} />
         <StyledTab label="NPCs" value={CampaignTabs.NPCs} />
