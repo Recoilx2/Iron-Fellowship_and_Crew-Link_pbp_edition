@@ -32,7 +32,7 @@ export const updateLocationGMProperties = createApiFunction<Params, void>(
       trouble?: string | null;
       location_features?: string | null;
     };
-    const { error } = await client
+    const { data: upserted, error } = await client
       .from(WORLD_LOCATION_GM_DETAILS_TABLE)
       .upsert({
         location_id: locationId,
@@ -44,9 +44,10 @@ export const updateLocationGMProperties = createApiFunction<Params, void>(
           locationGMProperties.locationFeatures ??
           current.location_features ??
           null,
-      });
-    if (error) {
-      throw error;
+      })
+      .select("location_id");
+    if (error || !upserted || upserted.length === 0) {
+      throw error ?? new Error("Failed to update location.");
     }
   },
   "Failed to update location."
