@@ -14,10 +14,11 @@ import { markdownToPlainText } from "functions/rollText";
 
 /**
  * The composer's rolls (spec #9): move, stat, ask-the-oracle, oracle table
- * and custom dice rolls computed for the draft. A finished roll attaches
+ * and custom dice results computed for the draft. A finished roll attaches
  * to the draft, the player adds text, and sending posts both to the current
- * channel as the current speaker. Nothing here touches the game log: rolls
- * made elsewhere keep their own path.
+ * channel as the current speaker. Rolls made elsewhere in a campaign join
+ * the same feed: they post to the starting IC channel as chat roll posts
+ * (ticket #30).
  *
  * Dice come from an injected roller, so the rules -- odds, outcomes, roll
  * shapes -- are pinned by unit tests with known-good dice. The interface

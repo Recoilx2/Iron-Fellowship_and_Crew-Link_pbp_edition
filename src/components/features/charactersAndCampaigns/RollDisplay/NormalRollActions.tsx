@@ -63,6 +63,13 @@ export function NormalRollActions(props: NormalRollActionsProps) {
 
   const { showGuidedPlayerView } = useCampaignType();
 
+  // A campaign's roll log entries are chat roll posts with immutable dice
+  // (ticket #30): the log offers no reroll, momentum burn or delete, only
+  // copying. Solo entries keep every action.
+  const isCampaignRoll =
+    useStore((store) => store.campaigns.currentCampaign.currentCampaignId) !=
+    null;
+
   const removeLog = useStore((store) => store.gameLog.removeRoll);
 
   const updateRoll = useStore((store) => store.gameLog.updateRoll);
@@ -192,7 +199,7 @@ export function NormalRollActions(props: NormalRollActionsProps) {
             </ListItemIcon>
             <ListItemText>Copy Roll Result</ListItemText>
           </MenuItem>
-          {roll.type === ROLL_TYPE.STAT && roll.uid === uid && (
+          {roll.type === ROLL_TYPE.STAT && roll.uid === uid && !isCampaignRoll && (
             <MenuItem
               onClick={(evt) => {
                 evt.stopPropagation();
@@ -209,7 +216,8 @@ export function NormalRollActions(props: NormalRollActionsProps) {
           {roll.type === ROLL_TYPE.STAT &&
             roll.uid === uid &&
             roll.characterId === characterId &&
-            isMomentumBurnUseful && (
+            isMomentumBurnUseful &&
+            !isCampaignRoll && (
               <MenuItem
                 onClick={(evt) => {
                   evt.stopPropagation();
@@ -223,7 +231,7 @@ export function NormalRollActions(props: NormalRollActionsProps) {
                 <ListItemText>Burn Momentum</ListItemText>
               </MenuItem>
             )}
-          {!showGuidedPlayerView && (
+          {!showGuidedPlayerView && !isCampaignRoll && (
             <MenuItem
               onClick={(evt) => {
                 evt.stopPropagation();

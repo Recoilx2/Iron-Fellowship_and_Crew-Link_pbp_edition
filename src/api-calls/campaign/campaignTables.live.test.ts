@@ -344,7 +344,6 @@ describe.skipIf(!config)("campaign shared tables end to end", () => {
       "campaign_tracks",
       "campaign_assets",
       "campaign_settings",
-      "campaign_rolls",
     ]) {
       const reread = await player.client.from(table).select("*").limit(1);
       expect(reread.error).toBeNull();

@@ -2,7 +2,6 @@ import { createApiFunction } from "api-calls/createApiFunction";
 import { getSupabaseClient } from "config/supabase.config";
 import {
   CHARACTER_ROLLS_TABLE,
-  CAMPAIGN_ROLLS_TABLE,
 } from "./_getRef";
 
 export const removeLog = createApiFunction<
@@ -15,17 +14,12 @@ export const removeLog = createApiFunction<
     throw new Error("Either campaign or character ID must be defined.");
   }
 
+  // A campaign's rolls live as chat roll posts: take the post back from
+  // chat instead of deleting it from a log (ticket #30).
   if (campaignId) {
-    const { data, error } = await getSupabaseClient()
-      .from(CAMPAIGN_ROLLS_TABLE)
-      .delete()
-      .eq("id", logId)
-      .eq("campaign_id", campaignId)
-      .select("id");
-    if (error || !data || data.length === 0) {
-      throw error ?? new Error("Roll not found");
-    }
-    return;
+    throw new Error(
+      "Campaign rolls are chat posts: delete the post from chat instead."
+    );
   }
   if (!characterId) {
     throw new Error("Either campaign or character ID must be defined.");
