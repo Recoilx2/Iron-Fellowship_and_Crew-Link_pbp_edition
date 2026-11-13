@@ -149,18 +149,17 @@ describe.skipIf(!config)("campaign roll log as a view of roll posts", () => {
     // arrives live, keyed by its post, while a text-only post in the same
     // channel never enters the log.
     const updated: Array<[string, Roll]> = [];
-    unsubscribes.push(
-      listenToLogs({
-        isGM: false,
-        campaignId,
-        totalLogsToLoad: 25,
-        updateLog: (rollId, roll) => updated.push([rollId, roll]),
-        removeLog: () => {},
-        onError: (error) => {
-          throw new Error(error);
-        },
-      })
-    );
+    const stopListening = listenToLogs({
+      isGM: false,
+      campaignId,
+      totalLogsToLoad: 25,
+      updateLog: (rollId, roll) => updated.push([rollId, roll]),
+      removeLog: () => {},
+      onError: (error) => {
+        throw new Error(error);
+      },
+    });
+    unsubscribes.push(stopListening);
     await waitFor(() =>
       updated.some(([id]) => id === postId) ? updated : null
     );
@@ -181,6 +180,11 @@ describe.skipIf(!config)("campaign roll log as a view of roll posts", () => {
       .eq("channel_id", icChannelId);
     expect(outsiderRows.error).toBeNull();
     expect(outsiderRows.data ?? []).toEqual([]);
+    // The singleton still holds the player's session here, so stop the
+    // log listener before the outsider signs in: the live assertions are
+    // done, and the open subscription would otherwise outlive its identity
+    // and surface the switch as a channel error.
+    stopListening();
     // The singleton still holds the player's session here, so sign in as
     // the outsider first: otherwise the roll posts as a member and
     // succeeds instead of rejecting.
@@ -289,8 +293,14 @@ describe.skipIf(!config)("campaign roll log as a view of roll posts", () => {
   it("cuts a removed member off the roll log at once", { timeout: 120000 }, async () => {
     const { gm, player, campaignId } = await setUpLog();
 
-    // The player follows the log live.
+    // The player follows the log live. The listener stays open past
+    // removal to prove the later roll never arrives, so the revocation
+    // surfaces as a channel error: record it instead of throwing. Cutoff
+    // is proven by the data assertions below (no gm roll in `updated`,
+    // empty `playerRows`), not by the error count — silent-drop vs error
+    // is server-version dependent.
     const updated: Array<[string, Roll]> = [];
+    const errors: string[] = [];
     unsubscribes.push(
       listenToLogs({
         isGM: false,
@@ -299,7 +309,7 @@ describe.skipIf(!config)("campaign roll log as a view of roll posts", () => {
         updateLog: (rollId, roll) => updated.push([rollId, roll]),
         removeLog: () => {},
         onError: (error) => {
-          throw new Error(error);
+          errors.push(error);
         },
       })
     );
