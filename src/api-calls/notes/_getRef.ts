@@ -81,6 +81,7 @@ export interface CampaignNoteRow {
   title: string;
   shared: boolean;
   sort_order: number;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 }
