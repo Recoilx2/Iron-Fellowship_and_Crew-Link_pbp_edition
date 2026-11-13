@@ -33,6 +33,7 @@ function posts(count: number, start = 0): PostWithId[] {
     authorId: "player-1",
     speakerCharacterId: null,
     text: `post ${start + i}`,
+    imagePaths: [],
     createdAt: new Date(Date.now() + (start + i) * 1000).toISOString(),
   }));
 }
@@ -199,6 +200,7 @@ describe("chat slice posts", () => {
         authorId: "player-1",
         speakerCharacterId: null,
         text: "A new post arrives.",
+        imagePaths: [],
         createdAt: new Date(Date.now() + 60_000).toISOString(),
       },
     ]);
@@ -215,6 +217,7 @@ describe("chat slice posts", () => {
         authorId: "player-1",
         speakerCharacterId: null,
         text: "An older post pages in.",
+        imagePaths: [],
         createdAt: new Date(Date.now() - 60_000).toISOString(),
       },
       ...posts(2),
@@ -224,6 +227,7 @@ describe("chat slice posts", () => {
         authorId: "player-1",
         speakerCharacterId: null,
         text: "A new post arrives.",
+        imagePaths: [],
         createdAt: new Date(Date.now() + 60_000).toISOString(),
       },
     ]);

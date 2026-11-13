@@ -10,8 +10,9 @@ export interface ChannelDocument {
 /**
  * A text post in a channel. The speaker is one of the author's characters
  * in the campaign (in character) or nobody (posting as themselves, the GM
- * included). Rolls, images, threads, whispers, edits and soft deletes all
- * extend this shape in later tickets; nothing here may change its meaning.
+ * included). Rolls, threads, whispers, edits and soft deletes extend this
+ * shape in later tickets; images arrived here, as storage paths in the
+ * chat-images bucket beside the text (#28).
  */
 export interface PostDocument {
   channelId: string;
@@ -19,5 +20,7 @@ export interface PostDocument {
   /** The speaking character, or null when posting as self. */
   speakerCharacterId: string | null;
   text: string;
+  /** Storage paths of the post's image attachments, oldest-first. */
+  imagePaths: string[];
   createdAt: string;
 }

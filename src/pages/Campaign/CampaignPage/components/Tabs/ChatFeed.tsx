@@ -6,6 +6,7 @@ import type { PostWithId } from "api-calls/chat/listenToChannelPosts";
 import { MarkdownRenderer } from "components/shared/MarkdownRenderer";
 import { PortraitAvatar } from "components/features/characters/PortraitAvatar/PortraitAvatar";
 import { UserAvatar } from "components/shared/UserAvatar";
+import { ChatPostImages } from "./ChatPostImages";
 import type { CharacterDocument } from "api-calls/character/_character.type";
 
 const EMPTY_POSTS: PostWithId[] = [];
@@ -218,6 +219,9 @@ function ChatPost(props: {
           </Typography>
         </Stack>
         <MarkdownRenderer markdown={post.text} />
+        {post.imagePaths.length > 0 && (
+          <ChatPostImages paths={post.imagePaths} />
+        )}
       </Box>
     </Stack>
   );

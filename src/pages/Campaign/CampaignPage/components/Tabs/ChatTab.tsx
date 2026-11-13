@@ -170,7 +170,11 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
                 This channel is archived. New posts are closed.
               </Typography>
             ) : (
-              <ChatComposer channel={openChannel} />
+              <ChatComposer
+                key={openChannel.id}
+                channel={openChannel}
+                campaignId={campaignId ?? ""}
+              />
             )}
           </>
         ) : (

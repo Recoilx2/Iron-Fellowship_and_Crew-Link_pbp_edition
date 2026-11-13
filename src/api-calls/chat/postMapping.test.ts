@@ -19,6 +19,7 @@ function row(overrides: Partial<PostRow> = {}): PostRow {
     author_id: "player-1",
     speaker_character_id: "character-1",
     text: "We push on through the bog.",
+    image_paths: ["campaign-1/post-1/lantern.png"],
     created_at: "2026-11-13T12:00:00.000Z",
     updated_at: "2026-11-13T12:00:00.000Z",
     ...overrides,
@@ -42,6 +43,7 @@ describe("chat post mapping", () => {
       authorId: "player-1",
       speakerCharacterId: "character-1",
       text: "We push on through the bog.",
+      imagePaths: ["campaign-1/post-1/lantern.png"],
       createdAt: "2026-11-13T12:00:00.000Z",
     });
     // Posting as self leaves no speaker character: the interface shows the

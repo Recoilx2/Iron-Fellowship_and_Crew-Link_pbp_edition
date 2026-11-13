@@ -18,6 +18,7 @@ export interface PostRow {
   author_id: string;
   speaker_character_id: string | null;
   text: string;
+  image_paths: string[];
   created_at: string;
   updated_at: string;
 }
@@ -36,6 +37,7 @@ export function postRowToDocument(row: PostRow): PostDocument {
     authorId: row.author_id,
     speakerCharacterId: row.speaker_character_id,
     text: row.text,
+    imagePaths: row.image_paths ?? [],
     createdAt: row.created_at,
   };
 }
