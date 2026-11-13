@@ -12,6 +12,8 @@ export type LocationWithGMProperties = Location & {
   notes?: Uint8Array | null;
   imageUrl?: string;
   mapBackgroundImageUrl?: string;
+  publicNoteId?: string;
+  gmNoteId?: string;
 };
 
 export interface LocationsSliceData {
@@ -24,7 +26,7 @@ export interface LocationsSliceData {
 }
 
 export interface LocationsSliceActions {
-  subscribe: (worldId: string, worldOwnerIds: string[]) => Unsubscribe;
+  subscribe: (worldId: string) => Unsubscribe;
   setOpenLocationId: (locationId?: string) => void;
   closeLocation: () => void;
   setLocationTab: (tab: LocationTab) => void;

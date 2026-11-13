@@ -2,7 +2,7 @@ import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import StarterKit from "@tiptap/starter-kit";
 import { getHueFromString, hslToHex } from "functions/getHueFromString";
-import { WebrtcProvider } from "y-webrtc";
+import { HocuspocusProvider } from "@hocuspocus/provider";
 import * as Y from "yjs";
 import Document from "@tiptap/extension-document";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -19,7 +19,7 @@ const CustomDocument = Document.extend({
 
 export const rtcExtensions = (params: {
   doc?: Y.Doc;
-  provider?: WebrtcProvider;
+  provider?: HocuspocusProvider;
   user?: RtcPresenceUser;
   withHeading?: boolean;
 }) => {

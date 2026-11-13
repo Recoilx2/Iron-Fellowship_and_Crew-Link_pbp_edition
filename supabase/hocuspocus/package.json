@@ -1,0 +1,19 @@
+{
+  "name": "hocuspocus-notes",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hocuspocus note server: live Yjs documents for shared note editing, one Postgres row per document.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test *.test.mjs"
+  },
+  "dependencies": {
+    "@hocuspocus/extension-database": "^4.8.0",
+    "@hocuspocus/server": "^4.8.0",
+    "pg": "^8.23.1"
+  }
+}

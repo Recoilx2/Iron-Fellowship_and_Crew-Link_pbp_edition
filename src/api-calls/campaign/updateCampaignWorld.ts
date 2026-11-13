@@ -2,9 +2,9 @@ import { updateCampaign } from "./updateCampaign";
 import { createApiFunction } from "api-calls/createApiFunction";
 
 /**
- * Points a campaign at a world. Only the campaign row changes here; linking
- * the world's owner list back stays with the worlds ticket, whose tables do
- * not exist yet.
+ * Points a campaign at a world. Only the campaign row changes here; the
+ * world's access rules pick the link up through private.is_world_gm, so
+ * campaign GMs manage linked worlds with no further writes.
  */
 export const updateCampaignWorld = createApiFunction<
   { campaignId: string; gmIds: string[]; worldId?: string },

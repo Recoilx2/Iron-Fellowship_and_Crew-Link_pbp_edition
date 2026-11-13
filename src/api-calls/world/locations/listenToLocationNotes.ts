@@ -1,22 +1,23 @@
 import { Unsubscribe } from "api-calls/helpers.type";
-import { onSnapshot } from "firebase/firestore";
-import { getPublicNotesLocationDoc } from "./_getRef";
-import { getErrorMessage } from "functions/getErrorMessage";
+import { listenToWorldItemNotes } from "api-calls/world/worldNotes";
 
+/**
+ * Follows one location's public notes bytes. Viewers of shared locations
+ * receive them; outsiders and viewers of unshared locations receive
+ * nothing. Combined with the world-notes document on the note server,
+ * which owns the live bytes.
+ */
 export function listenToLocationNotes(
   worldId: string,
   locationId: string,
   updateLocationNotes: (notes: Uint8Array | undefined) => void,
   onError: (error: string) => void
 ): Unsubscribe {
-  return onSnapshot(
-    getPublicNotesLocationDoc(worldId, locationId),
-    (snapshot) => {
-      const notes = snapshot.data()?.notes?.toUint8Array();
-      updateLocationNotes(notes);
-    },
-    (error) => {
-      onError(getErrorMessage(error, "Failed to get location notes"));
-    }
+  return listenToWorldItemNotes(
+    "location",
+    locationId,
+    false,
+    updateLocationNotes,
+    onError
   );
 }

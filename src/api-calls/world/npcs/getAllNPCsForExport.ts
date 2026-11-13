@@ -1,77 +1,98 @@
-import { getDocs, getDoc, query, where } from "firebase/firestore";
-import { NPCDocument, NPCNotesDocument, GMNPCDocument } from "./_npcs.type";
+import { getSupabaseClient } from "config/supabase.config";
+import { GMNPC, NPC } from "types/NPCs.type";
+import { decodeNoteContent } from "api-calls/notes/noteContent";
 import {
-  getNPCCollection,
-  getPublicNotesNPCDoc,
-  getPrivateDetailsNPCDoc,
+  getWorldItemNoteIds,
+  WORLD_NOTE_CONTENTS_TABLE,
+} from "api-calls/world/worldNotes";
+import {
+  WORLD_NPCS_TABLE,
+  WORLD_NPC_GM_DETAILS_TABLE,
+  npcRowToDocument,
+  npcGMDetailsRowToDocument,
+  type NPCRow,
+  type NPCGMDetailsRow,
 } from "./_getRef";
 
 export interface NPCExportRecord {
   id: string;
-  doc: NPCDocument;
+  doc: NPC;
   notes: Uint8Array | null;
   gmNotes: Uint8Array | null;
-  gmProperties: Omit<GMNPCDocument, "gmNotes"> | null;
+  gmProperties: Omit<GMNPC, "gmNotes"> | null;
+}
+
+async function readNoteBytes(noteId: string | undefined): Promise<Uint8Array | null> {
+  if (!noteId) return null;
+  const { data, error } = await getSupabaseClient()
+    .from(WORLD_NOTE_CONTENTS_TABLE)
+    .select("content")
+    .eq("note_id", noteId)
+    .maybeSingle();
+  if (error || !data) return null;
+  const content = (data as { content: string | null }).content;
+  if (!content) return null;
+  try {
+    return decodeNoteContent(content);
+  } catch {
+    return null;
+  }
 }
 
 /**
- * One-shot bulk read of all NPC documents (and their sub-documents) for export.
+ * One-shot bulk read of all NPC documents (and their sub-documents) for
+ * export.
  *
- * - isOwner=true  → reads all NPCs plus public notes, GM notes, and GM properties.
- * - isOwner=false → reads only NPCs where sharedWithPlayers===true, and only
- *                   public notes. GM docs are never fetched (mirrors the
- *                   existing listenToNPCs permission gating).
+ * - isOwner=true  → reads all NPCs plus public notes, GM notes, and GM
+ *                   properties.
+ * - isOwner=false → reads only NPCs shared with players, and only public
+ *                   notes. GM rows are never fetched.
  */
 export async function getAllNPCsForExport(
   worldId: string,
   isOwner: boolean
 ): Promise<NPCExportRecord[]> {
-  const collectionRef = getNPCCollection(worldId);
-  const q = isOwner
-    ? collectionRef
-    : query(collectionRef, where("sharedWithPlayers", "==", true));
+  const client = getSupabaseClient();
+  let query = client.from(WORLD_NPCS_TABLE).select("*").eq("world_id", worldId);
+  if (!isOwner) {
+    query = query.eq("shared_with_players", true);
+  }
+  const { data, error } = await query;
+  if (error || !data) {
+    if (error) throw error;
+    return [];
+  }
+  const rows = data as unknown as NPCRow[];
 
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) return [];
-
-  const records = await Promise.all(
-    snapshot.docs.map(async (docSnap): Promise<NPCExportRecord> => {
-      const id = docSnap.id;
-      const npcDoc = docSnap.data();
-
-      const notesPromise = getDoc(getPublicNotesNPCDoc(worldId, id)).catch(
-        () => null
+  return Promise.all(
+    rows.map(async (row): Promise<NPCExportRecord> => {
+      const ids = await getWorldItemNoteIds("npc", row.id).catch(
+        (): { publicNoteId?: string; gmNoteId?: string } => ({})
       );
-      const gmPromise = isOwner
-        ? getDoc(getPrivateDetailsNPCDoc(worldId, id)).catch(() => null)
-        : Promise.resolve(null);
-
-      const [notesSnap, gmSnap] = await Promise.all([notesPromise, gmPromise]);
-      const notesDoc: NPCNotesDocument | undefined = notesSnap?.data();
-      const notes = notesDoc?.notes?.toUint8Array() ?? null;
-
+      const notes = await readNoteBytes(ids.publicNoteId);
       if (!isOwner) {
-        return { id, doc: npcDoc, notes, gmNotes: null, gmProperties: null };
+        return {
+          id: row.id,
+          doc: npcRowToDocument(row),
+          notes,
+          gmNotes: null,
+          gmProperties: null,
+        };
       }
-
-      const gmDoc: GMNPCDocument | undefined = gmSnap?.data();
-      const gmNotes = gmDoc?.gmNotes?.toUint8Array() ?? null;
-      const gmProperties: Omit<GMNPCDocument, "gmNotes"> | null =
-        gmDoc != null
-          ? {
-              goal: gmDoc.goal,
-              role: gmDoc.role,
-              descriptor: gmDoc.descriptor,
-              disposition: gmDoc.disposition,
-              activity: gmDoc.activity,
-              firstLook: gmDoc.firstLook,
-              revealedAspect: gmDoc.revealedAspect,
-            }
-          : null;
-
-      return { id, doc: npcDoc, notes, gmNotes, gmProperties };
+      const { data: gmData } = await client
+        .from(WORLD_NPC_GM_DETAILS_TABLE)
+        .select("*")
+        .eq("npc_id", row.id)
+        .maybeSingle();
+      const gmNotes = await readNoteBytes(ids.gmNoteId);
+      const gmRow = gmData as unknown as NPCGMDetailsRow | null;
+      return {
+        id: row.id,
+        doc: npcRowToDocument(row),
+        notes,
+        gmNotes,
+        gmProperties: gmRow ? npcGMDetailsRowToDocument(gmRow) : null,
+      };
     })
   );
-
-  return records;
 }

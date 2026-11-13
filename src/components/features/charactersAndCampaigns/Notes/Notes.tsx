@@ -10,6 +10,11 @@ import { NoteSidebar } from "./NoteSidebar";
 import { NoteSource, ROLL_LOG_ID } from "stores/notes/notes.slice.type";
 import { GameLog } from "components/features/charactersAndCampaigns/GameLog";
 import { RtcRichTextEditor } from "components/shared/RichTextEditor/RtcRichTextEditor";
+import { constructNoteId, parseNoteId } from "./noteIds";
+import {
+  getCampaignNoteDocumentName,
+  getCharacterNoteDocumentName,
+} from "config/hocuspocus.config";
 import { useCallback } from "react";
 import { useStore } from "stores/store";
 import { useCampaignType } from "hooks/useCampaignType";
@@ -59,7 +64,7 @@ export function Notes(props: NotesProps) {
       isBeaconRequest?: boolean,
       title?: string
     ) => {
-      const note = parseId(unparsedId);
+      const note = parseNoteId(unparsedId);
 
       return onSave(
         note.source,
@@ -77,7 +82,7 @@ export function Notes(props: NotesProps) {
 
   const handleDelete = useCallback(
     (unparsedId: string) => {
-      const id = parseId(unparsedId);
+      const id = parseNoteId(unparsedId);
       onDelete(id).then(() => {
         setSelectedNote();
       });
@@ -85,17 +90,11 @@ export function Notes(props: NotesProps) {
     [onDelete, setSelectedNote]
   );
 
-  const roomPrefix =
+  const documentName =
     selectedNote && typeof selectedNote !== "string"
       ? selectedNote.source === NoteSource.Character
-        ? `characters-${characterId}-`
-        : `campaigns-${campaignId}-`
-      : "";
-  const roomPassword =
-    selectedNote && typeof selectedNote !== "string"
-      ? selectedNote.source === NoteSource.Character
-        ? characterId
-        : campaignId
+        ? getCharacterNoteDocumentName(selectedNote.id)
+        : getCampaignNoteDocumentName(selectedNote.id)
       : "";
 
   const { showGuidedPlayerView, campaignType } = useCampaignType();
@@ -148,11 +147,11 @@ export function Notes(props: NotesProps) {
             selectedNote &&
             selectedNoteContent !== undefined && (
               <RtcRichTextEditor
-                roomPrefix={roomPrefix}
-                documentPassword={roomPassword ?? ""}
-                id={constructId(selectedNote.source, selectedNote.id)}
+                documentName={documentName}
+                id={constructNoteId(selectedNote.source, selectedNote.id)}
                 initialValue={selectedNoteContent ?? undefined}
                 showTitle
+                serverPersisted
                 onSave={saveCallback}
                 onDelete={handleDelete}
                 extraEditorActions={
@@ -183,14 +182,3 @@ export function Notes(props: NotesProps) {
   );
 }
 
-function constructId(source: NoteSource, id: string) {
-  return `${source}-${id}`;
-}
-
-function parseId(id: string) {
-  const split = id.split("-");
-  return {
-    source: split[0] as NoteSource,
-    id: split[1],
-  };
-}

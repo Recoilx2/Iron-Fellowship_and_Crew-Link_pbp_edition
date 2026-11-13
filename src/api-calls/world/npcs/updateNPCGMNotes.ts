@@ -1,10 +1,5 @@
-import { Bytes, setDoc } from "firebase/firestore";
-import {
-  constructPrivateDetailsNPCDocPath,
-  getPrivateDetailsNPCDoc,
-} from "./_getRef";
-import { projectId } from "config/firebase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
+import { writeWorldNoteContent } from "api-calls/world/worldNotes";
 
 interface Params {
   worldId: string;
@@ -13,52 +8,14 @@ interface Params {
   isBeacon?: boolean;
 }
 
-export const updateNPCGMNotes = createApiFunction<Params, void>((params) => {
-  const { worldId, npcId, notes, isBeacon } = params;
-
-  return new Promise((resolve, reject) => {
-    if (isBeacon) {
-      const contentPath = `projects/${projectId}/databases/(default)/documents${constructPrivateDetailsNPCDocPath(
-        worldId,
-        npcId
-      )}`;
-
-      const token = window.sessionStorage.getItem("id-token") ?? "";
-      if (notes) {
-        fetch(
-          `https://firestore.googleapis.com/v1/${contentPath}?updateMask.fieldPaths=gmNotes`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              name: contentPath,
-              fields: {
-                gmNotes: {
-                  bytesValue: Bytes.fromUint8Array(notes).toBase64(),
-                },
-              },
-            }),
-            keepalive: true,
-          }
-        ).catch((e) => console.error(e));
-      }
-
-      resolve();
-    } else {
-      setDoc(
-        getPrivateDetailsNPCDoc(worldId, npcId),
-        { gmNotes: Bytes.fromUint8Array(notes) },
-        { merge: true }
-      )
-        .then(() => {
-          resolve();
-        })
-        .catch((e) => {
-          reject(e);
-        });
-    }
-  });
-}, "Failed to update notes.");
+/**
+ * Saves an NPC's GM-only notes bytes. Only world GMs may read or write
+ * them; the database enforces it.
+ */
+export const updateNPCGMNotes = createApiFunction<Params, void>(
+  async (params) => {
+    const { worldId, npcId, notes } = params;
+    await writeWorldNoteContent(worldId, "npc", npcId, true, notes);
+  },
+  "Failed to update npc notes."
+);
