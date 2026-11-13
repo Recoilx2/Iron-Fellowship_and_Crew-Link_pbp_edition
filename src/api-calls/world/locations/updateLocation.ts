@@ -40,12 +40,13 @@ export const updateLocation = createApiFunction<LocationParams, void>(
     if (Object.keys(columns).length === 0) {
       return;
     }
-    const { error } = await client
+    const { data: updated, error } = await client
       .from(WORLD_LOCATIONS_TABLE)
       .update(columns)
-      .eq("id", locationId);
-    if (error) {
-      throw error;
+      .eq("id", locationId)
+      .select("id");
+    if (error || !updated || updated.length === 0) {
+      throw error ?? new Error("Failed to update location.");
     }
   },
   "Failed to update location."

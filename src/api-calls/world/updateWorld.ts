@@ -25,11 +25,12 @@ export const updateWorld = createApiFunction<
   if (Object.keys(columns).length === 0) {
     return;
   }
-  const { error } = await getSupabaseClient()
+  const { data: updated, error } = await getSupabaseClient()
     .from(WORLDS_TABLE)
     .update(columns)
-    .eq("id", worldId);
-  if (error) {
-    throw error;
+    .eq("id", worldId)
+    .select("id");
+  if (error || !updated || updated.length === 0) {
+    throw error ?? new Error("Failed to update world.");
   }
 }, "Failed to update world.");

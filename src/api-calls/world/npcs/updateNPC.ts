@@ -35,12 +35,13 @@ export const updateNPC = createApiFunction<NPCParams, void>(
     if (Object.keys(columns).length === 0) {
       return;
     }
-    const { error } = await client
+    const { data: updated, error } = await client
       .from(WORLD_NPCS_TABLE)
       .update(columns)
-      .eq("id", npcId);
-    if (error) {
-      throw error;
+      .eq("id", npcId)
+      .select("id");
+    if (error || !updated || updated.length === 0) {
+      throw error ?? new Error("Failed to update npc.");
     }
   },
   "Failed to update npc."
