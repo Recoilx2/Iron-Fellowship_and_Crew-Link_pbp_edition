@@ -16,6 +16,8 @@ To pick a ticket:
 
 The agent sandbox has no Docker. Run the plain tests (`npm test`), lint and the type-check locally. Tests that need the local Supabase stack run in GitHub Actions on every pull request: push your branch, open the PR, and check its CI result before handing off. Don't try to install or start Docker in the sandbox.
 
+The stack tests (`src/**/*.live.test.ts`) skip without a stack, so plain `npm test` stays green. Against one local copy they run via `supabase/tests/live.sh` (see its header; it fails the run when any test is skipped). In CI the `live` job in `.github/workflows/supabase-smoke.yml` starts one copy from the template and runs that script on every pull request.
+
 ## Agent skills
 
 ### Issue tracker
