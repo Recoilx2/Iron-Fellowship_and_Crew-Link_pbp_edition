@@ -22,7 +22,7 @@ ALTER TABLE public.chat_posts
   ADD COLUMN IF NOT EXISTS image_paths text[] NOT NULL DEFAULT '{}';
 
 -- Posts need text, images, or both: the old rule refused blank text outright.
-DROP CONSTRAINT IF EXISTS chat_posts_text_required ON public.chat_posts;
+ALTER TABLE public.chat_posts DROP CONSTRAINT IF EXISTS chat_posts_text_required;
 DO $$
 BEGIN
   IF NOT EXISTS (
