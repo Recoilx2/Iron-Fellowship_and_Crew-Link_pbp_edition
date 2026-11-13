@@ -29,11 +29,12 @@ export const updateCampaignHiddenAssets = createApiFunction<
   const next = isHidden
     ? Array.from(new Set([...current, assetId]))
     : current.filter((entry) => entry !== assetId);
-  const { error } = await client
+  const { data, error } = await client
     .from(CAMPAIGNS_TABLE)
     .update({ hidden_asset_ids: next })
-    .eq("id", campaignId);
-  if (error) {
-    throw error;
+    .eq("id", campaignId)
+    .select("id");
+  if (error || !data || data.length === 0) {
+    throw error ?? new Error("Campaign not found");
   }
 }, "Failed to update hidden assets.");

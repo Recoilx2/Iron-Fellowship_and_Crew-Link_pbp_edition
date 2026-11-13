@@ -30,11 +30,12 @@ export const updateCampaignHiddenOracles = createApiFunction<
   const next = hidden
     ? Array.from(new Set([...current, oracleId]))
     : current.filter((entry) => entry !== oracleId);
-  const { error } = await client
+  const { data, error } = await client
     .from(CAMPAIGNS_TABLE)
     .update({ hidden_oracle_ids: next })
-    .eq("id", campaignId);
-  if (error) {
-    throw error;
+    .eq("id", campaignId)
+    .select("id");
+  if (error || !data || data.length === 0) {
+    throw error ?? new Error("Campaign not found");
   }
 }, "Failed to update hidden oracles.");
