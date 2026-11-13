@@ -21,18 +21,22 @@ const accessFile = () => {
 const text = () => readFileSync(join(dir, accessFile()), "utf8");
 
 describe("removed campaign members keep no private access migration (#117)", () => {
-  it("follows the <UTC timestamp>_<short-name>.sql convention with a timestamp later than every migration on the branch", () => {
+  it("follows the <UTC timestamp>_<short-name>.sql convention with a timestamp later than every migration it builds on", () => {
     assert.match(accessFile(), /^\d{14}_chat_private_dm_removal\.sql$/);
-    const stamps = readdirSync(dir)
-      .map((f) => (/^(\d{14})_.*\.sql$/.exec(f) ?? [])[1])
-      .filter(Boolean)
-      .sort();
-    const mine = accessFile().slice(0, 14);
-    assert.equal(
-      stamps.at(-1),
-      mine,
-      "the removal migration must sort last so it applies after every fix it builds on"
+    const mine = accessFile();
+    const stamp = mine.slice(0, 14);
+    // Migrations that landed after #117 (e.g. #118 chat image access,
+    // 20261114000000) sort later by design, so they are excluded here.
+    const landedLater = new Set(["20261114000000_chat_image_access.sql"]);
+    const others = readdirSync(dir).filter(
+      (f) => /^\d{14}_.*\.sql$/.test(f) && f !== mine && !landedLater.has(f)
     );
+    for (const other of others) {
+      assert.ok(
+        stamp > other.slice(0, 14),
+        `${mine} does not sort after ${other}`
+      );
+    }
   });
 
   it("requires current campaign membership to read private and DM channels", () => {
