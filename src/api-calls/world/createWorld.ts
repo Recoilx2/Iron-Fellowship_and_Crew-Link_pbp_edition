@@ -17,17 +17,20 @@ export const createWorld = createApiFunction<
   if (userError || !uid) {
     throw userError ?? new Error("Must be signed in to create a world.");
   }
-  const { data, error } = await client
-    .from(WORLDS_TABLE)
-    .insert({
-      name: params.name ?? "New World",
-      setting_key: params.settingKey ?? "ironlands",
-      owner_ids: [uid],
-    })
-    .select("id")
-    .single();
-  if (error || !data) {
-    throw error ?? new Error("Failed to create world.");
+  // The id is generated here so the insert needs no RETURNING clause: the
+  // worlds SELECT policy re-queries its own table, which cannot see a
+  // just-inserted row in the same statement, so insert-then-select always
+  // fails RLS (#74). The plain INSERT policy compares owner_ids directly
+  // and accepts the row.
+  const id = crypto.randomUUID();
+  const { error } = await client.from(WORLDS_TABLE).insert({
+    id,
+    name: params.name ?? "New World",
+    setting_key: params.settingKey ?? "ironlands",
+    owner_ids: [uid],
+  });
+  if (error) {
+    throw error;
   }
-  return (data as { id: string }).id;
+  return id;
 }, "Failed to create world");
