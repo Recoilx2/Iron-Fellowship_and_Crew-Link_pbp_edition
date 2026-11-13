@@ -87,6 +87,8 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
   let settled = false;
   let epoch = 0;
   let removed = false;
+  let refreshing = false;
+  let lastEmittedSignature: string | undefined;
 
   const applyChange = (change: RowChange<T>): boolean => {
     if (change.kind === "remove") {
@@ -107,23 +109,41 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
   };
 
   const emit = () => {
+    // Snapshots carry plain row data, so identical content serializes
+    // identically. A refresh that changed nothing (double SUBSCRIBED, a
+    // reconnect with no missed events) must not re-notify: subscribers diff
+    // against these emissions, and a duplicate snapshot looks like every row
+    // arriving twice.
+    const signature = JSON.stringify([...rows.entries()]);
+    if (signature === lastEmittedSignature) return;
+    lastEmittedSignature = signature;
     onRows([...rows.values()]);
   };
 
   const refresh = async () => {
-    const my = ++epoch;
-    settled = false;
+    // A fetch is already running (double SUBSCRIBED, reconnect storm): the
+    // in-flight fetch already reads the latest rows, and events that land
+    // meanwhile buffer into `pending` and merge on completion. A second fetch
+    // would only re-emit the same snapshot.
+    if (refreshing) return;
+    refreshing = true;
     try {
-      const snapshot = await fetchRows();
-      if (my !== epoch || removed) return;
-      rows = new Map(snapshot.map((row) => [getKey(row), row]));
-      const queued = pending;
-      pending = [];
-      for (const change of queued) applyChange(change);
-      settled = true;
-      emit();
-    } catch (error) {
-      if (my === epoch && !removed) onError?.(error);
+      const my = ++epoch;
+      settled = false;
+      try {
+        const snapshot = await fetchRows();
+        if (my !== epoch || removed) return;
+        rows = new Map(snapshot.map((row) => [getKey(row), row]));
+        const queued = pending;
+        pending = [];
+        for (const change of queued) applyChange(change);
+        settled = true;
+        emit();
+      } catch (error) {
+        if (my === epoch && !removed) onError?.(error);
+      }
+    } finally {
+      refreshing = false;
     }
   };
 
