@@ -33,12 +33,13 @@ export const updateCharacter = createApiFunction<Params, void>(
     if (Object.keys(columns).length === 0) {
       return;
     }
-    const { error } = await client
+    const { data: updated, error } = await client
       .from(CHARACTERS_TABLE)
       .update(columns)
-      .eq("id", characterId);
-    if (error) {
-      throw error;
+      .eq("id", characterId)
+      .select("id");
+    if (error || !updated || updated.length === 0) {
+      throw error ?? new Error("Character not found");
     }
   },
   "Failed to update character."
