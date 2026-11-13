@@ -369,6 +369,7 @@ describe.skipIf(!config)("character children end to end", () => {
     const characterId = await createSoloCharacter(owner);
     await addNote({ characterId, order: 0 });
 
+    // The one-row-per-character tables are keyed by their parent row, every
     for (const table of [
       "characters",
       "character_assets",
@@ -378,7 +379,18 @@ describe.skipIf(!config)("character children end to end", () => {
       "character_settings",
       "character_rolls",
     ]) {
-      const read = await outsider.client.from(table).select("id").limit(1);
+      // The one-row-per-character tables are keyed by their parent row,
+      // every other character table by id.
+      const keyColumn =
+        table === "character_note_contents"
+          ? "note_id"
+          : table === "character_settings"
+            ? "character_id"
+            : "id";
+      const read = await outsider.client
+        .from(table)
+        .select(keyColumn)
+        .limit(1);
       expect(read.error).toBeNull();
       expect(read.data ?? []).toEqual([]);
     }

@@ -97,6 +97,12 @@ describe.skipIf(!config)("characters end to end", () => {
     await waitFor(() => (seenSingle.length >= 1 ? seenSingle : null));
     expect(seenSingle[0].name).toBe("Del Nar");
 
+    // Let live updates catch up with the fresh subscriptions: on a cold
+    // stack the replication slot is still being created while the first
+    // writes land, so an update issued immediately here never produces an
+    // event and the wait below times out. Later tests reuse the warm slot.
+    await new Promise((resolve) => setTimeout(resolve, 10000));
+
     await updateCharacter({
       characterId,
       character: {

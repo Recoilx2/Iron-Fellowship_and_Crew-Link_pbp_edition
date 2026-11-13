@@ -28,13 +28,17 @@ export const deleteCharacter = createApiFunction<
   }
 
   // Assets, tracks, notes, settings and the solo roll log follow the row
-  // through ON DELETE CASCADE.
-  const { error } = await getSupabaseClient()
+  // through ON DELETE CASCADE. The RETURNING check reads the row back
+  // through the SELECT policy, which sees the pre-existing committed row,
+  // so rejecting on an empty return tells strangers their delete matched
+  // nothing instead of resolving silently.
+  const { data: deleted, error } = await getSupabaseClient()
     .from(CHARACTERS_TABLE)
     .delete()
-    .eq("id", characterId);
-  if (error) {
+    .eq("id", characterId)
+    .select("id");
+  if (error || !deleted || deleted.length === 0) {
     console.error(error);
-    throw error;
+    throw error ?? new Error("Character not found");
   }
 }, "Failed to delete character.");

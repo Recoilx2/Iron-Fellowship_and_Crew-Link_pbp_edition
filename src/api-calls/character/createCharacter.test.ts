@@ -112,10 +112,30 @@ describe("createCharacter owner plumbing", () => {
       assets: [],
     });
 
-    expect(characterId).toBe("char-1");
-    expect(
-      state.inserted.find((entry) => entry.table === "characters")?.row
-    ).toMatchObject({ owner_id: "user-A", name: "Del Nar" });
+    const inserted = state.inserted.find(
+      (entry) => entry.table === "characters"
+    )?.row;
+    expect(characterId).toBe(inserted?.id);
+    expect(inserted).toMatchObject({ owner_id: "user-A", name: "Del Nar" });
+  });
+
+  it("resolves the client-generated id carried by the inserted row", async () => {
+    await signInAs("user-A");
+
+    const characterId = await createCharacter({
+      uid: "user-A",
+      name: "Sheet",
+      stats: {},
+      assets: [],
+    });
+
+    const characterInsert = state.inserted.find(
+      (entry) => entry.table === "characters"
+    );
+    expect(characterInsert?.row.id).toBe(characterId);
+    expect(characterId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    );
   });
 
   it("refuses to create when nobody is signed in instead of hitting RLS", async () => {
