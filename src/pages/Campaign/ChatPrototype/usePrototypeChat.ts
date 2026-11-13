@@ -361,6 +361,8 @@ export function speakerName(speaker: Speaker, authorUid: string) {
 
 export function usePrototypeChat() {
   const [viewAsGM, setViewAsGM] = useState(false);
+  // GM's rolls hidden from players (the existing GM-only roll flag).
+  const [hideGMRolls, setHideGMRolls] = useState(false);
   const myUid = viewAsGM ? "gm" : "me";
   const [channels, setChannels] = useState(startingChannels);
   const [channelId, setChannelId] = useState("ic");
@@ -368,7 +370,8 @@ export function usePrototypeChat() {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [speakerByChannel, setSpeakerByChannel] = useState<Record<string, Speaker>>({});
 
-  const canSee = (c: Channel) => !c.members || viewAsGM || c.members.includes(myUid);
+  // GMs see private channels, but not direct messages they aren't in.
+  const canSee = (c: Channel) => !c.members || c.members.includes(myUid) || (viewAsGM && !c.dm);
   const visibleChannels = channels.filter(canSee);
   const channel = visibleChannels.find((c) => c.id === channelId) ?? visibleChannels[0];
 
@@ -410,6 +413,8 @@ export function usePrototypeChat() {
   return {
     viewAsGM,
     setViewAsGM,
+    hideGMRolls,
+    setHideGMRolls,
     myUid,
     channels: visibleChannels,
     channel,
@@ -465,7 +470,7 @@ export function usePrototypeChat() {
           speaker,
           text: draft.text,
           images: draft.images,
-          roll: draft.roll ? { ...draft.roll, characterId } : undefined,
+          roll: draft.roll ? { ...draft.roll, characterId, gmsOnly: viewAsGM && hideGMRolls } : undefined,
           createdAt: new Date(),
         },
       ]);

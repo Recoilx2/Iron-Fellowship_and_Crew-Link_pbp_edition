@@ -30,6 +30,7 @@ import {
   Select,
   Stack,
   TextField,
+  Tooltip,
   Typography,
   useMediaQuery,
   useTheme,
@@ -45,6 +46,8 @@ import PersonIcon from "@mui/icons-material/Person";
 import TrackIcon from "@mui/icons-material/LinearScale";
 import WorldIcon from "@mui/icons-material/Public";
 import NotesIcon from "@mui/icons-material/StickyNote2";
+import VisibleIcon from "@mui/icons-material/Visibility";
+import HiddenIcon from "@mui/icons-material/VisibilityOff";
 import { useEffect, useRef, useState } from "react";
 import { StyledTab, StyledTabs } from "components/shared/StyledTabs";
 import { getRollTitle } from "functions/rollText";
@@ -421,6 +424,19 @@ function Composer(props: { chat: PrototypeChat }) {
         <IconButton size={"small"} onClick={attach.openPicker} aria-label={"Attach images"}>
           <ImageIcon fontSize={"small"} />
         </IconButton>
+        {chat.viewAsGM && (
+          <Tooltip title={chat.hideGMRolls ? "Your rolls are hidden from players" : "Players see your rolls"}>
+            <IconButton
+              size={"small"}
+              onClick={() => chat.setHideGMRolls(!chat.hideGMRolls)}
+              aria-label={chat.hideGMRolls ? "Show my rolls to players" : "Hide my rolls from players"}
+              aria-pressed={chat.hideGMRolls}
+              color={chat.hideGMRolls ? "warning" : "default"}
+            >
+              {chat.hideGMRolls ? <HiddenIcon fontSize={"small"} /> : <VisibleIcon fontSize={"small"} />}
+            </IconButton>
+          </Tooltip>
+        )}
         <Typography variant={"caption"} color={"text.secondary"} sx={{ pr: 0.5 }}>
           Roll:
         </Typography>
