@@ -5,7 +5,11 @@ import type { Datasworn } from "@datasworn-community/core";
  * action roll option across every trigger condition, not just stats.
  * Condition meters roll their meter (Resupply rolls Supply), fixed values
  * roll as-is, and asset-backed options are shown but roll from the character
- * sheet, where the speaker's assets live.
+ * sheet, where the speaker's assets live. Chat never rolls asset options
+ * from here on purpose: the speaker's assets are not loaded in chat, and
+ * loading them would be new data work. Ticket #123 keeps the sheet roll,
+ * so the picker surfaces these options for display (chips plus the
+ * sheet-roll note) and excludes them from the rollable entries.
  */
 export type ChatMoveRollOption =
   | { kind: "stat"; key: string }

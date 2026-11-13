@@ -22,7 +22,7 @@ const state = {
   auth: { uid: "player-1", user: { displayName: "Sam" } },
   accessibilitySettings: { settings: { verboseRollResults: false } },
   appState: { openDialog: () => {} },
-  characters: { currentCharacter: {} },
+  characters: { currentCharacter: { assets: { assets: {} } } },
   rules: {
     rootMoveCollectionIds: ["adventure"],
     moveMaps: {
@@ -57,6 +57,25 @@ const state = {
                 ],
               },
             },
+            "move:test/spar": {
+              _id: "move:test/spar",
+              name: "Spar",
+              roll_type: "action_roll",
+              text: "When you spar, roll +integrity.",
+              trigger: {
+                conditions: [
+                  {
+                    roll_options: [
+                      {
+                        using: "asset_control",
+                        assets: null,
+                        control: "integrity",
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
           },
         },
       },
@@ -69,9 +88,11 @@ const state = {
       supply: { label: "Supply", shared: false, value: 5 },
     },
     oracleMaps: { oracleRollableMap: {} },
+    assetMaps: { assetMap: {} },
   },
   campaigns: {
     currentCampaign: {
+      assets: { assets: {} },
       characters: {
         characterMap: {
           kira: {
@@ -750,5 +771,62 @@ describe("ChatComposer", () => {
       }),
       gmsOnly: false,
     });
+  });
+
+  it("shows asset-backed moves with a sheet-roll note and no chat roll button", async () => {
+    // Ticket #123 keeps the sheet roll: the speaker's assets are not loaded
+    // in chat, so an asset-only move (Spar rolls +integrity) surfaces its
+    // option as a chip and points at the character sheet instead of offering
+    // a chat Roll button.
+    const view = render(ic);
+
+    const moveButton = Array.from(view.querySelectorAll("button")).find(
+      (candidate) => candidate.textContent === "Move"
+    );
+    if (!moveButton) {
+      throw new Error("no Move roll button");
+    }
+    act(() => {
+      moveButton.click();
+    });
+
+    const dialog = document.body;
+    const search = dialog.querySelector(
+      'input[placeholder="Search moves"]'
+    ) as HTMLInputElement | null;
+    if (!search) {
+      throw new Error("no move search box");
+    }
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value"
+    )?.set;
+    act(() => {
+      setter?.call(search, "spar");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const sparRow = Array.from(
+      dialog.querySelectorAll('[role="button"]')
+    ).find((candidate) => candidate.textContent?.includes("Spar")) as
+      | HTMLElement
+      | undefined;
+    if (!sparRow) {
+      throw new Error("no Spar move row");
+    }
+    act(() => {
+      sparRow.click();
+    });
+
+    // The asset option shows as a chip, with the sheet-roll note and no
+    // Roll button: chat never rolls asset options from here.
+    expect(dialog.textContent).toContain("integrity");
+    expect(dialog.textContent).toContain(
+      "This move rolls with an asset, so roll it from the character sheet."
+    );
+    const rollButtons = Array.from(dialog.querySelectorAll("button")).filter(
+      (candidate) => candidate.textContent?.startsWith("Roll +")
+    );
+    expect(rollButtons).toHaveLength(0);
   });
 });

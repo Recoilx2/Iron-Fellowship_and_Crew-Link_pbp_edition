@@ -43,10 +43,19 @@ homebrew_collections         one row per collection (+ stats, moves, oracles,
 
 Images live in the private `chat-images` storage bucket, one folder per
 campaign and post (`chat-images/<campaignId>/<postId>/<filename>`); posts
-carry their attachments as `image_paths` beside the text (ticket #28). The
-bucket rules today check campaign membership, so any campaign member can
-read a campaign's images; per-post scoping (private channels, direct
-messages, GM-only rolls) is still open in ticket #118.
+carry their attachments as `image_paths` beside the text (ticket #28). Reads
+go through the same checks as the posts they belong to (ticket #118,
+`private.can_read_chat_image` in `20261114000000_chat_image_access.sql`):
+channel members through the `private.can_read_channel` visibility check,
+GMs alone for GM-only roll posts. A file uploaded before its post exists
+(the composer attaches at once so sending is instant) reads only for its
+uploader. Only the uploader overwrites or deletes a file; the author of a
+post or a GM of its campaign may also remove the post's files when clearing
+the post. The bucket backstops what the composer accepts (PNG, JPEG, GIF
+and WebP through `allowed_mime_types`, and the `CHAT_IMAGE_MAX_MB`
+deployment setting through `file_size_limit`). Signed links stay
+short-lived on the client (minutes, re-signed when shown, see
+`src/api-calls/chat/chatImages.ts`).
 
 ## Type Links
 

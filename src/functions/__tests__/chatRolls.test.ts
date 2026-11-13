@@ -4,6 +4,7 @@ import {
   getChatRollSummary,
   parseMixedDiceNotation,
   rollChatCustomDice,
+  rollChatMove,
   rollChatStat,
   stripDataswornLinks,
   type ChatRollContext,
@@ -148,6 +149,34 @@ describe("chat stat rolls", () => {
       expect(roll.matchedNegativeMomentum).toBe(true);
       // Action 3 cancelled, so the total is 0: a miss against 4 and 5.
       expect(roll.result).toBe(ROLL_RESULT.MISS);
+    });
+  });
+});
+
+describe("chat move rolls", () => {
+  it("rolls a move through the shared action-roll scoring and names it", () => {
+    // Ticket #123: moves reuse the existing roller logic (scoreStatRoll,
+    // shared with the sheet). rollChatMove is the explicit move path: the
+    // same dice through rollChatStat score the same result, with the move
+    // name and id attached.
+    return rollChatMove(
+      "Supply",
+      {
+        modifier: 3,
+        move: { name: "Resupply", id: "move:test/resupply" },
+      },
+      context(),
+      fixedRoller([3, 8, 4])
+    ).then((roll) => {
+      expect(roll).toMatchObject({
+        type: ROLL_TYPE.STAT,
+        rollLabel: "Supply",
+        action: 4,
+        modifier: 3,
+        result: ROLL_RESULT.WEAK_HIT,
+        moveName: "Resupply",
+        moveId: "move:test/resupply",
+      });
     });
   });
 });

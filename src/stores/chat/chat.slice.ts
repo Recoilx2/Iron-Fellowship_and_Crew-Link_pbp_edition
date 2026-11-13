@@ -29,6 +29,10 @@ function stopPosts(): void {
   activePostsChannelId = undefined;
 }
 
+function postIds(posts: { id: string }[]): Set<string> {
+  return new Set(posts.map((post) => post.id));
+}
+
 type ChatSliceApi = CreateSliceType<ChatSlice>;
 type ChatSet = Parameters<ChatSliceApi>[0];
 type ChatGet = Parameters<ChatSliceApi>[1];
@@ -48,7 +52,7 @@ function startPosts(channelId: string, set: ChatSet, get: ChatGet): void {
         // snapshot only fills the feed, and paging back only adds older
         // posts, so only posts newer than everything already shown count.
         const previous = get().chat.postsByChannel[channelId] ?? [];
-        const previousIds = new Set(previous.map((post) => post.id));
+        const previousIds = postIds(previous);
         const newestPrevious = previous.reduce<string | null>(
           (newest, post) =>
             newest === null || post.createdAt > newest ? post.createdAt : newest,
@@ -63,7 +67,7 @@ function startPosts(channelId: string, set: ChatSet, get: ChatGet): void {
         // The live window holds the latest page only: posts the reader
         // paged back in stay in front of it, so a live re-emit never drops
         // older pages the one-off query fetched.
-        const liveIds = new Set(posts.map((post) => post.id));
+        const liveIds = postIds(posts);
         const merged =
           posts.length === 0
             ? []
@@ -244,7 +248,7 @@ export const createChatSlice: CreateSliceType<ChatSlice> = (set, get) => ({
       );
       pagedBackByChannel[channelId] = true;
       const current = get().chat.postsByChannel[channelId] ?? [];
-      const currentIds = new Set(current.map((post) => post.id));
+      const currentIds = postIds(current);
       const fresh = page.posts.filter((post) => !currentIds.has(post.id));
       set((store) => {
         store.chat.postsByChannel[channelId] = [...fresh, ...current];

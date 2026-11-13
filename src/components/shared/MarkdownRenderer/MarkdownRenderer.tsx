@@ -270,10 +270,38 @@ export function MarkdownRenderer(props: MarkdownRendererProps) {
           // Post text comes from other players, so only safe links render as
           // clickable anchors. Anything else (javascript:, data:,
           // vbscript:, ...) renders as plain text with no href to run.
+          // External links keep the app's long-standing same-tab behavior
+          // (react-markdown passes no target, and ticket #119 does not ask
+          // for a new tab); http(s) links always carry rel, set after any
+          // incoming props so no spread order can strip it.
           if (!isSafeLink(href)) {
             return <>{linkProps.children}</>;
           }
-          return <a {...linkProps} rel="noopener noreferrer" />;
+          const title =
+            typeof linkProps.node?.properties?.title === "string"
+              ? linkProps.node.properties.title
+              : undefined;
+          const target =
+            typeof (linkProps as { target?: unknown }).target === "string"
+              ? (linkProps as { target?: string }).target
+              : undefined;
+          if (target) {
+            return (
+              <a
+                href={trimmedHref}
+                title={title}
+                target={target}
+                rel="noopener noreferrer"
+              >
+                {linkProps.children}
+              </a>
+            );
+          }
+          return (
+            <a href={trimmedHref} title={title} rel="noopener noreferrer">
+              {linkProps.children}
+            </a>
+          );
         },
       }}
       urlTransform={(url) => (isSafeLink(url) ? url : "")}
