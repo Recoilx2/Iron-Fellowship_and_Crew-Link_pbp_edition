@@ -11,20 +11,25 @@ async function addSupabaseNote(
   order: number,
   shared?: boolean
 ): Promise<string> {
-  const { data, error } = await getSupabaseClient()
+  // The id is generated here so the insert needs no RETURNING clause: the
+  // notes SELECT policy re-queries its own table, which cannot see a
+  // just-inserted row in the same statement, so insert-then-select always
+  // fails RLS (#69). The plain INSERT policy compares ownership directly
+  // and accepts the row.
+  const id = crypto.randomUUID();
+  const { error } = await getSupabaseClient()
     .from(CHARACTER_NOTES_TABLE)
     .insert({
+      id,
       character_id: characterId,
       sort_order: order,
       title: "New Page",
       shared: shared ?? false,
-    })
-    .select("id")
-    .single();
-  if (error || !data) {
-    throw error ?? new Error("Failed to add note.");
+    });
+  if (error) {
+    throw error;
   }
-  return (data as { id: string }).id;
+  return id;
 }
 
 export const addNote = createApiFunction<
