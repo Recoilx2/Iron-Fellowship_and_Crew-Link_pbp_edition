@@ -5,7 +5,7 @@ import { useStore } from "stores/store";
 export function useListenToAuth() {
   const subscribe = useStore((store) => store.auth.subscribe);
   const uid = useStore((store) => store.auth.user?.uid);
-  const listenToUserDoc = useStore((store) => store.auth.subscribeToUser);
+  const subscribeToUser = useStore((store) => store.auth.subscribeToUser);
 
   useEffect(() => {
     const unsubscribe = subscribe();
@@ -19,10 +19,10 @@ export function useListenToAuth() {
     let unsubscribe: Unsubscribe;
 
     if (uid) {
-      unsubscribe = listenToUserDoc(uid);
+      unsubscribe = subscribeToUser(uid);
     }
     return () => {
       unsubscribe && unsubscribe();
     };
-  }, [uid, listenToUserDoc]);
+  }, [uid, subscribeToUser]);
 }

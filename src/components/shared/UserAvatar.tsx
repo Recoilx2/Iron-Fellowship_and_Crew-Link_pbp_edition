@@ -9,7 +9,7 @@ export interface UserAvatarProps {
 }
 
 export function UserAvatar(props: UserAvatarProps) {
-  const { uid, forceShowPhoto, forceName } = props;
+  const { uid, forceName } = props;
   const user = useStore((store) => store.users.userMap[uid]?.doc);
   const loadUser = useStore((store) => store.users.loadUserDocument);
   useEffect(() => {
@@ -25,16 +25,9 @@ export function UserAvatar(props: UserAvatarProps) {
     );
   }
 
-  let shouldShowPhoto = false;
-  if (forceShowPhoto !== undefined) {
-    shouldShowPhoto = forceShowPhoto;
-  } else {
-    shouldShowPhoto = !user.hidePhoto;
-  }
-
+  // Magic-link sign-in carries no profile photo, so avatars are initials.
   return (
     <Avatar
-      src={shouldShowPhoto && user.photoURL ? user.photoURL : undefined}
       sx={(theme) => ({
         bgcolor: theme.palette.darkGrey.dark,
         color: theme.palette.darkGrey.contrastText,

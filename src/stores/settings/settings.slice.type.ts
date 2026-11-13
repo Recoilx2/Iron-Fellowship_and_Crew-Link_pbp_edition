@@ -1,18 +1,10 @@
 import { Unsubscribe } from "api-calls/helpers.type";
 import { CustomTrack } from "types/CustomTrackSettings.type";
-import { StoredMove } from "types/Moves.type";
-import { StoredOracle } from "api-calls/user/custom-oracles/_custom-oracles.type";
 import { SettingsDocument } from "api-calls/character-campaign-settings/_character-campaign-settings.type";
 
 export interface SettingsSliceData {
   customStats: string[];
   customTracks: CustomTrack[];
-  customMoves: {
-    [uid: string]: StoredMove[];
-  };
-  customOracles: {
-    [uid: string]: StoredOracle[];
-  };
 
   hiddenCustomMoveIds: string[];
   hiddenCustomOracleIds: string[];
@@ -37,14 +29,6 @@ export interface SettingsSliceActions {
     oracleId: string,
     hidden: boolean
   ) => Promise<void>;
-
-  addCustomMove: (move: StoredMove) => Promise<void>;
-  updateCustomMove: (moveId: string, move: StoredMove) => Promise<void>;
-  removeCustomMove: (moveId: string) => Promise<void>;
-
-  addCustomOracle: (oracle: StoredOracle) => Promise<void>;
-  updateCustomOracle: (oracleId: string, oracle: StoredOracle) => Promise<void>;
-  removeCustomOracle: (oracleId: string) => Promise<void>;
 
   togglePinnedOracle: (oracleId: string, pinned: boolean) => Promise<void>;
 

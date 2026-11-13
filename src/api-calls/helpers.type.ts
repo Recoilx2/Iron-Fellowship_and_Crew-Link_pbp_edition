@@ -2,8 +2,8 @@ export type Nullable<T> = T | null;
 
 /**
  * Plain unsubscribe function returned by every data-layer listener.
- * Replaces the Firebase `Unsubscribe` type outside the data layer — both are
- * `() => void`, so existing listeners fit without behaviour changes.
+ * The data layer converts at its edge; stores and components use this
+ * app-owned type and never see backend listener types.
  */
 export type Unsubscribe = () => void;
 

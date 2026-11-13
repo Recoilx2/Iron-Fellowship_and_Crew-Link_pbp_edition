@@ -13,6 +13,16 @@ const profilesFile = () => {
   return files[0];
 };
 
+// Follow-up migrations keep the base file's name; read the whole chain so
+// the asserted rules are the ones a fresh database ends up with.
+const profilesChain = () => {
+  const files = readdirSync(dir)
+    .filter((f) => /profiles.*\.sql$/.test(f))
+    .sort();
+  assert.ok(files.length > 0, "no profiles migrations");
+  return files.map((f) => readFileSync(join(dir, f), "utf8")).join("\n");
+};
+
 describe("profiles migration", () => {
   it("follows the <UTC timestamp>_<short-name>.sql convention", () => {
     assert.match(profilesFile(), /^\d{14}_profiles\.sql$/);
@@ -27,13 +37,21 @@ describe("profiles migration", () => {
     assert.ok(/display_name/i.test(text), "no display name column");
   });
 
-  it("protects rows with owner-only access rules", () => {
-    const text = readFileSync(join(dir, profilesFile()), "utf8");
+  it("lets every signed-in person read display names but only owners write", () => {
+    const text = profilesChain();
     assert.ok(
       /ENABLE ROW LEVEL SECURITY/i.test(text),
       "row-level security not enabled"
     );
-    for (const op of ["SELECT", "INSERT", "UPDATE"]) {
+    // Names are shown to other players (rosters, avatars, game log), so
+    // reads are open to every signed-in person; writes stay owner-only.
+    assert.ok(
+      /FOR SELECT[\s\S]*?TO authenticated[\s\S]*?USING\s*\(\s*true\s*\)/i.test(
+        text
+      ),
+      "SELECT is not open to every signed-in person"
+    );
+    for (const op of ["INSERT", "UPDATE"]) {
       assert.ok(
         new RegExp(`FOR ${op}\\b[\\s\\S]*?auth\\.uid\\(\\)\\s*=\\s*id`, "i").test(text),
         `${op} is not restricted to the row owner`
