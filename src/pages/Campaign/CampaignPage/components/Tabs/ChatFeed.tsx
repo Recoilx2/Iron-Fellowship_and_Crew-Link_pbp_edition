@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
+  Avatar,
   Box,
   Button,
   Chip,
@@ -16,6 +17,7 @@ import { MarkdownRenderer } from "components/shared/MarkdownRenderer";
 import { PortraitAvatar } from "components/features/characters/PortraitAvatar/PortraitAvatar";
 import { UserAvatar } from "components/shared/UserAvatar";
 import type { CharacterDocument } from "api-calls/character/_character.type";
+import type { NPCDocumentWithGMProperties } from "stores/world/currentWorld/npcs/npcs.slice.type";
 
 const EMPTY_POSTS: PostWithId[] = [];
 const NEAR_TOP_PX = 48;
@@ -33,7 +35,8 @@ function timeLabel(iso: string): string {
  * The channel's flat feed (spec #9, prototype variant D): avatar, name
  * line, time, formatted text. In IC channels the name line leads with the
  * character, then the player; in OOC channels it leads with the player's
- * display name, then their character. GMs carry a GM tag. Older posts page
+ * display name, then their character. A GM's NPC voice leads with the NPC's
+ * name and portrait in any channel. GMs carry a GM tag. Older posts page
  * in from the top; new posts arrive live at the bottom.
  */
 export function ChatFeed(props: { channel: ChannelWithId }) {
@@ -56,6 +59,9 @@ export function ChatFeed(props: { channel: ChannelWithId }) {
   );
   const uid = useStore((store) => store.auth.uid);
   const userMap = useStore((store) => store.users.userMap);
+  const npcMap = useStore(
+    (store) => store.worlds.currentWorld.currentWorldNPCs.npcMap ?? {}
+  );
   const loadUserDocuments = useStore(
     (store) => store.users.loadUserDocuments
   );
@@ -145,6 +151,7 @@ export function ChatFeed(props: { channel: ChannelWithId }) {
           channel={channel}
           uid={uid}
           characterMap={characterMap}
+          npcMap={npcMap}
           gmIds={gmIds}
           userMap={userMap}
         />
@@ -168,14 +175,17 @@ function ChatPost(props: {
   channel: ChannelWithId;
   uid?: string;
   characterMap: Record<string, CharacterDocument>;
+  npcMap: Record<string, NPCDocumentWithGMProperties>;
   gmIds: string[];
   userMap: Record<string, { doc?: { displayName: string } } | undefined>;
 }) {
-  const { post, channel, uid, characterMap, gmIds, userMap } = props;
+  const { post, channel, uid, characterMap, npcMap, gmIds, userMap } = props;
   const character =
     post.speakerCharacterId != null
       ? characterMap[post.speakerCharacterId]
       : undefined;
+  const npc =
+    post.speakerNpcId != null ? npcMap[post.speakerNpcId] : undefined;
   const authorName =
     userMap[post.authorId]?.doc?.displayName ?? "Someone";
   const isGM = gmIds.includes(post.authorId);
@@ -228,12 +238,13 @@ function ChatPost(props: {
       });
   };
 
-  // IC leads with the character, then the player; OOC leads with the
+  // An NPC voice leads with the NPC, then the GM behind it; otherwise IC
+  // leads with the character, then the player, and OOC leads with the
   // player's display name, then their character beside it.
-  const title =
-    channel.kind === "IC" ? (character?.name ?? authorName) : authorName;
-  const subtitle =
-    channel.kind === "IC"
+  const title = npc?.name ?? (channel.kind === "IC" ? (character?.name ?? authorName) : authorName);
+  const subtitle = npc
+    ? authorName
+    : channel.kind === "IC"
       ? character
         ? authorName
         : undefined
@@ -261,6 +272,10 @@ function ChatPost(props: {
           }
           size={"small"}
         />
+      ) : npc ? (
+        <Avatar src={npc.imageUrl} alt={npc.name}>
+          {!npc.imageUrl && npc.name ? npc.name.charAt(0) : undefined}
+        </Avatar>
       ) : (
         <UserAvatar uid={post.authorId} forceName={authorName} />
       )}

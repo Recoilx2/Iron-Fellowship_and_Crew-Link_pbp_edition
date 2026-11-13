@@ -15,7 +15,17 @@ const state = {
           kira: { uid: "player-1", name: "Kira Vey" },
         },
       },
-      currentCampaign: { gmIds: [] as string[] },
+      currentCampaign: {
+        gmIds: [] as string[],
+        worldId: undefined as string | undefined,
+      },
+    },
+  },
+  worlds: {
+    currentWorld: {
+      currentWorldNPCs: {
+        npcMap: {} as Record<string, { name: string }>,
+      },
     },
   },
   chat: {
@@ -63,7 +73,8 @@ const ooc = {
 
 // Seam under test: the composer artists see. The channel kind picks the
 // speaker (players have no picker), and the text box keeps its unsent
-// draft per channel for the session. Posting itself is covered by the
+// draft per channel for the session. GMs alone get a simple picker over
+// the campaign world's NPC list. Posting itself is covered by the
 // data-layer live tests and the browser test; here the composer is a stub
 // around a mocked post call.
 describe("ChatComposer", () => {
@@ -75,6 +86,10 @@ describe("ChatComposer", () => {
     container?.remove();
     root = undefined;
     container = undefined;
+    state.auth.uid = "player-1";
+    state.campaigns.currentCampaign.currentCampaign.gmIds = [];
+    state.campaigns.currentCampaign.currentCampaign.worldId = undefined;
+    state.worlds.currentWorld.currentWorldNPCs.npcMap = {};
     state.chat.drafts = {};
     vi.clearAllMocks();
   });
@@ -167,7 +182,133 @@ describe("ChatComposer", () => {
       channelId: "ic",
       text: "we push on",
       speakerCharacterId: "kira",
+      speakerNpcId: null,
     });
     expect(state.chat.drafts["ic"]).toBeUndefined();
+  });
+
+  function becomeGMWithNPCs() {
+    state.auth.uid = "gm-1";
+    state.campaigns.currentCampaign.currentCampaign.gmIds = ["gm-1"];
+    state.campaigns.currentCampaign.currentCampaign.worldId = "world-1";
+    state.worlds.currentWorld.currentWorldNPCs.npcMap = {
+      elder: { name: "Elder Moss" },
+      drifter: { name: "Drifter" },
+    };
+  }
+
+  function voicePicker(view: HTMLDivElement): HTMLSelectElement {
+    const picker = view.querySelector('select[aria-label="Posting as"]');
+    if (!picker) {
+      throw new Error("no voice picker");
+    }
+    return picker as HTMLSelectElement;
+  }
+
+  function pickVoice(picker: HTMLSelectElement, value: string) {
+    act(() => {
+      picker.value = value;
+      picker.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+
+  it("offers GMs a voice picker over the campaign world's NPC list", async () => {
+    becomeGMWithNPCs();
+    createPost.mockResolvedValue("post-1");
+    const view = render(ic);
+
+    const picker = voicePicker(view);
+    expect(Array.from(picker.options).map((option) => option.text)).toEqual([
+      "Yourself",
+      "Drifter",
+      "Elder Moss",
+    ]);
+
+    pickVoice(picker, "elder");
+    expect(view.textContent).toContain("Elder Moss");
+
+    typeText(textBox(view), "the bog remembers");
+    render(ic);
+    const send = view.querySelector(
+      'button[aria-label="Send"]'
+    ) as HTMLButtonElement | null;
+    if (!send) {
+      throw new Error("no send button");
+    }
+    await act(async () => {
+      send.click();
+    });
+
+    expect(createPost).toHaveBeenCalledWith({
+      channelId: "ic",
+      text: "the bog remembers",
+      speakerCharacterId: null,
+      speakerNpcId: "elder",
+    });
+  });
+
+  it("posts as self when the GM keeps the yourself voice", async () => {
+    becomeGMWithNPCs();
+    createPost.mockResolvedValue("post-1");
+    const view = render(ic);
+    expect(view.textContent).toContain("Posting as");
+
+    typeText(textBox(view), "a wonder");
+    render(ic);
+    const send = view.querySelector(
+      'button[aria-label="Send"]'
+    ) as HTMLButtonElement | null;
+    if (!send) {
+      throw new Error("no send button");
+    }
+    await act(async () => {
+      send.click();
+    });
+
+    expect(createPost).toHaveBeenCalledWith({
+      channelId: "ic",
+      text: "a wonder",
+      speakerCharacterId: null,
+      speakerNpcId: null,
+    });
+  });
+
+  it("shows players no voice picker, even with a world of NPCs", () => {
+    state.campaigns.currentCampaign.currentCampaign.worldId = "world-1";
+    state.worlds.currentWorld.currentWorldNPCs.npcMap = {
+      elder: { name: "Elder Moss" },
+    };
+    const view = render(ic);
+    expect(view.textContent).toContain("Kira Vey");
+    expect(
+      view.querySelector('select[aria-label="Posting as"]')
+    ).toBeNull();
+  });
+
+  it("shows GMs no voice picker without a world or without NPCs", () => {
+    state.auth.uid = "gm-1";
+    state.campaigns.currentCampaign.currentCampaign.gmIds = ["gm-1"];
+
+    // No world on the campaign: no NPC list to pick from.
+    expect(
+      render(ic).querySelector('select[aria-label="Posting as"]')
+    ).toBeNull();
+
+    // A world with no NPCs: nothing to voice.
+    state.campaigns.currentCampaign.currentCampaign.worldId = "world-1";
+    expect(
+      render(ic).querySelector('select[aria-label="Posting as"]')
+    ).toBeNull();
+  });
+
+  it("resets the GM voice when the channel switches", () => {
+    becomeGMWithNPCs();
+    const view = render(ic);
+    pickVoice(voicePicker(view), "elder");
+    expect(view.textContent).toContain("Posting as Elder Moss");
+
+    render(ooc);
+    expect(voicePicker(view).value).toBe("");
+    expect(view.textContent).toContain("Posting as Sam");
   });
 });

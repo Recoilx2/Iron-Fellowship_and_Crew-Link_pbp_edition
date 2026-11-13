@@ -18,6 +18,7 @@ function row(overrides: Partial<PostRow> = {}): PostRow {
     channel_id: "channel-1",
     author_id: "player-1",
     speaker_character_id: "character-1",
+    speaker_npc_id: null,
     text: "We push on through the bog.",
     created_at: "2026-11-13T12:00:00.000Z",
     updated_at: "2026-11-13T12:00:00.000Z",
@@ -43,6 +44,7 @@ describe("chat post mapping", () => {
       channelId: "channel-1",
       authorId: "player-1",
       speakerCharacterId: "character-1",
+      speakerNpcId: null,
       text: "We push on through the bog.",
       createdAt: "2026-11-13T12:00:00.000Z",
       editedAt: null,
@@ -52,7 +54,13 @@ describe("chat post mapping", () => {
     // player's display name (and a GM tag for GMs) instead.
     expect(
       postRowToDocument(row({ speaker_character_id: null }))
-    ).toMatchObject({ speakerCharacterId: null });
+    ).toMatchObject({ speakerCharacterId: null, speakerNpcId: null });
+    // A GM's NPC voice names the NPC, never a character: one voice per post.
+    expect(
+      postRowToDocument(
+        row({ speaker_character_id: null, speaker_npc_id: "npc-1" })
+      )
+    ).toMatchObject({ speakerCharacterId: null, speakerNpcId: "npc-1" });
   });
 
   it("carries the edit and soft-delete markers the feed shows", () => {

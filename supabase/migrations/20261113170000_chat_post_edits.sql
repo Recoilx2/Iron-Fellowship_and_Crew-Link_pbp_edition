@@ -100,6 +100,7 @@ BEGIN
     OR NEW.channel_id IS DISTINCT FROM OLD.channel_id
     OR NEW.author_id IS DISTINCT FROM OLD.author_id
     OR NEW.speaker_character_id IS DISTINCT FROM OLD.speaker_character_id
+    OR NEW.speaker_npc_id IS DISTINCT FROM OLD.speaker_npc_id
     OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
     RAISE EXCEPTION 'only a post''s text and delete marker may change';
   END IF;
