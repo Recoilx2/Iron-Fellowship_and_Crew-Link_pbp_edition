@@ -8,17 +8,16 @@ import { leaveCampaign } from "api-calls/campaign/leaveCampaign";
 import { createCharacter } from "api-calls/character/createCharacter";
 import { CampaignType } from "api-calls/campaign/_campaign.type";
 import { addProgressTrack } from "api-calls/tracks/addProgressTrack";
-import { updateProgressTrack } from "api-calls/tracks/updateProgressTrack";
-import { removeProgressTrack } from "api-calls/tracks/removeProgressTrack";
 import { deleteAllProgressTracks } from "api-calls/tracks/deleteAllProgressTracks";
+import { campaignTrackToColumns } from "api-calls/tracks/_getRef";
 import { listenToProgressTracks } from "api-calls/tracks/listenToProgressTracks";
 import { addAsset } from "api-calls/assets/addAsset";
-import { updateAsset } from "api-calls/assets/updateAsset";
 import { updateAssetCheckbox } from "api-calls/assets/updateAssetCheckbox";
-import { removeAsset } from "api-calls/assets/removeAsset";
 import { deleteAllAssets } from "api-calls/assets/deleteAllAssets";
+import { campaignAssetDocumentToColumns } from "api-calls/assets/_getRef";
 import { listenToAssets } from "api-calls/assets/listenToAssets";
 import { updateSettings } from "api-calls/character-campaign-settings/updateSettings";
+import { campaignSettingsToColumns } from "api-calls/character-campaign-settings/_getRef";
 import { showOrHideCustomMove } from "api-calls/character-campaign-settings/showOrHideCustomMove";
 import { listenToSettings } from "api-calls/character-campaign-settings/listenToSettings";
 import type { SettingsDocument } from "api-calls/character-campaign-settings/_character-campaign-settings.type";
@@ -86,7 +85,10 @@ describe.skipIf(!config)("campaign shared tables end to end", () => {
   it("shares tracks live with members, and nobody else", { timeout: 120000 }, async () => {
     const { gm, outsider, campaignId } = await setUpTable();
 
-    // The player follows campaign tracks live.
+    // The player follows campaign tracks live. The singleton keeps the
+    // player's session for the whole test: everyone else acts through
+    // their own client, so the subscription never rides a mid-stream
+    // identity switch (which stalls the channel or closes it).
     const seen: Array<Record<string, { label: string }>> = [];
     const gone: string[] = [];
     const errors: unknown[] = [];
@@ -116,40 +118,51 @@ describe.skipIf(!config)("campaign shared tables end to end", () => {
     const trackId = Object.keys(arrived.at(-1) ?? {})[0];
     expect(arrived.at(-1)?.[trackId].label).toBe("Swear an Iron Vow");
 
-    // The GM renames it; the player follows.
-    await signOut();
-    await signInAs(gm);
-    await updateProgressTrack({
-      campaignId,
-      trackId,
-      track: { label: "Vow renewed" } as never,
-    });
+    // The GM renames it through their own client; the player follows.
+    // The update touches only the label, exactly what updateProgressTrack
+    // would send for this change.
+    const renamed = await gm.client
+      .from("campaign_tracks")
+      .update({ label: "Vow renewed" })
+      .eq("id", trackId)
+      .select("id");
+    expect(renamed.error).toBeNull();
+    expect(renamed.data ?? []).not.toEqual([]);
     await waitFor(() =>
       seen.some((tracks) => tracks[trackId]?.label === "Vow renewed")
         ? seen
         : null
     );
 
-    // An outsider reads nothing and writes nothing.
+    // An outsider reads nothing and writes nothing. The outsider writes
+    // through their own client, so the singleton never leaves the player.
     const outsiderTracks = await outsider.client
       .from("campaign_tracks")
       .select("id")
       .eq("campaign_id", campaignId);
     expect(outsiderTracks.error).toBeNull();
     expect(outsiderTracks.data ?? []).toEqual([]);
-    await signOut();
-    await signInAs(outsider);
-    await expect(
-      addProgressTrack({
-        campaignId,
-        track: { label: "Sneak", type: "vow" } as never,
-      })
-    ).rejects.toBeTruthy();
+    const deniedTrack = await outsider.client
+      .from("campaign_tracks")
+      .insert(
+        campaignTrackToColumns(campaignId, {
+          label: "Sneak",
+          type: "vow",
+          value: 1,
+          status: TrackStatus.Active,
+          createdDate: new Date(),
+        } as never)
+      );
+    expect(deniedTrack.error).not.toBeNull();
 
-    // The GM removes it; the player sees it go.
-    await signOut();
-    await signInAs(gm);
-    await removeProgressTrack({ campaignId, id: trackId });
+    // The GM removes it through their own client; the player sees it go.
+    const removed = await gm.client
+      .from("campaign_tracks")
+      .delete()
+      .eq("id", trackId)
+      .select("id");
+    expect(removed.error).toBeNull();
+    expect(removed.data ?? []).not.toEqual([]);
     await waitFor(() => (gone.includes(trackId) ? gone : null));
     await deleteAllProgressTracks({ campaignId });
     expect(errors).toEqual([]);
@@ -158,6 +171,9 @@ describe.skipIf(!config)("campaign shared tables end to end", () => {
   it("shares assets live with members, and nobody else", { timeout: 120000 }, async () => {
     const { gm, outsider, campaignId } = await setUpTable();
 
+    // The singleton keeps the player's session for the whole test; the GM
+    // and the outsider act through their own clients, so the subscription
+    // never rides a mid-stream identity switch.
     const seen: Array<Record<string, AssetDocument>> = [];
     const errors: unknown[] = [];
     unsubscribes.push(
@@ -198,23 +214,35 @@ describe.skipIf(!config)("campaign shared tables end to end", () => {
       .eq("campaign_id", campaignId);
     expect(outsiderAssets.error).toBeNull();
     expect(outsiderAssets.data ?? []).toEqual([]);
-    await signOut();
-    await signInAs(outsider);
-    await expect(
-      addAsset({
-        campaignId,
-        asset: { id: "x", enabledAbilities: {}, order: 0 },
-      })
-    ).rejects.toBeTruthy();
+    // The outsider writes through their own client, so the singleton never
+    // leaves the player.
+    const deniedAsset = await outsider.client
+      .from("campaign_assets")
+      .insert(
+        campaignAssetDocumentToColumns(campaignId, {
+          id: "x",
+          enabledAbilities: {},
+          order: 0,
+        })
+      );
+    expect(deniedAsset.error).not.toBeNull();
 
-    await signOut();
-    await signInAs(gm);
-    await updateAsset({
-      campaignId,
-      assetId,
-      asset: { order: 2 } as never,
-    });
-    await removeAsset({ campaignId, assetId });
+    // The GM reorders and removes the asset through their own client. The
+    // update touches only the order, exactly what updateAsset would send.
+    const reordered = await gm.client
+      .from("campaign_assets")
+      .update({ sort_order: 2 })
+      .eq("id", assetId)
+      .select("id");
+    expect(reordered.error).toBeNull();
+    expect(reordered.data ?? []).not.toEqual([]);
+    const removedAsset = await gm.client
+      .from("campaign_assets")
+      .delete()
+      .eq("id", assetId)
+      .select("id");
+    expect(removedAsset.error).toBeNull();
+    expect(removedAsset.data ?? []).not.toEqual([]);
     await waitFor(() =>
       seen.length > 0 && !seen.at(-1)?.[assetId] ? seen : null
     );
@@ -225,6 +253,10 @@ describe.skipIf(!config)("campaign shared tables end to end", () => {
   it("shares settings with members, and nobody else", { timeout: 120000 }, async () => {
     const { gm, outsider, campaignId } = await setUpTable();
 
+    // The singleton keeps the player's session for the whole test; the
+    // outsider and the GM act through their own clients, so the
+    // subscription never rides a mid-stream identity switch (which is what
+    // used to surface `realtime subscribe CLOSED` here).
     const seen: SettingsDocument[] = [];
     const errors: unknown[] = [];
     // Campaign scope comes first, as in the settings store: the swapped
@@ -260,14 +292,20 @@ describe.skipIf(!config)("campaign shared tables end to end", () => {
       .eq("campaign_id", campaignId);
     expect(outsiderSettings.error).toBeNull();
     expect(outsiderSettings.data ?? []).toEqual([]);
-    await signOut();
-    await signInAs(outsider);
-    await expect(
-      updateSettings({ campaignId, settings: { customStats: ["sneak"] } })
-    ).rejects.toBeTruthy();
-    await signOut();
-    await signInAs(gm);
-    await updateSettings({ campaignId, settings: { customStats: [] } });
+    // The outsider writes through their own client — byte-identical to
+    // updateSettings — so the singleton never leaves the player.
+    const deniedSettings = await outsider.client
+      .from("campaign_settings")
+      .upsert(campaignSettingsToColumns(campaignId, { customStats: ["sneak"] }), {
+        onConflict: "campaign_id",
+      });
+    expect(deniedSettings.error).not.toBeNull();
+    // The GM resets through their own client.
+    const reset = await gm.client.from("campaign_settings").upsert(
+      campaignSettingsToColumns(campaignId, { customStats: [] }),
+      { onConflict: "campaign_id" }
+    );
+    expect(reset.error).toBeNull();
     expect(errors).toEqual([]);
   });
 

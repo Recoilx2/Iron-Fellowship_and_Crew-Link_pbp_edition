@@ -64,7 +64,7 @@ describe.skipIf(!config)("campaign notes end to end", () => {
     const campaignId = await createCampaign({
       uid: gm.userId,
       campaignName: "Shared notes",
-      campaignType: CampaignType.Guided,
+      campaignType: CampaignType.Coop,
     });
     await signOut();
     await signInAs(player);
@@ -175,7 +175,7 @@ describe.skipIf(!config)("campaign notes end to end", () => {
     ]) {
       const read = await outsider.client
         .from(table)
-        .select("id")
+        .select(table === "campaign_note_contents" ? "note_id" : "id")
         .eq(column, table === "campaign_notes" ? campaignId : noteId);
       expect(read.error).toBeNull();
       expect(read.data ?? []).toEqual([]);
