@@ -592,6 +592,7 @@ export function ChatComposer(props: {
       <ChatRollPicker
         kind={picker}
         stats={myCharacter?.stats ?? {}}
+        conditionMeters={myCharacter?.conditionMeters ?? {}}
         characterName={myCharacter?.name ?? null}
         context={context}
         roller={roller}

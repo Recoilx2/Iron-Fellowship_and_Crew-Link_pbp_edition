@@ -4,24 +4,88 @@ import type { Mock } from "vitest";
 import { act } from "react";
 import { createRoot, Root } from "react-dom/client";
 import { ThemeProvider, createTheme } from "@mui/material";
+import { ROLL_TYPE } from "types/DieRolls.type";
 
 const createPost = vi.fn();
 const uploadChatImage = vi.fn();
 const removeChatImage: Mock = vi.fn(() => Promise.resolve());
 
+// Fixed dice for the composer's rolls: challenge 3 and 8, action 4.
+vi.mock("stores/appState/rollers/rollDice", () => ({
+  rollDice: () => Promise.resolve([3, 8, 4]),
+}));
+vi.mock("stores/appState/rollers/rollDie", () => ({
+  rollDie: () => Promise.resolve(12),
+}));
+
 const state = {
   auth: { uid: "player-1", user: { displayName: "Sam" } },
   accessibilitySettings: { settings: { verboseRollResults: false } },
+  appState: { openDialog: () => {} },
+  characters: { currentCharacter: {} },
+  rules: {
+    rootMoveCollectionIds: ["adventure"],
+    moveMaps: {
+      moveCategoryMap: {
+        adventure: {
+          _id: "adventure",
+          name: "Adventure",
+          contents: {
+            "move:test/face_danger": {
+              _id: "move:test/face_danger",
+              name: "Face Danger",
+              roll_type: "action_roll",
+              text: "When you attempt something risky, roll +Edge.",
+              trigger: {
+                conditions: [
+                  { roll_options: [{ using: "stat", stat: "edge" }] },
+                ],
+              },
+            },
+            "move:test/resupply": {
+              _id: "move:test/resupply",
+              name: "Resupply",
+              roll_type: "action_roll",
+              text: "When you resupply, roll +Supply.",
+              trigger: {
+                conditions: [
+                  {
+                    roll_options: [
+                      { using: "condition_meter", condition_meter: "supply" },
+                    ],
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+    stats: {
+      edge: { label: "Edge" },
+      wits: { label: "Wits" },
+    },
+    conditionMeters: {
+      supply: { label: "Supply", shared: false, value: 5 },
+    },
+    oracleMaps: { oracleRollableMap: {} },
+  },
   campaigns: {
     currentCampaign: {
       characters: {
         characterMap: {
-          kira: { uid: "player-1", name: "Kira Vey" },
+          kira: {
+            uid: "player-1",
+            name: "Kira Vey",
+            stats: { edge: 2, wits: 1 },
+            conditionMeters: { supply: 3 },
+          },
         },
       },
       currentCampaign: {
         gmIds: [] as string[],
         worldId: undefined as string | undefined,
+        conditionMeters: {},
       },
     },
   },
@@ -66,7 +130,16 @@ vi.mock("api-calls/chat/chatImages", () => ({
 import { ChatComposer } from "../ChatComposer";
 import type { ChannelWithId } from "api-calls/chat/listenToCampaignChannels";
 
-const theme = createTheme();
+const grey = {
+  light: "#666",
+  main: "#444",
+  dark: "#222",
+  contrastText: "#fff",
+};
+const theme = createTheme({
+  palette: { darkGrey: grey },
+  fontFamilyTitle: "serif",
+});
 
 (
   globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -586,5 +659,96 @@ describe("ChatComposer", () => {
     if (!toggle) {
       throw new Error("no GM eye toggle");
     }
+  });
+
+  it("rolls a condition-meter move from the composer into the current channel as the current speaker", async () => {
+    createPost.mockResolvedValue("post-1");
+    const view = render(ic);
+
+    const moveButton = Array.from(view.querySelectorAll("button")).find(
+      (candidate) => candidate.textContent === "Move"
+    );
+    if (!moveButton) {
+      throw new Error("no Move roll button");
+    }
+    act(() => {
+      moveButton.click();
+    });
+
+    // The picker offers every action-roll move, not just stat moves:
+    // Resupply rolls Supply, and used to be dropped. Searching opens the
+    // collapsed category, the way a player finds a move.
+    const dialog = document.body;
+    const search = dialog.querySelector(
+      'input[placeholder="Search moves"]'
+    ) as HTMLInputElement | null;
+    if (!search) {
+      throw new Error("no move search box");
+    }
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value"
+    )?.set;
+    act(() => {
+      setter?.call(search, "e");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(dialog.textContent).toContain("Face Danger");
+    expect(dialog.textContent).toContain("Resupply");
+
+    const resupplyRow = Array.from(
+      dialog.querySelectorAll('[role="button"]')
+    ).find((candidate) => candidate.textContent?.includes("Resupply")) as
+      | HTMLElement
+      | undefined;
+    if (!resupplyRow) {
+      throw new Error("no Resupply move row");
+    }
+    act(() => {
+      resupplyRow.click();
+    });
+
+    // The move shows the app's move display, with the speaker's Supply card.
+    expect(dialog.textContent).toContain("When you resupply, roll +Supply.");
+    const rollButton = Array.from(dialog.querySelectorAll("button")).find(
+      (candidate) => candidate.textContent === "Roll +Supply (3)"
+    );
+    if (!rollButton) {
+      throw new Error("no Supply roll button");
+    }
+    await act(async () => {
+      rollButton.click();
+    });
+
+    // The roll attaches to the draft; sending posts it to IC as Kira.
+    typeText(textBox(view), "sharing our last rations");
+    render(ic);
+    const send = view.querySelector(
+      'button[aria-label="Send"]'
+    ) as HTMLButtonElement | null;
+    if (!send) {
+      throw new Error("no send button");
+    }
+    await act(async () => {
+      send.click();
+    });
+
+    expect(createPost).toHaveBeenCalledWith({
+      channelId: "ic",
+      postId: undefined,
+      text: "sharing our last rations",
+      speakerCharacterId: "kira",
+      speakerNpcId: null,
+      imagePaths: [],
+      roll: expect.objectContaining({
+        type: ROLL_TYPE.STAT,
+        moveName: "Resupply",
+        moveId: "move:test/resupply",
+        characterId: "kira",
+        uid: "player-1",
+        gmsOnly: false,
+      }),
+      gmsOnly: false,
+    });
   });
 });

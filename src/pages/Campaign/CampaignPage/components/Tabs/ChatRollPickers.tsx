@@ -4,6 +4,7 @@ import {
   Button,
   ButtonBase,
   Card,
+  Chip,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -26,11 +27,16 @@ import type { Datasworn } from "@datasworn-community/core";
 import { useStore } from "stores/store";
 import { useSystemOracles } from "hooks/useSystemOracle";
 import { AskTheOracle } from "config/system.config";
-import { MarkdownRenderer } from "components/shared/MarkdownRenderer";
+import { MoveContent } from "components/features/datasworn/MoveContent";
 import { CollapsibleSectionHeader } from "components/features/charactersAndCampaigns/CollapsibleSectionHeader";
 import type { StatsMap } from "api-calls/character/_character.type";
 import type { Roll } from "types/DieRolls.type";
 import type { ChatRollContext, DiceRoller } from "functions/chatRolls";
+import {
+  getMoveRollOptions,
+  isActionRollMove,
+  type ChatMoveRollOption,
+} from "functions/chatMoveOptions";
 import {
   parseMixedDiceNotation,
   rollChatCustomDice,
@@ -53,6 +59,8 @@ export interface ChatRollPickerProps {
   kind: ChatRollKind | null;
   /** The speaking character's stats; empty when the speaker has none. */
   stats: StatsMap;
+  /** The speaking character's condition meters (Supply, Health...). */
+  conditionMeters: Record<string, number>;
   characterName: string | null;
   context: ChatRollContext;
   roller: DiceRoller;
@@ -258,39 +266,108 @@ function StatAndAdds(props: {
   );
 }
 
-function statsOfMove(move: Datasworn.Move): string[] {
-  if (move.roll_type !== "action_roll") {
-    return [];
-  }
-  const found = new Set<string>();
-  const conditions =
-    (move as { trigger?: { conditions?: unknown[] } }).trigger?.conditions ??
-    [];
-  for (const condition of conditions) {
-    const options =
-      (condition as { roll_options?: { using?: string; stat?: string }[] })
-        .roll_options ?? [];
-    for (const option of options) {
-      if (option.using === "stat" && option.stat) {
-        found.add(option.stat);
-      }
+function statLabelOf(
+  statRules: Record<string, unknown>,
+  key: string
+): string {
+  return (statRules[key] as { label?: string } | undefined)?.label ?? key;
+}
+
+function meterLabelOf(
+  conditionMeterRules: Record<string, unknown>,
+  key: string
+): string {
+  return (
+    (conditionMeterRules[key] as { label?: string } | undefined)?.label ?? key
+  );
+}
+
+/** Short labels for the move row: what this move can roll with. */
+function optionLabels(
+  options: ChatMoveRollOption[],
+  statRules: Record<string, unknown>,
+  conditionMeterRules: Record<string, unknown>
+): string[] {
+  return options.map((option) => {
+    switch (option.kind) {
+      case "stat":
+        return `+${statLabelOf(statRules, option.key)}`;
+      case "condition_meter":
+        return `+${meterLabelOf(conditionMeterRules, option.key)}`;
+      case "custom":
+        return `+${option.label}`;
+      case "asset":
+        return option.label;
     }
-  }
-  return [...found];
+  });
 }
 
 function ChatMovePicker(
   props: ChatRollPickerProps & { done: (roll: Roll) => void }
 ) {
-  const { stats, context, roller, onClose, done } = props;
+  const { stats, conditionMeters, context, roller, onClose, done } = props;
   const rootIds = useStore((store) => store.rules.rootMoveCollectionIds);
   const categoryMap = useStore((store) => store.rules.moveMaps.moveCategoryMap);
   const statRules = useStore((store) => store.rules.stats);
+  const conditionMeterRules = useStore((store) => store.rules.conditionMeters);
+  const campaignConditionMeters = useStore(
+    (store) =>
+      store.campaigns.currentCampaign.currentCampaign?.conditionMeters
+  );
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [move, setMove] = useState<Datasworn.Move | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+
+  // Shared meters live on the campaign, the rest on the speaker, falling back
+  // to the ruleset default -- the same order the sheet's rollers use.
+  const meterValue = (key: string): number => {
+    const rule = conditionMeterRules[key] as
+      | { shared?: boolean; value?: number }
+      | undefined;
+    if (rule?.shared) {
+      return (
+        campaignConditionMeters?.[key] ?? conditionMeters[key] ?? rule.value ?? 0
+      );
+    }
+    return conditionMeters[key] ?? rule?.value ?? 0;
+  };
+
+  const rollableEntries = (candidate: Datasworn.Move): StatEntry[] =>
+    getMoveRollOptions(candidate).flatMap((option) => {
+      switch (option.kind) {
+        case "stat":
+          return [
+            {
+              key: `stat:${option.key}`,
+              label: statLabelOf(statRules, option.key),
+              value: stats[option.key] ?? 0,
+            },
+          ];
+        case "condition_meter":
+          return [
+            {
+              key: `meter:${option.key}`,
+              label: meterLabelOf(conditionMeterRules, option.key),
+              value: meterValue(option.key),
+            },
+          ];
+        case "custom":
+          return [
+            { key: `custom:${option.key}`, label: option.label, value: option.value },
+          ];
+        case "asset":
+          // Asset-backed options roll from the character sheet, where the
+          // speaker's assets live; here they are shown, not rolled.
+          return [];
+      }
+    });
+
+  const assetOptions = (candidate: Datasworn.Move): string[] =>
+    getMoveRollOptions(candidate).flatMap((option) =>
+      option.kind === "asset" ? [option.label] : []
+    );
 
   const categories = useMemo(() => {
     const out: { id: string; name: string; moves: Datasworn.Move[] }[] = [];
@@ -302,7 +379,7 @@ function ChatMovePicker(
         continue;
       }
       const moves = Object.values(category.contents ?? {}).filter(
-        (candidate) => statsOfMove(candidate).length > 0
+        (candidate) => isActionRollMove(candidate)
       );
       if (moves.length > 0) {
         out.push({ id: category._id, name: category.name, moves });
@@ -312,12 +389,8 @@ function ChatMovePicker(
   }, [rootIds, categoryMap]);
 
   if (move) {
-    const allowed = statsOfMove(move);
-    const entries: StatEntry[] = allowed.map((key) => ({
-      key,
-      label: (statRules[key] as { label?: string } | undefined)?.label ?? key,
-      value: stats[key] ?? 0,
-    }));
+    const entries = rollableEntries(move);
+    const assets = assetOptions(move);
     return (
       <>
         <PickerTitle onClose={onClose} onBack={() => setMove(null)}>
@@ -325,35 +398,59 @@ function ChatMovePicker(
         </PickerTitle>
         <DialogContent sx={{ pt: "16px !important" }}>
           <Box sx={{ mb: 2, maxHeight: 220, overflowY: "auto", pr: 1 }}>
-            <MarkdownRenderer markdown={move.text} />
+            <MoveContent move={move} />
           </Box>
-          <StatAndAdds
-            entries={entries}
-            busy={busy}
-            onRoll={(entry, adds) => {
-              setBusy(true);
-              setError(undefined);
-              rollChatStat(
-                entry.label,
-                {
-                  modifier: entry.value,
-                  adds,
-                  move: { name: move.name, id: move._id },
-                },
-                context,
-                roller
-              )
-                .then(done)
-                .catch((rollError: unknown) =>
-                  setError(
-                    rollError instanceof Error
-                      ? rollError.message
-                      : "Could not roll."
-                  )
+          {assets.length > 0 && (
+            <Stack
+              direction={"row"}
+              spacing={1}
+              flexWrap={"wrap"}
+              useFlexGap
+              sx={{ mb: 2 }}
+            >
+              {assets.map((label) => (
+                <Chip
+                  key={label}
+                  label={label}
+                  sx={{ textTransform: "capitalize" }}
+                />
+              ))}
+            </Stack>
+          )}
+          {entries.length > 0 ? (
+            <StatAndAdds
+              entries={entries}
+              busy={busy}
+              onRoll={(entry, adds) => {
+                setBusy(true);
+                setError(undefined);
+                rollChatStat(
+                  entry.label,
+                  {
+                    modifier: entry.value,
+                    adds,
+                    move: { name: move.name, id: move._id },
+                  },
+                  context,
+                  roller
                 )
-                .finally(() => setBusy(false));
-            }}
-          />
+                  .then(done)
+                  .catch((rollError: unknown) =>
+                    setError(
+                      rollError instanceof Error
+                        ? rollError.message
+                        : "Could not roll."
+                    )
+                  )
+                  .finally(() => setBusy(false));
+              }}
+            />
+          ) : (
+            <Typography color={"text.secondary"} sx={{ textAlign: "center" }}>
+              This move rolls with an asset, so roll it from the character
+              sheet.
+            </Typography>
+          )}
           {error && (
             <Typography color={"error"} sx={{ textAlign: "center" }}>
               {error}
@@ -442,15 +539,11 @@ function ChatMovePicker(
                             variant={"caption"}
                             color={"text.secondary"}
                           >
-                            {statsOfMove(candidate)
-                              .map(
-                                (key) =>
-                                  `+${
-                                    (statRules[key] as { label?: string } | undefined)
-                                      ?.label ?? key
-                                  }`
-                              )
-                              .join(" ")}
+                            {optionLabels(
+                              getMoveRollOptions(candidate),
+                              statRules,
+                              conditionMeterRules
+                            ).join(" ")}
                           </Typography>
                           <OpenIcon fontSize={"small"} />
                         </Stack>
