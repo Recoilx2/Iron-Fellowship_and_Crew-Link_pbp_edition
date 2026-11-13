@@ -5,7 +5,7 @@ import { useStore } from "stores/store";
 import { NoteSource } from "stores/notes/notes.slice.type";
 import type { Note } from "types/Notes.type";
 import { Notes } from "components/features/charactersAndCampaigns/Notes/Notes";
-import { isMyNote } from "./myNotes";
+import { isMyNote } from "functions/myNotes";
 
 /**
  * My notes (spec #9, ticket #31): the player's own notes, private and

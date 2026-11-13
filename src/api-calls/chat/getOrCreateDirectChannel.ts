@@ -2,13 +2,14 @@ import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
 
 /**
- * Opens a member's direct message with another member: the existing channel
+ * Opens a member's direct channel with another member: the existing channel
  * when the pair already talks, a new one otherwise. Any campaign member may
  * message another member; the database refuses outsiders, strangers to the
- * campaign and messaging oneself, and the caller sees the failure. A DM is
- * visible only to its two members, blind even to GMs who are not in it.
+ * campaign and messaging oneself, and the caller sees the failure. A direct
+ * channel is visible only to its two members, blind even to GMs who are
+ * not in it.
  */
-export const getOrCreateDMChannel = createApiFunction<
+export const getOrCreateDirectChannel = createApiFunction<
   { campaignId: string; otherUserId: string },
   string
 >(async (params) => {

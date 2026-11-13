@@ -104,7 +104,7 @@ test.describe("chat rolls from the composer", () => {
 
       // The player adds text and sends both as the current speaker.
       const text = `For the road ${Date.now()}`;
-      await playerPage.getByRole("textbox", { name: /Message #/ }).fill(text);
+      await playerPage.getByRole("textbox", { name: /Post in #/ }).fill(text);
       await playerPage.getByRole("button", { name: "Send" }).click();
 
       // The roll posts as a dark one-liner beside its title, live in both
@@ -157,7 +157,7 @@ test.describe("chat rolls from the composer", () => {
       ).toBeVisible();
 
       const secret = `secret stash ${Date.now()}`;
-      await gmPage.getByRole("textbox", { name: /Message #/ }).fill(secret);
+      await gmPage.getByRole("textbox", { name: /Post in #/ }).fill(secret);
       await gmPage.getByRole("button", { name: "Send" }).click();
 
       // The GM sees their own secret roll post.

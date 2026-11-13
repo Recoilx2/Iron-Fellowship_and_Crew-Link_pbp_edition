@@ -104,8 +104,8 @@ vi.mock("api-calls/chat/createChannel", () => ({
 vi.mock("api-calls/chat/createPrivateChannel", () => ({
   createPrivateChannel: vi.fn(),
 }));
-vi.mock("api-calls/chat/getOrCreateDMChannel", () => ({
-  getOrCreateDMChannel: vi.fn(),
+vi.mock("api-calls/chat/getOrCreateDirectChannel", () => ({
+  getOrCreateDirectChannel: vi.fn(),
 }));
 vi.mock("api-calls/chat/setChannelMembers", () => ({
   setChannelMembers: vi.fn(),
@@ -128,7 +128,7 @@ vi.mock("components/shared/UserAvatar", () => ({
 
 import { ChatTab } from "../ChatTab";
 import { createPrivateChannel } from "api-calls/chat/createPrivateChannel";
-import { getOrCreateDMChannel } from "api-calls/chat/getOrCreateDMChannel";
+import { getOrCreateDirectChannel } from "api-calls/chat/getOrCreateDirectChannel";
 import { setChannelMembers } from "api-calls/chat/setChannelMembers";
 
 const theme = createTheme();
@@ -220,14 +220,14 @@ describe("ChatTab channels", () => {
     expect(view.textContent).toContain("Show archived");
   });
 
-  it("groups private channels and DMs under their own sections", () => {
+  it("groups private channels and direct channels under their own sections", () => {
     const view = render();
 
     expect(view.textContent).toContain("Private");
     expect(view.textContent).toContain("Direct messages");
     const names = channelButtons(view).map((button) => button.textContent);
     expect(names).toContain("# Side quest");
-    // DMs wear the other person's name, never the stored placeholder.
+    // Direct channels wear the other person's name, never the stored placeholder.
     expect(names).toContain("@ Bo");
     expect(names).not.toContain("Direct message");
   });
@@ -266,8 +266,8 @@ describe("ChatTab channels", () => {
     expect(setOpenChannelId).toHaveBeenCalledWith("ooc");
   });
 
-  it("opens a DM from the People list", async () => {
-    vi.mocked(getOrCreateDMChannel).mockResolvedValue("dm-9");
+  it("opens a direct channel from the People list", async () => {
+    vi.mocked(getOrCreateDirectChannel).mockResolvedValue("dm-9");
     const view = render();
 
     const bo = Array.from(view.querySelectorAll("button")).find(
@@ -279,7 +279,7 @@ describe("ChatTab channels", () => {
     await act(async () => {
       bo?.click();
     });
-    expect(getOrCreateDMChannel).toHaveBeenCalledWith({
+    expect(getOrCreateDirectChannel).toHaveBeenCalledWith({
       campaignId: "campaign-1",
       otherUserId: "player-2",
     });

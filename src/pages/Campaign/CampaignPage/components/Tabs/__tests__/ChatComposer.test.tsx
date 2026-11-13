@@ -499,6 +499,34 @@ describe("ChatComposer", () => {
     expect(view.querySelector('img[alt="lantern.png"]')).toBeNull();
   });
 
+  it("discards staged uploads when sending fails", async () => {
+    uploadChatImage.mockResolvedValue("campaign-1/post-1/lantern.png");
+    removeChatImage.mockResolvedValue(undefined);
+    createPost.mockRejectedValue(new Error("boom"));
+    const view = render(ic);
+    dropFiles(view, [imageFile()]);
+    await flushUploads();
+    typeText(textBox(view), "see this");
+    render(ic);
+
+    const send = view.querySelector(
+      'button[aria-label="Send"]'
+    ) as HTMLButtonElement | null;
+    if (!send) {
+      throw new Error("no send button");
+    }
+    await act(async () => {
+      send.click();
+    });
+
+    // The post never landed, so its staged upload is an orphan: sending
+    // fails best-effort cleanup, and the draft stays for another try.
+    expect(removeChatImage).toHaveBeenCalledWith(
+      "campaign-1/post-1/lantern.png"
+    );
+    expect(state.chat.drafts["ic"]).toBe("see this");
+  });
+
   it("refuses oversized and foreign images with a clear error", async () => {
     const view = render(ic);
     const big = new File(["x"], "huge.png", { type: "image/png" });

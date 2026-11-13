@@ -50,8 +50,8 @@ export function constructCampaignChannelsFilter(campaignId: string): string {
 /**
  * The roster follows the whole campaign, not one channel: membership rows
  * arrive unfiltered and merge by channel, while each row's delivery stays
- * governed by the channel access rules (a GM who is not in a DM never
- * receives its roster). The roster channel shares the dash family of the
+ * governed by the channel access rules (a GM who is not in a direct
+ * channel never receives its roster). The roster channel shares the dash family of the
  * channel list, so it joins under the same realtime authorization.
  */
 export function constructCampaignChannelMembersChannelName(

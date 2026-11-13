@@ -144,7 +144,7 @@ export function ChatFeed(props: { channel: ChannelWithId }) {
       {hasOlder && (
         <Box sx={{ display: "flex", justifyContent: "center", pb: 1 }}>
           <Button size={"small"} onClick={pageBack} disabled={postsLoading}>
-            Show earlier messages
+            Show earlier posts
           </Button>
         </Box>
       )}

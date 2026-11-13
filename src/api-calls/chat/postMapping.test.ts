@@ -159,6 +159,37 @@ describe("chat post mapping", () => {
     });
   });
 
+  it("reads an old single-group custom dice roll unchanged", () => {
+    // Rolls stored before the mixed-dice breakdown carry no dieGroups.
+    const stored = {
+      type: ROLL_TYPE.CUSTOM_DICE,
+      notation: "2d6",
+      dieSides: 6,
+      dieValues: [3, 4],
+      modifier: 0,
+      total: 7,
+      rollLabel: "2d6",
+      timestamp: "2026-11-13T12:00:00.000Z",
+      characterId: "character-1",
+      uid: "player-1",
+      gmsOnly: false,
+    };
+    const document = postRowToDocument(
+      row({ text: "", image_paths: [], roll: stored })
+    );
+    // The stored roll comes back unchanged: same dice, no breakdown added,
+    // its timestamp a Date again for the roll card.
+    expect(document.roll).toEqual({
+      ...stored,
+      timestamp: new Date("2026-11-13T12:00:00.000Z"),
+    });
+    expect(document.roll).not.toHaveProperty("dieGroups");
+    // And the round trip stores the same shape it read.
+    expect(
+      postDocumentToColumns({ text: "", roll: document.roll })
+    ).toMatchObject({ roll: stored });
+  });
+
   it("turns row events into upserts and deletes into removals", () => {
     const post = row();
     expect(

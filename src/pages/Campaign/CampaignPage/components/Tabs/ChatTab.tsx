@@ -43,7 +43,7 @@ import { useListenToChatChannels } from "stores/chat/useListenToChatChannels";
 import { useListenToChannelPosts } from "stores/chat/useListenToChannelPosts";
 import { createChannel } from "api-calls/chat/createChannel";
 import { createPrivateChannel } from "api-calls/chat/createPrivateChannel";
-import { getOrCreateDMChannel } from "api-calls/chat/getOrCreateDMChannel";
+import { getOrCreateDirectChannel } from "api-calls/chat/getOrCreateDirectChannel";
 import { setChannelMembers } from "api-calls/chat/setChannelMembers";
 import { renameChannel } from "api-calls/chat/renameChannel";
 import { archiveChannel } from "api-calls/chat/archiveChannel";
@@ -63,9 +63,9 @@ export interface RosterEntry {
   isGM: boolean;
 }
 
-function channelLabel(channel: ChannelWithId, dmName?: string): string {
+function channelLabel(channel: ChannelWithId, directName?: string): string {
   if (channel.visibility === "dm") {
-    return `@ ${dmName ?? channel.name}`;
+    return `@ ${directName ?? channel.name}`;
   }
   return `# ${channel.name}`;
 }
@@ -158,7 +158,7 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify([...rosterIds].sort()), JSON.stringify(membersByChannel), loadUserDocuments]);
 
-  const dmName = (channelId: string): string | undefined => {
+  const directName = (channelId: string): string | undefined => {
     const other = (membersByChannel[channelId] ?? []).find(
       (id) => id !== uid
     );
@@ -172,11 +172,11 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
     setOpenChannelId(id);
   };
 
-  const openDM = (otherId: string) => {
+  const openDirectChannel = (otherId: string) => {
     if (!campaignId || otherId === uid) {
       return;
     }
-    getOrCreateDMChannel({ campaignId, otherUserId: otherId })
+    getOrCreateDirectChannel({ campaignId, otherUserId: otherId })
       .then((id) => {
         setOpenChannelId(id);
       })
@@ -192,11 +192,11 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
     isGM,
     showArchived,
     setShowArchived,
-    dmName,
+    directName,
     onPick: pick,
     onCreate: setCreateKind,
     onCreatePrivate: () => setCreatePrivate(true),
-    onOpenDM: openDM,
+    onOpenDirectChannel: openDirectChannel,
   };
 
   return (
@@ -241,7 +241,7 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
               {open.map((channel) => (
                 <Chip
                   key={channel.id}
-                  label={channelLabel(channel, dmName(channel.id))}
+                  label={channelLabel(channel, directName(channel.id))}
                   color={channel.id === openChannelId ? "primary" : "default"}
                   onClick={() => pick(channel.id)}
                 />
@@ -250,7 +250,7 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
             <ChannelHeader
               channel={openChannel}
               members={openChannel ? membersByChannel[openChannel.id] ?? [] : []}
-              dmName={openChannel ? dmName(openChannel.id) : undefined}
+              directName={openChannel ? directName(openChannel.id) : undefined}
               userMap={userMap}
               isGM={isGM}
               onRename={() => setRenaming(true)}
@@ -329,8 +329,8 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
               pick(id);
               setPeopleOpen(false);
             }}
-            onOpenDM={(otherId) => {
-              openDM(otherId);
+            onOpenDirectChannel={(otherId) => {
+              openDirectChannel(otherId);
               setPeopleOpen(false);
             }}
           />
@@ -371,11 +371,11 @@ function ChannelList(props: {
   isGM: boolean;
   showArchived: boolean;
   setShowArchived: (show: boolean) => void;
-  dmName: (channelId: string) => string | undefined;
+  directName: (channelId: string) => string | undefined;
   onPick: (id: string) => void;
   onCreate: (kind: ChannelKind) => void;
   onCreatePrivate: () => void;
-  onOpenDM: (uid: string) => void;
+  onOpenDirectChannel: (uid: string) => void;
 }) {
   const {
     channels,
@@ -385,11 +385,11 @@ function ChannelList(props: {
     isGM,
     showArchived,
     setShowArchived,
-    dmName,
+    directName,
     onPick,
     onCreate,
     onCreatePrivate,
-    onOpenDM,
+    onOpenDirectChannel,
   } = props;
   const open = channels.filter((channel) => !channel.archived);
   const archived = channels.filter((channel) => channel.archived);
@@ -402,7 +402,7 @@ function ChannelList(props: {
   const privateChannels = open.filter(
     (channel) => channel.visibility === "private"
   );
-  const dms = open.filter((channel) => channel.visibility === "dm");
+  const directChannels = open.filter((channel) => channel.visibility === "dm");
 
   const header = (label: string, kind?: ChannelKind) => (
     <ListSubheader
@@ -438,7 +438,7 @@ function ChannelList(props: {
         <LockIcon sx={{ fontSize: 14, mr: 0.75, opacity: 0.6 }} />
       )}
       <ListItemText
-        primary={channelLabel(channel, dmName(channel.id))}
+        primary={channelLabel(channel, directName(channel.id))}
         primaryTypographyProps={{ noWrap: true }}
       />
     </ListItemButton>
@@ -472,15 +472,15 @@ function ChannelList(props: {
         </ListSubheader>
       )}
       {sortChannels(privateChannels).map(item)}
-      {dms.length > 0 && <ListSubheader>Direct messages</ListSubheader>}
-      {sortChannels(dms).map(item)}
+      {directChannels.length > 0 && <ListSubheader>Direct messages</ListSubheader>}
+      {sortChannels(directChannels).map(item)}
       <ListSubheader>People</ListSubheader>
       {roster.map((person) => (
         <ListItemButton
           key={person.uid}
           component={"button"}
           disabled={person.uid === uid}
-          onClick={() => onOpenDM(person.uid)}
+          onClick={() => onOpenDirectChannel(person.uid)}
         >
           <ListItemAvatar sx={{ minWidth: 40 }}>
             <UserAvatar
@@ -516,19 +516,19 @@ function ChannelList(props: {
 function ChannelHeader(props: {
   channel?: ChannelWithId;
   members: string[];
-  dmName?: string;
+  directName?: string;
   userMap: Record<string, { doc?: { displayName: string } } | undefined>;
   isGM: boolean;
   onRename: () => void;
   onMembers: () => void;
   onArchive: (archived: boolean) => void;
 }) {
-  const { channel, members, dmName, userMap, isGM, onRename, onMembers, onArchive } =
+  const { channel, members, directName, userMap, isGM, onRename, onMembers, onArchive } =
     props;
   if (!channel) {
     return null;
   }
-  const isDM = channel.visibility === "dm";
+  const isDirectChannel = channel.visibility === "dm";
   return (
     <Stack
       direction={"row"}
@@ -543,7 +543,7 @@ function ChannelHeader(props: {
       }}
     >
       <Typography fontWeight={700} noWrap sx={{ flexGrow: 1 }}>
-        {channelLabel(channel, dmName)}{" "}
+        {channelLabel(channel, directName)}{" "}
         <Typography
           component={"span"}
           variant={"caption"}
@@ -568,7 +568,7 @@ function ChannelHeader(props: {
           Members
         </Button>
       )}
-      {isGM && !isDM && (
+      {isGM && !isDirectChannel && (
         <>
           <Button size={"small"} onClick={onRename}>
             Rename

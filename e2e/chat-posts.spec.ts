@@ -83,7 +83,7 @@ test.describe("chat text posts", () => {
       // its speaker and text.
       const text = `The lantern is still lit ${Date.now()}`;
       await playerPage
-        .getByRole("textbox", { name: /Message #/ })
+        .getByRole("textbox", { name: /Post in #/ })
         .fill(text);
       await playerPage.getByRole("button", { name: "Send" }).click();
 
@@ -145,7 +145,7 @@ test.describe("chat text posts", () => {
       await expect(playerPage.getByLabel("Posting as")).toHaveCount(0);
 
       const text = `The bog remembers ${Date.now()}`;
-      await gmPage.getByRole("textbox", { name: /Message #/ }).fill(text);
+      await gmPage.getByRole("textbox", { name: /Post in #/ }).fill(text);
       await gmPage.getByRole("button", { name: "Send" }).click();
 
       // Both browsers show the NPC as speaker with a GM tag beside it.
