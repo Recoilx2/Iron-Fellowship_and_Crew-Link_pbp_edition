@@ -4,21 +4,24 @@ import { defaultChatSlice } from "./chat.slice.default";
 import { listenToCampaignChannels } from "api-calls/chat/listenToCampaignChannels";
 import { listenToCampaignChannelMembers } from "api-calls/chat/listenToCampaignChannelMembers";
 import {
-  CHAT_POST_MAX_WINDOW,
   CHAT_POST_PAGE_SIZE,
   listenToChannelPosts,
 } from "api-calls/chat/listenToChannelPosts";
+import { fetchOlderChannelPosts } from "api-calls/chat/fetchOlderChannelPosts";
 import type { Unsubscribe } from "api-calls/helpers.type";
 import { getRollDescription } from "functions/rollText";
 
-// The live post window per channel: paging back grows the limit one page
-// at a time up to the cap, so the shared listener's reconcile re-fetch
-// stays bounded even in long channels. The slice owns the one active post
-// subscription, so switching channels stops the old feed and paging back
-// restarts the current one with its wider window.
-const postWindowByChannel: Record<string, number> = {};
+// The live post subscription per channel stays on the latest page, so the
+// shared listener's reconcile re-fetch stays one page even in long
+// channels. Scrolling back pages older posts in front of it with a one-off
+// query, all the way to the channel's first post. The slice owns the one
+// active post subscription, so switching channels stops the old feed.
 let activePostsChannelId: string | undefined;
 let stopActivePosts: Unsubscribe | undefined;
+// Channels the reader has paged back in: their has-older flag comes from
+// the one-off pages, no longer from the live window's lookahead.
+const pagedBackByChannel: Record<string, boolean> = {};
+const pagingOlderByChannel: Record<string, boolean> = {};
 
 function stopPosts(): void {
   stopActivePosts?.();
@@ -31,7 +34,6 @@ type ChatSet = Parameters<ChatSliceApi>[0];
 type ChatGet = Parameters<ChatSliceApi>[1];
 
 function startPosts(channelId: string, set: ChatSet, get: ChatGet): void {
-  const limit = postWindowByChannel[channelId] ?? CHAT_POST_PAGE_SIZE;
   set((store) => {
     store.chat.postsLoading = true;
     store.chat.postsError = undefined;
@@ -39,7 +41,7 @@ function startPosts(channelId: string, set: ChatSet, get: ChatGet): void {
   activePostsChannelId = channelId;
   stopActivePosts = listenToChannelPosts(
     channelId,
-    limit,
+    CHAT_POST_PAGE_SIZE,
     {
       onPosts: (posts) => {
         // Announce genuinely new arrivals for screen readers: the first
@@ -58,8 +60,25 @@ function startPosts(channelId: string, set: ChatSet, get: ChatGet): void {
             newestPrevious !== null &&
             post.createdAt > newestPrevious
         );
+        // The live window holds the latest page only: posts the reader
+        // paged back in stay in front of it, so a live re-emit never drops
+        // older pages the one-off query fetched.
+        const liveIds = new Set(posts.map((post) => post.id));
+        const merged =
+          posts.length === 0
+            ? []
+            : [
+                ...previous.filter(
+                  (post) =>
+                    !liveIds.has(post.id) &&
+                    (post.createdAt < posts[0].createdAt ||
+                      (post.createdAt === posts[0].createdAt &&
+                        post.id < posts[0].id))
+                ),
+                ...posts,
+              ];
         set((store) => {
-          store.chat.postsByChannel[channelId] = posts;
+          store.chat.postsByChannel[channelId] = merged;
         });
         if (arrivals.length > 0) {
           const channel = get().chat.channels.find(
@@ -82,6 +101,11 @@ function startPosts(channelId: string, set: ChatSet, get: ChatGet): void {
         }
       },
       onHasOlder: (hasOlder) => {
+        // Once the reader pages back, the one-off pages own the flag: the
+        // live window's lookahead only knows about its own latest page.
+        if (pagedBackByChannel[channelId]) {
+          return;
+        }
         set((store) => {
           store.chat.hasOlderByChannel[channelId] = hasOlder;
         });
@@ -200,19 +224,39 @@ export const createChatSlice: CreateSliceType<ChatSlice> = (set, get) => ({
     };
   },
 
-  loadOlderPosts: (channelId) => {
-    const next = Math.min(
-      (postWindowByChannel[channelId] ?? CHAT_POST_PAGE_SIZE) +
-        CHAT_POST_PAGE_SIZE,
-      CHAT_POST_MAX_WINDOW
-    );
-    if (next === (postWindowByChannel[channelId] ?? CHAT_POST_PAGE_SIZE)) {
+  loadOlderPosts: async (channelId) => {
+    // One page back per call, all the way to the channel's first post: the
+    // live subscription keeps its latest page while the fetched page joins
+    // the front. A second call waits for the first instead of racing it.
+    if (!channelId || pagingOlderByChannel[channelId]) {
       return;
     }
-    postWindowByChannel[channelId] = next;
-    if (activePostsChannelId === channelId) {
-      stopPosts();
-      startPosts(channelId, set, get);
+    const oldest = get().chat.postsByChannel[channelId]?.[0];
+    if (!oldest) {
+      return;
+    }
+    pagingOlderByChannel[channelId] = true;
+    try {
+      const page = await fetchOlderChannelPosts(
+        channelId,
+        { createdAt: oldest.createdAt, id: oldest.id },
+        CHAT_POST_PAGE_SIZE
+      );
+      pagedBackByChannel[channelId] = true;
+      const current = get().chat.postsByChannel[channelId] ?? [];
+      const currentIds = new Set(current.map((post) => post.id));
+      const fresh = page.posts.filter((post) => !currentIds.has(post.id));
+      set((store) => {
+        store.chat.postsByChannel[channelId] = [...fresh, ...current];
+        store.chat.hasOlderByChannel[channelId] = page.hasOlder;
+      });
+    } catch (error) {
+      console.error(error);
+      set((store) => {
+        store.chat.postsError = "Failed to load older posts.";
+      });
+    } finally {
+      pagingOlderByChannel[channelId] = false;
     }
   },
 
@@ -238,8 +282,11 @@ export const createChatSlice: CreateSliceType<ChatSlice> = (set, get) => ({
 
   resetStore: () => {
     stopPosts();
-    for (const channelId of Object.keys(postWindowByChannel)) {
-      delete postWindowByChannel[channelId];
+    for (const channelId of Object.keys(pagedBackByChannel)) {
+      delete pagedBackByChannel[channelId];
+    }
+    for (const channelId of Object.keys(pagingOlderByChannel)) {
+      delete pagingOlderByChannel[channelId];
     }
     set((store) => {
       store.chat = {
