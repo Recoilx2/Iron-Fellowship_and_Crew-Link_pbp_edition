@@ -155,13 +155,13 @@ export async function grantMembership(
  * slow, so callers pass generous timeouts.
  */
 export async function waitFor<T>(
-  observe: () => T | null,
+  observe: () => T | null | Promise<T | null>,
   timeoutMs = 30000
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   let last: T | null = null;
   for (;;) {
-    last = observe();
+    last = await observe();
     if (last !== null) return last;
     if (Date.now() >= deadline) {
       throw new Error("timed out waiting for the expected live state");
