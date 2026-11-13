@@ -17,6 +17,16 @@ const charactersFile = () => {
 
 const text = () => readFileSync(join(dir, charactersFile()), "utf8");
 
+// Follow-up migrations keep the base file's name; read the whole chain so
+// the asserted rules are the ones a fresh database ends up with.
+const charactersChain = () => {
+  const files = readdirSync(dir)
+    .filter((f) => /characters.*\.sql$/.test(f))
+    .sort();
+  assert.ok(files.length > 0, "no characters migrations");
+  return files.map((f) => readFileSync(join(dir, f), "utf8")).join("\n");
+};
+
 describe("characters migration", () => {
   it("follows the <UTC timestamp>_<short-name>.sql convention", () => {
     assert.match(charactersFile(), /^\d{14}_characters\.sql$/);
@@ -113,6 +123,16 @@ describe("characters migration", () => {
     assert.ok(
       /REPLICA IDENTITY FULL/i.test(sql),
       "old row values are not published"
+    );
+  });
+
+  it("rejects a second character from the same player in one campaign", () => {
+    const sql = charactersChain();
+    assert.ok(
+      /CREATE\s+UNIQUE\s+INDEX[\s\S]*?\(\s*owner_id\s*,\s*campaign_id\s*\)[\s\S]*?WHERE\s+campaign_id\s+IS\s+NOT\s+NULL/i.test(
+        sql
+      ),
+      "no partial unique index on (owner_id, campaign_id); a player can add two characters to one campaign"
     );
   });
 });

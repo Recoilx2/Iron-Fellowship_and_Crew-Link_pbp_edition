@@ -19,7 +19,7 @@ A person running a campaign. A campaign can have more than one.
 _Avoid_: DM, narrator, guide
 
 **Player**:
-A person in a campaign who plays one or more characters.
+A person in a campaign who plays one character in it.
 _Avoid_: User (when meaning a campaign member)
 
 **Roll**:

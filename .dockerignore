@@ -10,5 +10,7 @@ supabase/.env.*
 !supabase/.env.example
 logs
 *.log
+test-results
+playwright-report
 .vscode
 .idea

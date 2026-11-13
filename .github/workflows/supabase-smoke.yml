@@ -160,3 +160,136 @@ jobs:
         if: always()
         working-directory: supabase
         run: ENV_FILE=.env.live docker compose -p live --env-file .env.live -f docker-compose.yml down -v
+
+  e2e:
+    # Runs the Playwright browser tests (e2e/*.spec.ts) against one real
+    # stack copy plus the site container it serves. tests/e2e.sh fails the
+    # run when any browser test is skipped, so a misconfigured job can never
+    # pass silently. Traces and screenshots stay here as CI artifacts; they
+    # are never posted to issues or pull requests (public repo).
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Type-check the browser tests
+        run: npx tsc --noEmit -p tsconfig.e2e.json
+
+      - name: Generate the copy env file
+        working-directory: supabase
+        run: python3 bin/gen-env.py --copy ironsworn --port 8000 --out .env.live
+
+      - name: Mask generated keys in logs
+        working-directory: supabase
+        run: |
+          echo "::add-mask::$(grep -E '^ANON_KEY=' .env.live | cut -d= -f2-)"
+          echo "::add-mask::$(grep -E '^SERVICE_ROLE_KEY=' .env.live | cut -d= -f2-)"
+          echo "::add-mask::$(grep -E '^POSTGRES_PASSWORD=' .env.live | cut -d= -f2-)"
+
+      - name: Validate the template renders
+        working-directory: supabase
+        run: ENV_FILE=.env.live docker compose -p live --env-file .env.live -f docker-compose.yml config --quiet
+
+      - name: Build the site image
+        working-directory: supabase
+        run: ENV_FILE=.env.live docker compose -p live --env-file .env.live -f docker-compose.yml build site
+
+      - name: Start one stack copy
+        working-directory: supabase
+        run: ENV_FILE=.env.live docker compose -p live --env-file .env.live -f docker-compose.yml up -d
+
+      - name: Wait until the copy is healthy and migrations applied
+        working-directory: supabase
+        run: |
+          get_var() { grep -E "^$2=" "$1" | cut -d= -f2- || true; }
+          PORT="$(get_var .env.live API_GW_HTTP_PORT)"
+          ANON="$(get_var .env.live ANON_KEY)"
+          SERVICE_KEY="$(get_var .env.live SERVICE_ROLE_KEY)"
+          SITE_PORT="$(get_var .env.live SITE_HTTP_PORT)"
+          GW="http://localhost:$PORT"
+
+          compose() {
+            ENV_FILE=.env.live \
+              docker compose -p live --env-file .env.live -f docker-compose.yml "$@"
+          }
+
+          wait_for() {
+            local label="$1"
+            shift
+            local deadline=$((SECONDS + 300))
+            until curl -sf "$@" >/dev/null 2>&1; do
+              [ "$SECONDS" -ge "$deadline" ] && { echo "e2e: timed out waiting for $label" >&2; exit 1; }
+              sleep 5
+            done
+            echo "e2e: $label up"
+          }
+
+          poll_for() {
+            local label="$1"
+            shift
+            local deadline=$((SECONDS + 300))
+            until "$@" >/dev/null 2>&1; do
+              [ "$SECONDS" -ge "$deadline" ] && { echo "e2e: timed out waiting for $label" >&2; exit 1; }
+              sleep 5
+            done
+            echo "e2e: $label ok"
+          }
+
+          realtime_healthy() {
+            compose exec -T realtime \
+              curl -sSfL --head -o /dev/null \
+              -H "Authorization: Bearer $ANON" \
+              http://localhost:4000/api/tenants/realtime-dev/health
+          }
+
+          functions_placeholder_ok() {
+            curl -s -H "apikey: $ANON" "$GW/functions/v1/smoke-probe" | grep -q FUNCTIONS_NOT_CONFIGURED
+          }
+
+          migrate_done() {
+            compose logs migrate 2>/dev/null | grep -q "migrate: done"
+          }
+
+          wait_for "auth" -H "apikey: $ANON" "$GW/auth/v1/health"
+          # The gateway's OpenAPI route only admits the service key; table reads
+          # below go through the anon key like a real client.
+          wait_for "rest" -H "apikey: $SERVICE_KEY" "$GW/rest/v1/"
+          wait_for "storage" "$GW/storage/v1/status"
+          poll_for "realtime" realtime_healthy
+          poll_for "functions" functions_placeholder_ok
+          poll_for "migrations" migrate_done
+          wait_for "site" "http://localhost:$SITE_PORT/"
+
+      - name: Run the browser tests (zero skips allowed)
+        working-directory: supabase
+        run: ENV_FILE=.env.live tests/e2e.sh
+
+      - name: Upload traces and screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 14
+
+      - name: Dump service logs on failure
+        if: failure()
+        working-directory: supabase
+        run: ENV_FILE=.env.live docker compose -p live --env-file .env.live -f docker-compose.yml logs --tail 200
+
+      - name: Bring the copy down
+        if: always()
+        working-directory: supabase
+        run: ENV_FILE=.env.live docker compose -p live --env-file .env.live -f docker-compose.yml down -v

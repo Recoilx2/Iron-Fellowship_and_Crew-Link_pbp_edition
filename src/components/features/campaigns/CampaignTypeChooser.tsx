@@ -22,7 +22,7 @@ const campaignTypeConfigs: Record<
     Icon: SoloIcon,
     title: "Solo",
     description:
-      "A single player plays one or more characters. Text and content only useful in multiplayer campaigns is hidden.",
+      "A single player plays one character. Text and content only useful in multiplayer campaigns is hidden.",
   },
   [CampaignType.Coop]: {
     Icon: CoopIcon,
