@@ -19,7 +19,7 @@ import {
 import { TrackTypes } from "types/Track.type";
 import { LEGACY_TrackTypes } from "types/LegacyTrack.type";
 import { rollOracle } from "./rollers/rollOracle";
-import { idMap } from "data/idMap";
+import { lookupRollableOracle } from "./rollers/resolveOracleRoll";
 import { Datasworn, IdParser } from "@datasworn-community/core";
 import { rollDice } from "./rollers/rollDice";
 import { scoreStatRoll } from "./rollers/scoreStatRoll";
@@ -143,17 +143,9 @@ export function useRoller() {
 
   const rollOracleTable = useCallback(
     async (potentialOldOracleId: string, showSnackbar = true, gmsOnly = false) => {
-      const oracleId = idMap[potentialOldOracleId] ?? potentialOldOracleId;
-      // const oracle = newOracles[oracleId];
+      const oracle = lookupRollableOracle(potentialOldOracleId);
 
-      let oracle: Datasworn.OracleRollable | undefined;
-      try {
-        oracle = IdParser.get(oracleId) as Datasworn.OracleRollable;
-      } catch {
-        // Empty on purpose - the following if statement will handle the undefined case
-      }
-
-      if (!oracle || oracle.type !== "oracle_rollable") {
+      if (!oracle) {
         return undefined;
       }
 
