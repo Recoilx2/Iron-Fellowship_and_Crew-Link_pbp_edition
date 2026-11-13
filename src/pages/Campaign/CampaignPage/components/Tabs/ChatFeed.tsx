@@ -1,8 +1,17 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
-import { Box, Button, Chip, Stack, Typography } from "@mui/material";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  Box,
+  Button,
+  Chip,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 import { useStore } from "stores/store";
 import type { ChannelWithId } from "api-calls/chat/listenToCampaignChannels";
 import type { PostWithId } from "api-calls/chat/listenToChannelPosts";
+import { editPost } from "api-calls/chat/editPost";
+import { deletePost } from "api-calls/chat/deletePost";
 import { MarkdownRenderer } from "components/shared/MarkdownRenderer";
 import { PortraitAvatar } from "components/features/characters/PortraitAvatar/PortraitAvatar";
 import { UserAvatar } from "components/shared/UserAvatar";
@@ -45,6 +54,7 @@ export function ChatFeed(props: { channel: ChannelWithId }) {
   const gmIds = useStore(
     (store) => store.campaigns.currentCampaign.currentCampaign?.gmIds ?? []
   );
+  const uid = useStore((store) => store.auth.uid);
   const userMap = useStore((store) => store.users.userMap);
   const loadUserDocuments = useStore(
     (store) => store.users.loadUserDocuments
@@ -133,6 +143,7 @@ export function ChatFeed(props: { channel: ChannelWithId }) {
           key={post.id}
           post={post}
           channel={channel}
+          uid={uid}
           characterMap={characterMap}
           gmIds={gmIds}
           userMap={userMap}
@@ -155,11 +166,12 @@ export function ChatFeed(props: { channel: ChannelWithId }) {
 function ChatPost(props: {
   post: PostWithId;
   channel: ChannelWithId;
+  uid?: string;
   characterMap: Record<string, CharacterDocument>;
   gmIds: string[];
   userMap: Record<string, { doc?: { displayName: string } } | undefined>;
 }) {
-  const { post, channel, characterMap, gmIds, userMap } = props;
+  const { post, channel, uid, characterMap, gmIds, userMap } = props;
   const character =
     post.speakerCharacterId != null
       ? characterMap[post.speakerCharacterId]
@@ -167,6 +179,54 @@ function ChatPost(props: {
   const authorName =
     userMap[post.authorId]?.doc?.displayName ?? "Someone";
   const isGM = gmIds.includes(post.authorId);
+  const deleted = post.deletedAt != null;
+
+  // The access rules decide: authors edit their own live posts, and the
+  // author or a GM deletes. Everyone else sees the marker and the text,
+  // no controls.
+  const viewerIsGM = uid != null && gmIds.includes(uid);
+  const canEdit = uid != null && post.authorId === uid && !deleted;
+  const showDelete =
+    !deleted && (post.authorId === uid || viewerIsGM);
+
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(post.text);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const startEdit = () => {
+    setDraft(post.text);
+    setConfirmingDelete(false);
+    setEditing(true);
+  };
+
+  const saveEdit = () => {
+    if (draft.trim().length === 0 || busy) {
+      return;
+    }
+    setBusy(true);
+    editPost({ postId: post.id, text: draft })
+      .then(() => {
+        setEditing(false);
+      })
+      .catch(() => {})
+      .finally(() => {
+        setBusy(false);
+      });
+  };
+
+  const confirmDelete = () => {
+    if (busy) {
+      return;
+    }
+    setBusy(true);
+    deletePost({ postId: post.id })
+      .catch(() => {})
+      .finally(() => {
+        setBusy(false);
+        setConfirmingDelete(false);
+      });
+  };
 
   // IC leads with the character, then the player; OOC leads with the
   // player's display name, then their character beside it.
@@ -216,8 +276,104 @@ function ChatPost(props: {
           <Typography variant={"caption"} color={"text.secondary"}>
             {timeLabel(post.createdAt)}
           </Typography>
+          {post.editedAt != null && !deleted && (
+            <Typography variant={"caption"} color={"text.secondary"}>
+              (edited)
+            </Typography>
+          )}
         </Stack>
-        <MarkdownRenderer markdown={post.text} />
+        {deleted ? (
+          <Typography
+            variant={"body2"}
+            color={"text.secondary"}
+            sx={{ fontStyle: "italic" }}
+          >
+            post deleted
+          </Typography>
+        ) : editing ? (
+          <Stack spacing={1}>
+            <TextField
+              multiline
+              fullWidth
+              size={"small"}
+              value={draft}
+              inputProps={{ "aria-label": "Edit post text" }}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+            <Stack direction={"row"} spacing={1}>
+              <Button
+                size={"small"}
+                variant={"contained"}
+                aria-label={"Save edit"}
+                disabled={draft.trim().length === 0 || busy}
+                onClick={saveEdit}
+              >
+                Save
+              </Button>
+              <Button
+                size={"small"}
+                aria-label={"Cancel edit"}
+                onClick={() => setEditing(false)}
+              >
+                Cancel
+              </Button>
+            </Stack>
+          </Stack>
+        ) : (
+          <MarkdownRenderer markdown={post.text} />
+        )}
+        {(canEdit || showDelete) && !editing && (
+          <Stack direction={"row"} spacing={1} sx={{ pt: 0.5 }}>
+            {confirmingDelete ? (
+              <>
+                <Typography
+                  variant={"caption"}
+                  color={"text.secondary"}
+                  sx={{ alignSelf: "center" }}
+                >
+                  Delete this post?
+                </Typography>
+                <Button
+                  size={"small"}
+                  color={"error"}
+                  aria-label={"Confirm delete"}
+                  disabled={busy}
+                  onClick={confirmDelete}
+                >
+                  Delete
+                </Button>
+                <Button
+                  size={"small"}
+                  aria-label={"Cancel delete"}
+                  onClick={() => setConfirmingDelete(false)}
+                >
+                  Keep
+                </Button>
+              </>
+            ) : (
+              <>
+                {canEdit && (
+                  <Button
+                    size={"small"}
+                    aria-label={"Edit post"}
+                    onClick={startEdit}
+                  >
+                    Edit
+                  </Button>
+                )}
+                {showDelete && (
+                  <Button
+                    size={"small"}
+                    aria-label={"Delete post"}
+                    onClick={() => setConfirmingDelete(true)}
+                  >
+                    Delete
+                  </Button>
+                )}
+              </>
+            )}
+          </Stack>
+        )}
       </Box>
     </Stack>
   );

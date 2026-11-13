@@ -20,6 +20,8 @@ export interface PostRow {
   text: string;
   created_at: string;
   updated_at: string;
+  edited_at: string | null;
+  deleted_at: string | null;
 }
 
 export function constructChannelPostsChannelName(channelId: string): string {
@@ -37,6 +39,8 @@ export function postRowToDocument(row: PostRow): PostDocument {
     speakerCharacterId: row.speaker_character_id,
     text: row.text,
     createdAt: row.created_at,
+    editedAt: row.edited_at,
+    deletedAt: row.deleted_at,
   };
 }
 

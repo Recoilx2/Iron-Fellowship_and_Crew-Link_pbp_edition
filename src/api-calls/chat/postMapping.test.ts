@@ -21,6 +21,8 @@ function row(overrides: Partial<PostRow> = {}): PostRow {
     text: "We push on through the bog.",
     created_at: "2026-11-13T12:00:00.000Z",
     updated_at: "2026-11-13T12:00:00.000Z",
+    edited_at: null,
+    deleted_at: null,
     ...overrides,
   };
 }
@@ -43,12 +45,46 @@ describe("chat post mapping", () => {
       speakerCharacterId: "character-1",
       text: "We push on through the bog.",
       createdAt: "2026-11-13T12:00:00.000Z",
+      editedAt: null,
+      deletedAt: null,
     });
     // Posting as self leaves no speaker character: the interface shows the
     // player's display name (and a GM tag for GMs) instead.
     expect(
       postRowToDocument(row({ speaker_character_id: null }))
     ).toMatchObject({ speakerCharacterId: null });
+  });
+
+  it("carries the edit and soft-delete markers the feed shows", () => {
+    expect(postRowToDocument(row())).toMatchObject({
+      editedAt: null,
+      deletedAt: null,
+    });
+    // An edit stamps the row; the feed shows the new text with an edited
+    // marker beside it.
+    expect(
+      postRowToDocument(
+        row({
+          text: "We push on through the bog, quietly.",
+          edited_at: "2026-11-13T12:05:00.000Z",
+        })
+      )
+    ).toMatchObject({
+      text: "We push on through the bog, quietly.",
+      editedAt: "2026-11-13T12:05:00.000Z",
+      deletedAt: null,
+    });
+    // A soft delete clears the content but keeps the row; the feed shows a
+    // "post deleted" marker in its place.
+    expect(
+      postRowToDocument(
+        row({ text: "", deleted_at: "2026-11-13T12:06:00.000Z" })
+      )
+    ).toMatchObject({
+      text: "",
+      editedAt: null,
+      deletedAt: "2026-11-13T12:06:00.000Z",
+    });
   });
 
   it("turns row events into upserts and deletes into removals", () => {
