@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CHAT_IMAGES_BUCKET,
+  CHAT_IMAGE_SIGNED_URL_TTL_SECONDS,
   chatImageFilePath,
 } from "api-calls/chat/chatImages";
 
@@ -17,5 +18,10 @@ describe("chat image paths", () => {
     expect(
       chatImageFilePath("campaign-1", "post-1", "Lantern.png")
     ).toBe("campaign-1/post-1/Lantern.png");
+  });
+
+  it("keeps signed links short-lived, in minutes rather than days", () => {
+    expect(CHAT_IMAGE_SIGNED_URL_TTL_SECONDS).toBeGreaterThanOrEqual(60);
+    expect(CHAT_IMAGE_SIGNED_URL_TTL_SECONDS).toBeLessThanOrEqual(60 * 60);
   });
 });
