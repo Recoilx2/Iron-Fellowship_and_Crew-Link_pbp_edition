@@ -5,8 +5,10 @@ import * as Y from "yjs";
 
 import { getSupabaseClient } from "config/supabase.config";
 import { createCharacter } from "api-calls/character/createCharacter";
+import { updateCharacter } from "api-calls/character/updateCharacter";
 import { createCampaign } from "api-calls/campaign/createCampaign";
 import { joinCampaign } from "api-calls/campaign/joinCampaign";
+import { removeCharacterFromCampaign } from "api-calls/campaign/removeCharacterFromCampaign";
 import { CampaignType } from "api-calls/campaign/_campaign.type";
 import { addNote } from "api-calls/notes/addNote";
 import { updateNoteShared } from "api-calls/notes/updateNoteShared";
@@ -292,6 +294,151 @@ describe.skipIf(!config)("shared note editing on the note server", () => {
     await new Promise((resolve) => setTimeout(resolve, 3000));
     expect(playerNote.doc.getText("body").toString()).not.toContain(
       "GM only now"
+    );
+  });
+
+  it("cuts off a player removed from the campaign while connected (#106)", { timeout: 120000 }, async () => {
+    const gm = await createPerson(cfg, "gm");
+    const player = await createPerson(cfg, "player");
+    people.push(gm, player);
+    // Co-op: the founder starts as a GM, so they can remove members.
+    await signInAs(gm);
+    const campaignId = await createCampaign({
+      uid: gm.userId,
+      campaignName: "Kicked mid-edit",
+      campaignType: CampaignType.Coop,
+    });
+    const noteId = await addNote({ campaignId, order: 0, shared: true });
+    await signOut();
+    await signInAs(player);
+    await joinCampaign({ campaignId });
+    await signOut();
+
+    const gmNote = await connectNote(cfg, gm, `campaign-notes/${noteId}`);
+    const playerNote = await connectNote(cfg, player, `campaign-notes/${noteId}`);
+    connected.push(gmNote, playerNote);
+    playerNote.provider.on("close", () => playerNote.events.push("close"));
+
+    // The GM removes the player: the player's connection closes within seconds.
+    const kicked = await gm.client.rpc("remove_campaign_member", {
+      cid: campaignId,
+      target_uid: player.userId,
+    });
+    expect(kicked.error).toBeNull();
+    await waitFor(
+      () => (playerNote.events.includes("close") ? true : null),
+      60000
+    );
+
+    // The GM stays connected and keeps editing.
+    gmNote.doc.getText("body").insert(0, "GM only now");
+    await waitFor(
+      () => (gmNote.doc.getText("body").toString().includes("GM only now") ? true : null),
+      30000
+    );
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    expect(playerNote.doc.getText("body").toString()).not.toContain(
+      "GM only now"
+    );
+  });
+
+  it("cuts off a demoted GM from unshared GM notes (#106)", { timeout: 120000 }, async () => {
+    const gm = await createPerson(cfg, "gm");
+    const cogm = await createPerson(cfg, "cogm");
+    people.push(gm, cogm);
+    await signInAs(gm);
+    const campaignId = await createCampaign({
+      uid: gm.userId,
+      campaignName: "Demoted mid-edit",
+      campaignType: CampaignType.Coop,
+    });
+    await signOut();
+    await signInAs(cogm);
+    await joinCampaign({ campaignId });
+    await signOut();
+
+    // Promote the newcomer to GM, then author an unshared GM draft.
+    const promoted = await gm.client
+      .from("campaign_members")
+      .update({ role: "gm" })
+      .eq("campaign_id", campaignId)
+      .eq("user_id", cogm.userId)
+      .select();
+    expect(promoted.error).toBeNull();
+    await signInAs(gm);
+    const noteId = await addNote({ campaignId, order: 0 });
+    await signOut();
+
+    // Both GMs read the unshared draft.
+    const gmNote = await connectNote(cfg, gm, `campaign-notes/${noteId}`);
+    const coNote = await connectNote(cfg, cogm, `campaign-notes/${noteId}`);
+    connected.push(gmNote, coNote);
+    coNote.provider.on("close", () => coNote.events.push("close"));
+
+    // Demote back to player: the draft is invisible to players, so the
+    // connection closes, and reconnecting is refused.
+    const demoted = await gm.client
+      .from("campaign_members")
+      .update({ role: "player" })
+      .eq("campaign_id", campaignId)
+      .eq("user_id", cogm.userId)
+      .select();
+    expect(demoted.error).toBeNull();
+    await waitFor(
+      () => (coNote.events.includes("close") ? true : null),
+      60000
+    );
+    await expect(
+      connectNote(cfg, cogm, `campaign-notes/${noteId}`)
+    ).rejects.toThrow(/access refused/);
+  });
+
+  it("cuts off campaign members from a character note when the character leaves (#106)", { timeout: 120000 }, async () => {
+    const gm = await createPerson(cfg, "gm");
+    const player = await createPerson(cfg, "player");
+    people.push(gm, player);
+    await signInAs(gm);
+    const campaignId = await createCampaign({
+      uid: gm.userId,
+      campaignName: "Leaving character",
+      campaignType: CampaignType.Coop,
+    });
+    const characterId = await createCharacter({
+      uid: gm.userId,
+      name: "Sheet",
+      stats: {},
+      assets: [],
+    });
+    await updateCharacter({ characterId, character: { campaignId } });
+    const noteId = await addNote({ characterId, order: 0, shared: true });
+    await signOut();
+    await signInAs(player);
+    await joinCampaign({ campaignId });
+    await signOut();
+
+    const gmNote = await connectNote(cfg, gm, `character-notes/${noteId}`);
+    const playerNote = await connectNote(cfg, player, `character-notes/${noteId}`);
+    connected.push(gmNote, playerNote);
+    playerNote.provider.on("close", () => playerNote.events.push("close"));
+
+    // The character leaves the campaign: the member loses access within seconds.
+    await signInAs(gm);
+    await removeCharacterFromCampaign({ uid: gm.userId, campaignId, characterId });
+    await signOut();
+    await waitFor(
+      () => (playerNote.events.includes("close") ? true : null),
+      60000
+    );
+
+    // The owner stays connected and keeps editing.
+    gmNote.doc.getText("body").insert(0, "Owner only now");
+    await waitFor(
+      () => (gmNote.doc.getText("body").toString().includes("Owner only now") ? true : null),
+      30000
+    );
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    expect(playerNote.doc.getText("body").toString()).not.toContain(
+      "Owner only now"
     );
   });
 

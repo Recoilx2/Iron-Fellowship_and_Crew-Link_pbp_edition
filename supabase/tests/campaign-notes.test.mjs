@@ -15,7 +15,18 @@ const notesFile = () => {
   return files[0];
 };
 
-const text = () => readFileSync(join(dir, notesFile()), "utf8");
+const baseText = () => readFileSync(join(dir, notesFile()), "utf8");
+
+// Combined SQL of every migration, in apply order: #106's strict rules
+// live in a later file (README: never edit an applied migration), so the
+// #106 assertions below read the whole chain, while the base assertions
+// above keep reading the base file they have always checked.
+const text = () =>
+  readdirSync(dir)
+    .filter((f) => f.endsWith(".sql"))
+    .sort()
+    .map((f) => readFileSync(join(dir, f), "utf8"))
+    .join("\n");
 
 describe("campaign notes migration", () => {
   it("follows the <UTC timestamp>_<short-name>.sql convention", () => {
@@ -23,7 +34,7 @@ describe("campaign notes migration", () => {
   });
 
   it("keeps campaign notes and their contents beside their campaign", () => {
-    const sql = text();
+    const sql = baseText();
     for (const table of ["campaign_notes", "campaign_note_contents"]) {
       assert.ok(
         new RegExp(`public\\.${table}`, "i").test(sql),
@@ -40,7 +51,7 @@ describe("campaign notes migration", () => {
   });
 
   it("shows unshared notes to GMs only, and lets members write", () => {
-    const sql = text();
+    const sql = baseText();
     assert.ok(/ENABLE ROW LEVEL SECURITY/i.test(sql), "row-level security not enabled");
     assert.ok(
       /is_campaign_note_visible[\s\S]*?shared[\s\S]*?is_campaign_gm/i.test(sql),
@@ -65,7 +76,7 @@ describe("campaign notes migration", () => {
   });
 
   it("exposes security-definer campaign note helpers for the access rules", () => {
-    const sql = text();
+    const sql = baseText();
     for (const fn of ["is_campaign_note_visible", "is_campaign_note_writable"]) {
       assert.ok(
         new RegExp(`private\\.${fn}\\s*\\(`, "i").test(sql),
@@ -80,7 +91,7 @@ describe("campaign notes migration", () => {
   });
 
   it("publishes the tables for row streaming with old values", () => {
-    const sql = text();
+    const sql = baseText();
     assert.ok(
       /ALTER PUBLICATION\s+supabase_realtime\s+ADD TABLE/i.test(sql),
       "tables are not added to the supabase_realtime publication"
@@ -93,7 +104,7 @@ describe("campaign notes migration", () => {
   });
 
   it("notifies the note server when sharing ends or a note is deleted", () => {
-    const sql = text();
+    const sql = baseText();
     assert.ok(/pg_notify/i.test(sql), "no pg_notify call");
     assert.ok(
       /note_access_revoked/i.test(sql),
@@ -109,5 +120,110 @@ describe("campaign notes migration", () => {
         `no revoke trigger on ${table}`
       );
     }
+  });
+
+  it("tightens campaign note writes so writable implies visible (#106)", () => {
+    const sql = text();
+    // Every note records its author; the human decision on #106 allows any
+    // backfill for existing rows, but new rows must name their author.
+    assert.ok(/created_by/i.test(sql), "campaign notes record no author");
+    // Contents stay writable exactly where they are readable: the
+    // writable helper reuses the visibility helper in its own body.
+    assert.ok(
+      /private\.is_campaign_note_writable\(nid[^)]*\)[\s\S]{0,400}?is_campaign_note_visible/i.test(
+        sql
+      ),
+      "the writable helper does not imply the visibility helper"
+    );
+    // Inserts name the signed-in person as the author.
+    assert.ok(
+      /campaign_notes_insert[\s\S]*?created_by[\s\S]*?auth\.uid\(\)/i.test(sql),
+      "INSERT does not pin the author to the signed-in person"
+    );
+    // Row updates stay readable on both sides of the write; the guard
+    // trigger below owns the field-level rules.
+    assert.ok(
+      /campaign_notes_update[\s\S]*?is_campaign_note_visible/i.test(sql),
+      "UPDATE does not go through the visibility helper"
+    );
+    // campaign_id can never move a note to another campaign.
+    assert.ok(
+      /NEW\.campaign_id\s+IS\s+DISTINCT\s+FROM\s+OLD\.campaign_id/i.test(sql),
+      "campaign_id is not locked against moves"
+    );
+    // Only the author or a campaign GM flips shared.
+    assert.ok(
+      /NEW\.shared\s+IS\s+DISTINCT\s+FROM\s+OLD\.shared[\s\S]*?created_by[\s\S]*?is_campaign_gm/i.test(
+        sql
+      ),
+      "shared flips are not restricted to the author or a GM"
+    );
+    // A removed author loses write access at once: every author branch
+    // still requires campaign membership, so the author alone is not
+    // enough after the roster row is gone.
+    assert.ok(
+      /campaign_notes_update[\s\S]*?created_by[\s\S]{0,200}?is_campaign_member/i.test(
+        sql
+      ),
+      "UPDATE still lets a removed author write"
+    );
+    assert.ok(
+      /campaign_notes_delete[\s\S]*?created_by[\s\S]{0,200}?is_campaign_member/i.test(
+        sql
+      ),
+      "DELETE still lets a removed author delete"
+    );
+    assert.ok(
+      /NEW\.shared\s+IS\s+DISTINCT\s+FROM\s+OLD\.shared[\s\S]*?is_campaign_member\s*\(\s*OLD\.campaign_id\s*\)/i.test(
+        sql
+      ),
+      "shared flips do not require the author to still be a member"
+    );
+    // Deleting the account that wrote a note must not fail: service-key
+    // work with no signed-in person bypasses the author-change guard, so
+    // the ON DELETE SET NULL cascade can clear the author.
+    assert.ok(
+      /enforce_campaign_note_update[\s\S]*?auth\.uid\(\)\)\s+IS\s+NULL/i.test(sql),
+      "deleting an author's account still trips the author-change guard"
+    );
+    // Deletes are author-or-GM only.
+    assert.ok(
+      /campaign_notes_delete[\s\S]*?created_by/i.test(sql),
+      "DELETE is not restricted to the note author"
+    );
+    assert.ok(
+      /campaign_notes_delete[\s\S]*?is_campaign_gm/i.test(sql),
+      "DELETE does not still allow a campaign GM"
+    );
+  });
+
+  it("cuts live access when campaign access is lost (#106)", () => {
+    const sql = text();
+    // Losing the roster row ends note access: removal deletes it, and a
+    // GM-to-player demotion drops the unshared notes.
+    assert.ok(
+      /campaign_members_revoke_notify/i.test(sql),
+      "no revoke trigger on campaign_members"
+    );
+    assert.ok(
+      /OLD\.role\s*=\s*'gm'\s+AND\s+NEW\.role\s*=\s*'player'/i.test(sql),
+      "demoting a GM to player fires no revocation"
+    );
+    // A character leaving its campaign ends its old campaign's access to
+    // the character's notes (and re-checks the old campaign's notes).
+    assert.ok(
+      /characters_campaign_leave_notify/i.test(sql),
+      "no revoke trigger on characters.campaign_id"
+    );
+    // Unlinking a world from a campaign ends the campaign GMs' world-note
+    // access (per #12); deleting the campaign does the same.
+    assert.ok(
+      /campaigns_world_unlink_notify/i.test(sql),
+      "no revoke trigger on campaigns.world_id"
+    );
+    assert.ok(
+      /campaigns_delete_world_notify/i.test(sql),
+      "deleting a campaign fires no world-note revocation"
+    );
   });
 });

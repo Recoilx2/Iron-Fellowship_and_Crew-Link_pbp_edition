@@ -325,4 +325,205 @@ describe.skipIf(!config)("campaign notes end to end", () => {
       .single();
     expect(edited.data?.title).toBe("Player edit");
   });
+
+  it("refuses contents writes to notes the writer cannot read (#106)", { timeout: 90000 }, async () => {
+    const { gm, player, campaignId } = await setUpCampaign();
+    await signInAs(gm);
+    const noteId = await addNote({ campaignId, order: 0 });
+    // Seed the contents row as the GM, who can read the unshared draft.
+    const seed = await gm.client
+      .from("campaign_note_contents")
+      .insert({ note_id: noteId, content: "e30=" })
+      .select("note_id");
+    expect(seed.error).toBeNull();
+
+    // The player cannot see the unshared draft, so neither insert nor
+    // update of its contents may go through.
+    const deniedInsert = await player.client
+      .from("campaign_note_contents")
+      .insert({ note_id: noteId, content: "e30=" });
+    expect(deniedInsert.error).not.toBeNull();
+    const deniedUpdate = await player.client
+      .from("campaign_note_contents")
+      .update({ content: "e30=" })
+      .eq("note_id", noteId)
+      .select("note_id");
+    expect(deniedUpdate.error ? [] : (deniedUpdate.data ?? [])).toEqual([]);
+  });
+
+  it("locks shared, move and delete to the note author or a GM (#106)", { timeout: 90000 }, async () => {
+    const { gm, player, campaignId } = await setUpCampaign();
+    await signInAs(gm);
+    const noteId = await addNote({ campaignId, order: 0 });
+    await updateNoteShared({
+      campaignId,
+      characterId: undefined,
+      noteId,
+      shared: true,
+    });
+
+    // A second campaign the player also belongs to, so a move would pass
+    // the membership checks and only the campaign lock can stop it.
+    const otherId = await createCampaign({
+      uid: gm.userId,
+      campaignName: "Other campaign",
+      campaignType: CampaignType.Coop,
+    });
+    await signOut();
+    await signInAs(player);
+    await joinCampaign({ campaignId: otherId });
+    await signOut();
+
+    // The player sees the shared note but did not write it: shared flips,
+    // moves and deletes all fail.
+    const deniedShared = await player.client
+      .from("campaign_notes")
+      .update({ shared: false })
+      .eq("id", noteId)
+      .select("id");
+    expect(deniedShared.error ? [] : (deniedShared.data ?? [])).toEqual([]);
+    const deniedMove = await player.client
+      .from("campaign_notes")
+      .update({ campaign_id: otherId })
+      .eq("id", noteId)
+      .select("id");
+    expect(deniedMove.error ? [] : (deniedMove.data ?? [])).toEqual([]);
+    const deniedDelete = await player.client
+      .from("campaign_notes")
+      .delete()
+      .eq("id", noteId)
+      .select("id");
+    expect(deniedDelete.error ? [] : (deniedDelete.data ?? [])).toEqual([]);
+
+    // Retitling a note they can see still works for members.
+    const allowedTitle = await player.client
+      .from("campaign_notes")
+      .update({ title: "Player edit" })
+      .eq("id", noteId)
+      .select("id");
+    expect(allowedTitle.error).toBeNull();
+    expect((allowedTitle.data ?? []).map((row) => row.id)).toEqual([noteId]);
+
+    // The GM, who authored the note, can flip shared back and delete it.
+    await signInAs(gm);
+    await updateNoteShared({
+      campaignId,
+      characterId: undefined,
+      noteId,
+      shared: false,
+    });
+    await removeNote({ campaignId, noteId });
+  });
+
+  it("blocks a removed author from updating or deleting their note (#106)", { timeout: 90000 }, async () => {
+    const { gm, player, campaignId } = await setUpCampaign();
+    await signInAs(player);
+    const noteId = await addNote({ campaignId, order: 0 });
+    await signOut();
+
+    // Share the player's draft so the author can see it while a member.
+    // (Unshared notes are invisible to players, so even the returning
+    // SELECT stays empty; sharing keeps the write proof readable.)
+    const shared = await gm.client
+      .from("campaign_notes")
+      .update({ shared: true })
+      .eq("id", noteId)
+      .select("id");
+    expect(shared.error).toBeNull();
+
+    // While still a member the author may retitle the shared note.
+    const allowedWhileMember = await player.client
+      .from("campaign_notes")
+      .update({ title: "Draft" })
+      .eq("id", noteId)
+      .select("id");
+    expect(allowedWhileMember.error).toBeNull();
+    expect(
+      ((allowedWhileMember.data ?? []) as Array<{ id: string }>).map(
+        (row) => row.id
+      )
+    ).toEqual([noteId]);
+    const draftRead = await gm.client
+      .from("campaign_notes")
+      .select("id, title")
+      .eq("id", noteId)
+      .single();
+    expect(draftRead.error).toBeNull();
+    expect(draftRead.data?.title).toBe("Draft");
+
+    // The GM removes the author from the campaign.
+    const kicked = await gm.client.rpc("remove_campaign_member", {
+      cid: campaignId,
+      target_uid: player.userId,
+    });
+    expect(kicked.error).toBeNull();
+
+    // The removed author can no longer update, share, or delete, even
+    // though they wrote the note. Returning SELECTs stay empty for lack
+    // of read access too, so the GM re-reads to prove nothing changed.
+    const deniedUpdate = await player.client
+      .from("campaign_notes")
+      .update({ title: "Hijacked" })
+      .eq("id", noteId)
+      .select("id");
+    expect(deniedUpdate.error ? [] : (deniedUpdate.data ?? [])).toEqual([]);
+    const deniedShared = await player.client
+      .from("campaign_notes")
+      .update({ shared: false })
+      .eq("id", noteId)
+      .select("id");
+    expect(deniedShared.error ? [] : (deniedShared.data ?? [])).toEqual([]);
+    const deniedDelete = await player.client
+      .from("campaign_notes")
+      .delete()
+      .eq("id", noteId)
+      .select("id");
+    expect(deniedDelete.error ? [] : (deniedDelete.data ?? [])).toEqual([]);
+
+    // The note is still there for the GM, unchanged.
+    const gmRead = await gm.client
+      .from("campaign_notes")
+      .select("id, title, shared")
+      .eq("id", noteId)
+      .single();
+    expect(gmRead.error).toBeNull();
+    expect(gmRead.data?.id).toBe(noteId);
+    expect(gmRead.data?.title).toBe("Draft");
+    expect(gmRead.data?.shared).toBe(true);
+  });
+
+  it("deleting an author's account keeps the note and clears the author (#106)", { timeout: 90000 }, async () => {
+    const { gm, player, campaignId } = await setUpCampaign();
+    await signInAs(player);
+    const noteId = await addNote({ campaignId, order: 0 });
+    await signOut();
+
+    // Removing the account must not trip the author-change guard: the
+    // foreign key clears the author to NULL.
+    await deletePerson(cfg, player.userId);
+    people = people.filter((person) => person.userId !== player.userId);
+
+    const reread = await gm.client
+      .from("campaign_notes")
+      .select("id, created_by")
+      .eq("id", noteId);
+    expect(reread.error).toBeNull();
+    const rows = (reread.data ?? []) as Array<{
+      id: string;
+      created_by: string | null;
+    }>;
+    expect(rows.map((row) => row.id)).toEqual([noteId]);
+    expect(rows[0]?.created_by).toBeNull();
+
+    // The GM still manages the orphaned note.
+    const deleted = await gm.client
+      .from("campaign_notes")
+      .delete()
+      .eq("id", noteId)
+      .select("id");
+    expect(deleted.error).toBeNull();
+    expect(
+      ((deleted.data ?? []) as Array<{ id: string }>).map((row) => row.id)
+    ).toEqual([noteId]);
+  });
 });
