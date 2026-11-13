@@ -41,20 +41,20 @@ test.describe("sheet rolls land in the starting IC channel", () => {
     campaignId = await createCampaignAs(gm, campaignName, "co-op");
     await joinCampaignAs(player, campaignId);
     // The player's one campaign character: the starting IC channel posts
-    // sheet rolls as them.
-    const { data, error } = await player.client
-      .from("characters")
-      .insert({
-        owner_id: player.userId,
-        name: "E2E Kira",
-        campaign_id: campaignId,
-      })
-      .select("id")
-      .single();
-    if (error || !data) {
-      throw new Error(`e2e: could not create player character: ${error?.message}`);
+    // sheet rolls as them. The id is generated here so the insert needs no
+    // RETURNING clause: the characters SELECT policy re-queries its own
+    // table, which cannot see a just-inserted row in the same statement, so
+    // insert-then-select always fails RLS (#69).
+    kiraId = crypto.randomUUID();
+    const { error } = await player.client.from("characters").insert({
+      id: kiraId,
+      owner_id: player.userId,
+      name: "E2E Kira",
+      campaign_id: campaignId,
+    });
+    if (error) {
+      throw new Error(`e2e: could not create player character: ${error.message}`);
     }
-    kiraId = (data as unknown as { id: string }).id;
   });
 
   test.afterAll(async () => {

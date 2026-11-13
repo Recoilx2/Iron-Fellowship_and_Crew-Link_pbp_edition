@@ -100,16 +100,20 @@ test.describe("chat text posts", () => {
   test("a GM post as a world NPC shows the NPC with a GM tag", async ({
     browser,
   }) => {
-    // The campaign links a world with an NPC the GM can voice.
-    const { error: worldError, data: world } = await gm.client
-      .from("worlds")
-      .insert({ name: "E2E Bog realm", owner_ids: [gm.userId] })
-      .select("id")
-      .single();
-    if (worldError || !world) {
-      throw new Error(`e2e: could not create world: ${worldError?.message}`);
+    // The campaign links a world with an NPC the GM can voice. The world id
+    // is generated here so the insert needs no RETURNING clause: the worlds
+    // SELECT policy re-queries its own table, which cannot see a
+    // just-inserted row in the same statement, so insert-then-select always
+    // fails RLS (#69).
+    const worldId = crypto.randomUUID();
+    const { error: worldError } = await gm.client.from("worlds").insert({
+      id: worldId,
+      name: "E2E Bog realm",
+      owner_ids: [gm.userId],
+    });
+    if (worldError) {
+      throw new Error(`e2e: could not create world: ${worldError.message}`);
     }
-    const worldId = (world as { id: string }).id;
     const { error: linkError } = await gm.client
       .from("campaigns")
       .update({ world_id: worldId })

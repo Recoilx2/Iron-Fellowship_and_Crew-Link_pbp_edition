@@ -106,13 +106,20 @@ describe.skipIf(!config)("chat roll posts end to end", () => {
     campaignId: string,
     name: string
   ): Promise<string> {
-    const { data, error } = await person.client
-      .from("characters")
-      .insert({ owner_id: person.userId, name, campaign_id: campaignId })
-      .select("id")
-      .single();
+    // The id is generated here so the insert needs no RETURNING clause: the
+    // characters SELECT policy re-queries its own table, which cannot see a
+    // just-inserted row in the same statement, so insert-then-select always
+    // fails RLS (#69). The plain INSERT policy compares owner_id directly
+    // and accepts the row.
+    const id = crypto.randomUUID();
+    const { error } = await person.client.from("characters").insert({
+      id,
+      owner_id: person.userId,
+      name,
+      campaign_id: campaignId,
+    });
     expect(error).toBeNull();
-    return (data as { id: string }).id;
+    return id;
   }
 
   it("posts a roll with its existing shape beside the author's text", { timeout: 90000 }, async () => {
