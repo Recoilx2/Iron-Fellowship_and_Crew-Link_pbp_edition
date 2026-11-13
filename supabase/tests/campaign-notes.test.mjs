@@ -158,6 +158,34 @@ describe("campaign notes migration", () => {
       ),
       "shared flips are not restricted to the author or a GM"
     );
+    // A removed author loses write access at once: every author branch
+    // still requires campaign membership, so the author alone is not
+    // enough after the roster row is gone.
+    assert.ok(
+      /campaign_notes_update[\s\S]*?created_by[\s\S]{0,200}?is_campaign_member/i.test(
+        sql
+      ),
+      "UPDATE still lets a removed author write"
+    );
+    assert.ok(
+      /campaign_notes_delete[\s\S]*?created_by[\s\S]{0,200}?is_campaign_member/i.test(
+        sql
+      ),
+      "DELETE still lets a removed author delete"
+    );
+    assert.ok(
+      /NEW\.shared\s+IS\s+DISTINCT\s+FROM\s+OLD\.shared[\s\S]*?is_campaign_member\s*\(\s*OLD\.campaign_id\s*\)/i.test(
+        sql
+      ),
+      "shared flips do not require the author to still be a member"
+    );
+    // Deleting the account that wrote a note must not fail: service-key
+    // work with no signed-in person bypasses the author-change guard, so
+    // the ON DELETE SET NULL cascade can clear the author.
+    assert.ok(
+      /enforce_campaign_note_update[\s\S]*?auth\.uid\(\)\)\s+IS\s+NULL/i.test(sql),
+      "deleting an author's account still trips the author-change guard"
+    );
     // Deletes are author-or-GM only.
     assert.ok(
       /campaign_notes_delete[\s\S]*?created_by/i.test(sql),

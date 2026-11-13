@@ -20,10 +20,13 @@
 --    - `private.is_campaign_note_writable` reuses the visibility helper, so
 --      note contents are writable exactly where they are readable.
 --    - Row UPDATEs stay readable on both sides, and additionally pass for
---      the author (so authors can share or delete their own drafts before a
---      GM shares them); a BEFORE UPDATE guard locks `campaign_id` (and
---      `created_by`) and lets only the author or a campaign GM flip `shared`.
---    - DELETEs are author-or-GM only. Members still retitle/reorder and edit
+--      the author while they remain a member (so authors can share their
+--      own drafts before a GM shares them); a BEFORE UPDATE guard locks
+--      `campaign_id` (and `created_by`) and lets only a member-author or a
+--      campaign GM flip `shared`. Service-key work with no signed-in person
+--      (backfills, auth-user deletes) bypasses the guard.
+--    - DELETEs are member-author-or-GM only, so a removed author loses write
+--      access at once. Members still retitle/reorder and edit
 --      the contents of the shared notes they can see, as before.
 --
 -- Conventions: see supabase/migrations/README.md. This file runs once against
@@ -82,6 +85,12 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
+  -- Service-key work (migrations, auth-user deletes that SET NULL the
+  -- author) runs with no signed-in person; row policies are bypassed there,
+  -- so the trigger must not block it.
+  IF (select auth.uid()) IS NULL THEN
+    RETURN NEW;
+  END IF;
   IF NEW.campaign_id IS DISTINCT FROM OLD.campaign_id THEN
     RAISE EXCEPTION 'campaign_id cannot be changed' USING ERRCODE = '42501';
   END IF;
@@ -90,7 +99,8 @@ BEGIN
   END IF;
   IF NEW.shared IS DISTINCT FROM OLD.shared
     AND NOT (
-      OLD.created_by IS NOT DISTINCT FROM (select auth.uid())
+      (OLD.created_by IS NOT DISTINCT FROM (select auth.uid())
+        AND private.is_campaign_member(OLD.campaign_id))
       OR private.is_campaign_gm(OLD.campaign_id)
     )
   THEN
@@ -117,9 +127,10 @@ AS $$
 $$;
 
 -- Row policies, re-created on the strict rules. UPDATE passes for readers on
--- both sides and additionally for the author (so authors can share their own
--- drafts) and GMs; the guard above still rejects non-author shared-flips and
--- every campaign move.
+-- both sides, and additionally for the author (so authors can share their own
+-- drafts) and GMs; the author branch still requires campaign membership so a
+-- removed author loses write access at once. The guard above still rejects
+-- non-author shared-flips and every campaign move.
 DROP POLICY IF EXISTS "campaign_notes_insert_members" ON public.campaign_notes;
 CREATE POLICY "campaign_notes_insert_members" ON public.campaign_notes
   FOR INSERT TO authenticated WITH CHECK (
@@ -132,19 +143,19 @@ CREATE POLICY "campaign_notes_update_members" ON public.campaign_notes
   FOR UPDATE TO authenticated
   USING (
     private.is_campaign_note_visible(id)
-    OR created_by = (select auth.uid())
+    OR (created_by = (select auth.uid()) AND private.is_campaign_member(campaign_id))
     OR private.is_campaign_gm(campaign_id)
   )
   WITH CHECK (
     private.is_campaign_note_visible(id)
-    OR created_by = (select auth.uid())
+    OR (created_by = (select auth.uid()) AND private.is_campaign_member(campaign_id))
     OR private.is_campaign_gm(campaign_id)
   );
 
 DROP POLICY IF EXISTS "campaign_notes_delete_members" ON public.campaign_notes;
 CREATE POLICY "campaign_notes_delete_members" ON public.campaign_notes
   FOR DELETE TO authenticated USING (
-    created_by = (select auth.uid())
+    (created_by = (select auth.uid()) AND private.is_campaign_member(campaign_id))
     OR private.is_campaign_gm(campaign_id)
   );
 
