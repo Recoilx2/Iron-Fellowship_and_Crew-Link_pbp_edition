@@ -1,22 +1,19 @@
 import {
   Button,
-  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControlLabel,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
 import { LoadingButton } from "@mui/lab";
 import { useSnackbar } from "providers/SnackbarProvider/useSnackbar";
-import { updateUser } from "lib/auth.lib";
-import { useEffect, useState } from "react";
+import { updateUser } from "api-calls/auth/updateUser";
+import { useState } from "react";
 import { useStore } from "stores/store";
 import { UserAvatar } from "./UserAvatar";
-import { UserDocument } from "api-calls/user/_user.type";
 import { DialogTitleWithCloseButton } from "./DialogTitleWithCloseButton";
 
 export interface UserNameDialogProps {
@@ -30,31 +27,15 @@ export function UserNameDialog(props: UserNameDialogProps) {
   const { error } = useSnackbar();
 
   const user = useStore((store) => store.auth.user);
-  const hasHiddenPhotoUrl = useStore((store) =>
-    user?.uid ? store.users.userMap[user.uid]?.doc?.hidePhoto ?? false : false
-  );
 
   const [name, setName] = useState(user?.displayName ?? "");
-  const [showProfileImage, setShowProfileImage] = useState(!hasHiddenPhotoUrl);
-
-  useEffect(() => {
-    setShowProfileImage(!hasHiddenPhotoUrl);
-  }, [hasHiddenPhotoUrl]);
 
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSave = () => {
     if (name.trim().length > 0) {
-      const newUserDoc: UserDocument = {
-        displayName: name,
-        hidePhoto: !showProfileImage,
-      };
-      if (user?.photoURL) {
-        newUserDoc.photoURL = user.photoURL;
-      }
-
       setIsLoading(true);
-      updateUser(newUserDoc)
+      updateUser({ displayName: name })
         .then(() => {
           location.reload();
           handleClose();
@@ -86,30 +67,13 @@ export function UserNameDialog(props: UserNameDialogProps) {
           <Typography>
             Usernames will be displayed to other players in campaigns.
           </Typography>
+          {user && <UserAvatar uid={user.uid} forceName={name} />}
           <TextField
             label={"Username"}
             value={name}
             onChange={(evt) => setName(evt.currentTarget.value)}
             sx={{ mt: 4 }}
           />
-          {user?.photoURL && (
-            <Stack direction={"row"} spacing={1}>
-              <UserAvatar
-                uid={user.uid}
-                forceShowPhoto={showProfileImage}
-                forceName={name}
-              />
-              <FormControlLabel
-                label={"Show Profile Image"}
-                control={
-                  <Checkbox
-                    checked={showProfileImage}
-                    onChange={(evt, checked) => setShowProfileImage(checked)}
-                  />
-                }
-              />
-            </Stack>
-          )}
         </Stack>
       </DialogContent>
       <DialogActions>

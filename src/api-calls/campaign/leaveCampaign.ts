@@ -1,44 +1,23 @@
-import { arrayRemove, updateDoc } from "firebase/firestore";
-import { CampaignDocument } from "api-calls/campaign/_campaign.type";
-import { getCampaignDoc } from "./_getRef";
-import { updateCampaignGM } from "./updateCampaignGM";
-import { removeCharacterFromCampaign } from "./removeCharacterFromCampaign";
+import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
 
+/**
+ * Leaves a campaign, or -- for GMs -- removes another member. Leaving
+ * unlinks the departing member's characters from the campaign without
+ * deleting them, then drops the roster row. Anyone may leave themselves;
+ * only GMs remove other members. Access ends in the same step, so removed
+ * members read nothing afterwards.
+ */
 export const leaveCampaign = createApiFunction<
-  { uid: string; campaignId: string; campaign: CampaignDocument },
+  { uid: string; campaignId: string },
   void
 >(async (params) => {
-  const { uid, campaignId, campaign } = params;
-  return new Promise((resolve, reject) => {
-    const allPromises: Promise<unknown>[] = [];
-
-    if (campaign.gmIds?.includes(uid)) {
-      allPromises.push(
-        updateCampaignGM({ campaignId, gmId: uid, shouldRemove: true })
-      );
-    }
-    Object.values(campaign.characters).forEach((character) => {
-      if (character.uid === uid) {
-        allPromises.push(
-          removeCharacterFromCampaign({
-            uid,
-            campaignId,
-            characterId: character.characterId,
-          })
-        );
-      }
-    });
-
-    allPromises.push(
-      updateDoc(getCampaignDoc(campaignId), {
-        users: arrayRemove(uid),
-      })
-    );
-
-    Promise.all(allPromises)
-      .then(() => resolve())
-      .catch(reject);
-    return;
+  const { uid, campaignId } = params;
+  const { error } = await getSupabaseClient().rpc("remove_campaign_member", {
+    cid: campaignId,
+    target_uid: uid,
   });
+  if (error) {
+    throw error;
+  }
 }, "Failed to remove user from campaign.");

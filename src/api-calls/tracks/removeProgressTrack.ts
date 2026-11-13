@@ -1,5 +1,8 @@
-import { deleteDoc } from "firebase/firestore";
-import { getCampaignTracksDoc, getCharacterTracksDoc } from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
+import {
+  CAMPAIGN_TRACKS_TABLE,
+  CHARACTER_TRACKS_TABLE,
+} from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
 
 export const removeProgressTrack = createApiFunction<
@@ -9,25 +12,30 @@ export const removeProgressTrack = createApiFunction<
     id: string;
   },
   void
->((params) => {
+>(async (params) => {
   const { campaignId, characterId, id } = params;
 
-  return new Promise((resolve, reject) => {
-    if (!campaignId && !characterId) {
-      reject(new Error("Either campaign or character ID must be defined."));
-      return;
-    }
+  if (!campaignId && !characterId) {
+    throw new Error("Either campaign or character ID must be defined.");
+  }
 
-    deleteDoc(
-      campaignId
-        ? getCampaignTracksDoc(campaignId, id)
-        : getCharacterTracksDoc(characterId as string, id)
-    )
-      .then(() => {
-        resolve();
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
+  if (campaignId) {
+    const { data, error } = await getSupabaseClient()
+      .from(CAMPAIGN_TRACKS_TABLE)
+      .delete()
+      .eq("id", id)
+      .select("id");
+    if (error || !data || data.length === 0) {
+      throw error ?? new Error("Track not found");
+    }
+    return;
+  }
+  const { data, error } = await getSupabaseClient()
+    .from(CHARACTER_TRACKS_TABLE)
+    .delete()
+    .eq("id", id)
+    .select("id");
+  if (error || !data || data.length === 0) {
+    throw error ?? new Error("Track not found");
+  }
 }, "Failed to remove progress track.");

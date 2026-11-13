@@ -10,8 +10,9 @@ import { updateLocationGMProperties } from "api-calls/world/locations/updateLoca
 import { updateLocationNotes } from "api-calls/world/locations/updateLocationNotes";
 import { uploadLocationImage } from "api-calls/world/locations/uploadLocationImage";
 import { listenToLocationNotes } from "api-calls/world/locations/listenToLocationNotes";
-import { reportApiError } from "lib/analytics.lib";
-import { Unsubscribe, arrayRemove, arrayUnion } from "firebase/firestore";
+import { addLocationToMapCell } from "api-calls/world/locations/addLocationToMapCell";
+import { removeLocationFromMapCell } from "api-calls/world/locations/removeLocationFromMapCell";
+import { listenToLocationGMNotes } from "api-calls/world/locations/listenToLocationGMNotes";
 import { listenToLocationGMProperties } from "api-calls/world/locations/listenToLocationGMProperties";
 import { updateLocationCharacterBond } from "api-calls/world/locations/updateLocationCharacterBond";
 import { removeLocationImage } from "api-calls/world/locations/removeLocationImage";
@@ -19,21 +20,37 @@ import { createSpecificLocation } from "api-calls/world/locations/createSpecific
 import { MapEntry, MapEntryType } from "types/Locations.type";
 import { uploadLocationMapBackgroundImage } from "api-calls/world/locations/uploadLocationMapBackgroundImage";
 import { removeLocationMapBackgroundImage } from "api-calls/world/locations/removeLocationMapBackgroundImage";
-import { getImageUrl } from "lib/storage.lib";
-import { constructLocationImagePath } from "api-calls/world/locations/_getRef";
+import { getWorldImageUrl } from "api-calls/world/worldImageStorage";
+import {
+  ensureWorldItemNotes,
+  getWorldItemNoteIds,
+} from "api-calls/world/worldNotes";
+import type { GMLocation } from "types/Locations.type";
+
+/**
+ * Merges streamed GM notes bytes into the structured GM details, keeping
+ * each side's updates. No details and no notes means no GM properties.
+ */
+function withGMNotes(
+  details: GMLocation | null | undefined,
+  notes: Uint8Array | undefined
+): GMLocation | null {
+  const { gmNotes: _dropped, ...rest } = details ?? {};
+  void _dropped;
+  if (notes) {
+    return { ...rest, gmNotes: notes };
+  }
+  return Object.keys(rest).length > 0 ? rest : null;
+}
 
 export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
   set,
   getState
 ) => ({
   ...defaultLocationsSlice,
-  subscribe: (currentWorldId: string, currentWorldOwnerIds: string[]) => {
-    const uid = getState().auth.uid;
-    const isWorldOwner = currentWorldOwnerIds.includes(uid);
-
+  subscribe: (currentWorldId: string) => {
     return listenToLocations(
       currentWorldId,
-      isWorldOwner,
       (locationId, location) => {
         set((store) => {
           if (
@@ -48,6 +65,8 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
             ];
           const gmProperties = existingLocation?.gmProperties;
           const notes = existingLocation?.notes;
+          const publicNoteId = existingLocation?.publicNoteId;
+          const gmNoteId = existingLocation?.gmNoteId;
           const imageUrl =
             (location.imageFilenames?.length ?? 0) > 0
               ? existingLocation?.imageUrl
@@ -61,6 +80,8 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
             ...location,
             gmProperties,
             notes,
+            publicNoteId,
+            gmNoteId,
             imageUrl,
             mapBackgroundImageUrl,
           };
@@ -82,7 +103,8 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
       },
       (error) => {
         set((store) => {
-          store.worlds.currentWorld.currentWorldLocations.error = error;
+          store.worlds.currentWorld.currentWorldLocations.error =
+            error instanceof Error ? error.message : String(error);
         });
       }
     );
@@ -152,6 +174,8 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
     const worldId = getState().worlds.currentWorld.currentWorldId;
     const updateLocation =
       getState().worlds.currentWorld.currentWorldLocations.updateLocation;
+    const placeLocationOnMap =
+      getState().worlds.currentWorld.currentWorldLocations.placeLocationOnMap;
     if (!worldId) {
       return new Promise((res, reject) => reject("No world found"));
     }
@@ -175,8 +199,12 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
                 entry?.type === MapEntryType.Location &&
                 entry.locationIds.includes(locationId)
               ) {
-                updateLocation(oldParentId, {
-                  [`map.${row}.${col}.locationIds`]: arrayRemove(locationId),
+                removeLocationFromMapCell({
+                  worldId,
+                  mapLocationId: oldParentId,
+                  row: Number(row),
+                  col: Number(col),
+                  locationId,
                 }).catch(() => {});
               }
             });
@@ -191,10 +219,7 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
 
     if (typeof row === "number" && typeof col === "number" && parentId) {
       // Add the new location to the map
-      return updateLocation(parentId, {
-        [`map.${row}.${col}.type`]: MapEntryType.Location,
-        [`map.${row}.${col}.locationIds`]: arrayUnion(locationId),
-      });
+      return placeLocationOnMap(parentId, row, col, locationId);
     } else {
       return Promise.resolve();
     }
@@ -205,6 +230,19 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
       return new Promise((res, reject) => reject("No world found"));
     }
     return updateLocation({ worldId, locationId, location: partialLocation });
+  },
+  placeLocationOnMap: (mapLocationId, row, col, locationId) => {
+    const worldId = getState().worlds.currentWorld.currentWorldId;
+    if (!worldId) {
+      return new Promise((res, reject) => reject("No world found"));
+    }
+    return addLocationToMapCell({
+      worldId,
+      mapLocationId,
+      row,
+      col,
+      locationId,
+    });
   },
   updateLocationGMNotes: (locationId, notes, isBeacon) => {
     const worldId = getState().worlds.currentWorld.currentWorldId;
@@ -291,7 +329,7 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
       );
       return;
     }
-    getImageUrl(constructLocationImagePath(worldId, locationId, filename))
+    getWorldImageUrl(worldId, locationId, filename)
       .then((url) => {
         set((store) => {
           store.worlds.currentWorld.currentWorldLocations.locationMap[
@@ -345,14 +383,38 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
   subscribeToOpenLocation: (locationId) => {
     const state = getState();
     const worldId = state.worlds.currentWorld.currentWorldId;
-    const isWorldOwner =
-      state.worlds.currentWorld.currentWorld?.ownerIds.includes(
-        state.auth.uid
-      ) ?? false;
 
     if (!worldId) {
       return () => {};
     }
+
+    // The open item's note ids back the live editors. Notes are created
+    // with the item; when they are missing (a slower create racing the
+    // open), a world GM backfills them while everyone else keeps waiting
+    // for the live rows below.
+    getWorldItemNoteIds("location", locationId)
+      .then((ids) => {
+        if (ids.publicNoteId && ids.gmNoteId) {
+          return ids;
+        }
+        return ensureWorldItemNotes(worldId, "location", locationId).catch(
+          () => ids
+        );
+      })
+      .then((ids) => {
+        set((store) => {
+          const entry =
+            store.worlds.currentWorld.currentWorldLocations.locationMap[
+              locationId
+            ];
+          if (entry) {
+            entry.publicNoteId = ids.publicNoteId;
+            entry.gmNoteId = ids.gmNoteId;
+          }
+        });
+      })
+      .catch(() => {});
+
     const notesUnsubscribe = listenToLocationNotes(
       worldId,
       locationId,
@@ -371,50 +433,54 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
       },
       (error) => {
         console.error(error);
-        reportApiError(error);
       }
     );
 
-    let gmPropertiesUnsubscribe: Unsubscribe;
-    if (isWorldOwner) {
-      gmPropertiesUnsubscribe = listenToLocationGMProperties(
-        worldId,
-        locationId,
-        (properties) => {
-          set((store) => {
-            if (
-              store.worlds.currentWorld.currentWorldLocations.locationMap[
-                locationId
-              ]
-            ) {
-              store.worlds.currentWorld.currentWorldLocations.locationMap[
-                locationId
-              ].gmProperties = properties ?? null;
-            }
-          });
-        },
-        (error) => {
-          console.error(error);
-          reportApiError(error);
-        }
-      );
-    } else {
-      set((store) => {
-        if (
-          store.worlds.currentWorld.currentWorldLocations.locationMap[
-            locationId
-          ]
-        ) {
-          store.worlds.currentWorld.currentWorldLocations.locationMap[
-            locationId
-          ].gmProperties = null;
-        }
-      });
-    }
+    // GM rows are always subscribed: the database filters them, so players
+    // simply receive nothing and the location keeps null GM properties.
+    const gmPropertiesUnsubscribe = listenToLocationGMProperties(
+      worldId,
+      locationId,
+      (properties) => {
+        set((store) => {
+          const entry =
+            store.worlds.currentWorld.currentWorldLocations.locationMap[
+              locationId
+            ];
+          if (entry) {
+            const gmNotes = entry.gmProperties?.gmNotes;
+            entry.gmProperties = withGMNotes(properties ?? undefined, gmNotes);
+          }
+        });
+      },
+      (error) => {
+        console.error(error);
+      }
+    );
+
+    const gmNotesUnsubscribe = listenToLocationGMNotes(
+      worldId,
+      locationId,
+      (notes) => {
+        set((store) => {
+          const entry =
+            store.worlds.currentWorld.currentWorldLocations.locationMap[
+              locationId
+            ];
+          if (entry) {
+            entry.gmProperties = withGMNotes(entry.gmProperties, notes);
+          }
+        });
+      },
+      (error) => {
+        console.error(error);
+      }
+    );
 
     return () => {
       notesUnsubscribe();
-      gmPropertiesUnsubscribe && gmPropertiesUnsubscribe();
+      gmPropertiesUnsubscribe();
+      gmNotesUnsubscribe();
     };
   },
   resetStore: () => {

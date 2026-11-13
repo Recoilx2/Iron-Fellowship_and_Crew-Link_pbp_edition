@@ -1,21 +1,16 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { PartialWithFieldValue, updateDoc } from "firebase/firestore";
-import { getHomebrewStatsDoc } from "./_getRef";
+import { DocumentUpdate } from "api-calls/helpers.type";
 import { HomebrewStatDocument } from "api-calls/homebrew/rules/stats/_homebrewStat.type";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
+
+const api = createHomebrewContentApi<HomebrewStatDocument>("homebrew_stats");
 
 export const updateHomebrewStat = createApiFunction<
-  {
-    statId: string;
-    stat: PartialWithFieldValue<HomebrewStatDocument>;
-  },
+  { statId: string; stat: DocumentUpdate<HomebrewStatDocument> } & ClientOption,
   void
->((params) => {
-  const { statId, stat } = params;
-  return new Promise((resolve, reject) => {
-    updateDoc(getHomebrewStatsDoc(statId), stat)
-      .then(() => {
-        resolve();
-      })
-      .catch(reject);
-  });
+>(async (params) => {
+  await api.update({ id: params.statId, doc: params.stat, client: params.client });
 }, "Failed to update stat.");

@@ -1,8 +1,11 @@
 import { createApiFunction } from "api-calls/createApiFunction";
+import { removeWorldImageFile } from "api-calls/world/worldImageStorage";
 import { updateLocation } from "./updateLocation";
-import { constructLocationImagesPath } from "./_getRef";
-import { deleteImage } from "lib/storage.lib";
 
+/**
+ * Removes a location image, clearing the location's image list. Only
+ * world GMs may write; the database and the bucket enforce it.
+ */
 export const removeLocationImage = createApiFunction<
   {
     worldId: string;
@@ -10,22 +13,14 @@ export const removeLocationImage = createApiFunction<
     filename: string;
   },
   void
->((params) => {
+>(async (params) => {
   const { worldId, locationId, filename } = params;
-
-  return new Promise((resolve, reject) => {
-    updateLocation({
-      worldId,
-      locationId,
-      location: { imageFilenames: [] },
-    })
-      .then(() => {
-        deleteImage(
-          constructLocationImagesPath(worldId, locationId),
-          filename
-        ).catch(() => console.error("Failed to remove image from storage."));
-        resolve();
-      })
-      .catch(reject);
+  await updateLocation({
+    worldId,
+    locationId,
+    location: { imageFilenames: [] },
   });
+  await removeWorldImageFile(worldId, locationId, filename).catch((e) =>
+    console.error(e)
+  );
 }, "Failed to delete location image.");

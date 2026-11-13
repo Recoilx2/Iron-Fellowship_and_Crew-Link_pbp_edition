@@ -1,19 +1,25 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { PartialWithFieldValue, updateDoc } from "firebase/firestore";
-import { getHomebrewAssetCollectionDoc } from "./_getRef";
+import { DocumentUpdate } from "api-calls/helpers.type";
 import { HomebrewAssetCollectionDocument } from "api-calls/homebrew/assets/collections/_homebrewAssetCollection.type";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
+
+const api = createHomebrewContentApi<HomebrewAssetCollectionDocument>(
+  "homebrew_asset_collections"
+);
 
 export const updateHomebrewAssetCollection = createApiFunction<
   {
     assetCollectionId: string;
-    assetCollection: PartialWithFieldValue<HomebrewAssetCollectionDocument>;
-  },
+    assetCollection: DocumentUpdate<HomebrewAssetCollectionDocument>;
+  } & ClientOption,
   void
->((params) => {
-  const { assetCollectionId, assetCollection } = params;
-  return new Promise((resolve, reject) => {
-    updateDoc(getHomebrewAssetCollectionDoc(assetCollectionId), assetCollection)
-      .then(() => resolve())
-      .catch(reject);
+>(async (params) => {
+  await api.update({
+    id: params.assetCollectionId,
+    doc: params.assetCollection,
+    client: params.client,
   });
 }, "Failed to update asset collection.");

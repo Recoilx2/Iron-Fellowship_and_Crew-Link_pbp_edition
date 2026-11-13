@@ -1,23 +1,16 @@
-import { getDocs, orderBy, query, where } from "firebase/firestore";
+import { getSupabaseClient } from "config/supabase.config";
 import {
-  getCampaignGameLogCollection,
-  getCharacterGameLogCollection,
+  CHARACTER_ROLLS_TABLE,
+  CAMPAIGN_ROLLS_TABLE,
+  characterRollRowToExportRecord,
+  campaignRollRowToExportRecord,
+  type CampaignRollRow,
+  type CharacterRollRow,
 } from "./_getRef";
-import { GameLogDocument } from "./_game-log.type";
 
 export interface GameLogExportRecord {
   id: string;
   roll: Record<string, unknown>;
-}
-
-function serializeLogForExport(log: GameLogDocument): Record<string, unknown> {
-  const { timestamp, ...rest } = log;
-  const timestampDate = timestamp?.toDate?.();
-
-  return {
-    ...rest,
-    timestamp: timestampDate?.toISOString() ?? null,
-  };
 }
 
 export async function getAllLogsForExport(params: {
@@ -31,21 +24,40 @@ export async function getAllLogsForExport(params: {
     throw new Error("Either campaignId or characterId must be defined.");
   }
 
-  const collectionRef = campaignId
-    ? getCampaignGameLogCollection(campaignId)
-    : getCharacterGameLogCollection(characterId as string);
+  // Campaign rolls export from the campaign roll log table, oldest first.
+  // The database refuses GM-only rows to non-GMs; the explicit filter keeps
+  // the export's intent obvious either way.
+  if (!characterId || campaignId) {
+    let rowsQuery = getSupabaseClient()
+      .from(CAMPAIGN_ROLLS_TABLE)
+      .select("*")
+      .eq("campaign_id", (campaignId ?? characterId) as string)
+      .order("created_at", { ascending: true });
+    if (!isGM) {
+      rowsQuery = rowsQuery.eq("gms_only", false);
+    }
+    const { data, error } = await rowsQuery;
+    if (error) {
+      throw error;
+    }
+    return ((data ?? []) as unknown as CampaignRollRow[]).map(
+      campaignRollRowToExportRecord
+    );
+  }
 
-  const q = isGM
-    ? query(collectionRef, orderBy("timestamp", "asc"))
-    : query(
-        collectionRef,
-        where("gmsOnly", "==", false),
-        orderBy("timestamp", "asc")
-      );
-
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((doc) => ({
-    id: doc.id,
-    roll: serializeLogForExport(doc.data()),
-  }));
+  let rowsQuery = getSupabaseClient()
+    .from(CHARACTER_ROLLS_TABLE)
+    .select("*")
+    .eq("character_id", characterId)
+    .order("created_at", { ascending: true });
+  if (!isGM) {
+    rowsQuery = rowsQuery.eq("gms_only", false);
+  }
+  const { data, error } = await rowsQuery;
+  if (error) {
+    throw error;
+  }
+  return ((data ?? []) as unknown as CharacterRollRow[]).map(
+    characterRollRowToExportRecord
+  );
 }

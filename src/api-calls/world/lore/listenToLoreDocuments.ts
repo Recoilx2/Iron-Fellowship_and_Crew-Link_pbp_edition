@@ -1,54 +1,76 @@
-import { Unsubscribe } from "firebase/auth";
-import { onSnapshot, query, where } from "firebase/firestore";
+import { getSupabaseClient } from "config/supabase.config";
+import { Unsubscribe } from "api-calls/helpers.type";
+import { listenToRows } from "api-calls/realtime/listenToRows";
 import { Lore } from "types/Lore.type";
+import { getWorldImageUrl } from "api-calls/world/worldImageStorage";
 import {
-  constructLoreImagePath,
-  convertFromDatabase,
-  getLoreCollection,
+  WORLD_LORE_TABLE,
+  constructWorldLoreChannelName,
+  constructWorldLoreFilter,
+  lorePayloadToChange,
+  loreRowToDocument,
+  type LoreRow,
 } from "./_getRef";
-import { getImageUrl } from "lib/storage.lib";
 
+/**
+ * Follows every lore document in a world one person may see. The database
+ * filters the rows: world GMs receive all documents, other viewers only
+ * the shared ones, outsiders none. Image URLs resolve lazily per row.
+ */
 export function listenToLoreDocuments(
   worldId: string,
-  isWorldOwner: boolean,
   updateLore: (loreId: string, lore: Lore) => void,
   updateLoreImage: (loreId: string, imageUrl: string) => void,
   removeLore: (loreId: string) => void,
-  onError: (error: string) => void
+  onError: (error: unknown) => void
 ): Unsubscribe {
-  const loreCollectionRef = getLoreCollection(worldId);
+  const client = getSupabaseClient();
+  let previousIds = new Set<string>();
 
-  return onSnapshot(
-    isWorldOwner
-      ? loreCollectionRef
-      : query(loreCollectionRef, where("sharedWithPlayers", "==", true)),
-    (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === "removed") {
-          removeLore(change.doc.id);
-        } else {
-          const convertedDoc = convertFromDatabase(change.doc.data());
-          updateLore(change.doc.id, convertedDoc);
-          if (
-            Array.isArray(convertedDoc.imageFilenames) &&
-            convertedDoc.imageFilenames.length > 0
-          ) {
-            getImageUrl(
-              constructLoreImagePath(
-                worldId,
-                change.doc.id,
-                convertedDoc.imageFilenames[0]
-              )
-            ).then((url) => {
-              updateLoreImage(change.doc.id, url);
-            });
-          }
-        }
-      });
+  return listenToRows<LoreRow>({
+    client,
+    channelName: constructWorldLoreChannelName(worldId),
+    bindings: [
+      {
+        type: "postgres_changes",
+        table: WORLD_LORE_TABLE,
+        filter: constructWorldLoreFilter(worldId),
+        toChange: lorePayloadToChange,
+      },
+    ],
+    fetchRows: async () => {
+      const { data, error } = await client
+        .from(WORLD_LORE_TABLE)
+        .select("*")
+        .eq("world_id", worldId);
+      if (error) {
+        throw error;
+      }
+      return (data ?? []) as unknown as LoreRow[];
     },
-    (error) => {
-      console.error(error);
-      onError("Failed to get lore documents.");
-    }
-  );
+    getKey: (row) => row.id,
+    getUpdatedAt: (row) => row.updated_at,
+    onRows: (rows) => {
+      const seen = new Set<string>();
+      for (const row of rows) {
+        seen.add(row.id);
+        updateLore(row.id, loreRowToDocument(row));
+        if (
+          Array.isArray(row.image_filenames) &&
+          row.image_filenames.length > 0
+        ) {
+          getWorldImageUrl(worldId, row.id, row.image_filenames[0])
+            .then((url) => updateLoreImage(row.id, url))
+            .catch(() => {});
+        }
+      }
+      for (const id of previousIds) {
+        if (!seen.has(id)) {
+          removeLore(id);
+        }
+      }
+      previousIds = seen;
+    },
+    onError,
+  });
 }

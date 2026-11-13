@@ -1,23 +1,36 @@
-import { updateDoc } from "firebase/firestore";
-import { getWorldDoc } from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
 import { Truth } from "api-calls/world/_world.type";
+import { WORLDS_TABLE } from "./_getRef";
 
+/**
+ * Merges one truth into the world's truths. Only world GMs may write; the
+ * database enforces it.
+ */
 export const updateWorldTruth = createApiFunction<
   { worldId: string; truthKey: string; truth: Truth },
   void
->((params) => {
+>(async (params) => {
   const { worldId, truthKey, truth } = params;
-
-  return new Promise((resolve, reject) => {
-    updateDoc(getWorldDoc(worldId), {
-      [`newTruths.${truthKey}`]: truth,
-    })
-      .then(() => {
-        resolve();
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
+  const client = getSupabaseClient();
+  const { data, error: readError } = await client
+    .from(WORLDS_TABLE)
+    .select("new_truths")
+    .eq("id", worldId)
+    .single();
+  if (readError || !data) {
+    throw readError ?? new Error("Failed to update world truth.");
+  }
+  const merged = {
+    ...((data as { new_truths: Record<string, Truth> }).new_truths ?? {}),
+    [truthKey]: truth,
+  };
+  const { data: updated, error } = await client
+    .from(WORLDS_TABLE)
+    .update({ new_truths: merged })
+    .eq("id", worldId)
+    .select("id");
+  if (error || !updated || updated.length === 0) {
+    throw error ?? new Error("Failed to update world truth.");
+  }
 }, "Failed to update world truth.");

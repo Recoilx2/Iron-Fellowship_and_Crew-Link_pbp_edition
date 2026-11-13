@@ -1,6 +1,20 @@
-import { deleteDoc } from "firebase/firestore";
-import { getCampaignAssetDoc, getCharacterAssetDoc } from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
+import {
+  CAMPAIGN_ASSETS_TABLE,
+  CHARACTER_ASSETS_TABLE,
+} from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
+
+async function removeSupabaseAsset(assetId: string): Promise<void> {
+  const { data, error } = await getSupabaseClient()
+    .from(CHARACTER_ASSETS_TABLE)
+    .delete()
+    .eq("id", assetId)
+    .select("id");
+  if (error || !data || data.length === 0) {
+    throw error ?? new Error("Asset not found");
+  }
+}
 
 export const removeAsset = createApiFunction<
   {
@@ -9,24 +23,25 @@ export const removeAsset = createApiFunction<
     assetId: string;
   },
   void
->((params) => {
+>(async (params) => {
   const { characterId, campaignId, assetId } = params;
 
-  return new Promise((resolve, reject) => {
-    if (!characterId && !campaignId) {
-      reject(new Error("Either character or campaign ID must be defined"));
-      return;
+  if (!characterId && !campaignId) {
+    throw new Error("Either campaign or character ID must be defined");
+  }
+  if (campaignId) {
+    const { data, error } = await getSupabaseClient()
+      .from(CAMPAIGN_ASSETS_TABLE)
+      .delete()
+      .eq("id", assetId)
+      .select("id");
+    if (error || !data || data.length === 0) {
+      throw error ?? new Error("Asset not found");
     }
-    deleteDoc(
-      characterId
-        ? getCharacterAssetDoc(characterId, assetId)
-        : getCampaignAssetDoc(campaignId as string, assetId)
-    )
-      .then(() => {
-        resolve();
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
+    return;
+  }
+  if (!characterId) {
+    throw new Error("Either campaign or character ID must be defined");
+  }
+  await removeSupabaseAsset(assetId);
 }, "Error removing asset");

@@ -1,23 +1,46 @@
-import { UpdateData, updateDoc } from "firebase/firestore";
+import { getSupabaseClient } from "config/supabase.config";
+import { DocumentUpdate } from "api-calls/helpers.type";
 import { CharacterDocument } from "./_character.type";
-import { getCharacterDoc } from "./_getRef";
+import {
+  CHARACTERS_TABLE,
+  characterUpdateToColumns,
+  type CharacterRow,
+} from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
 
 interface Params {
   characterId: string;
-  character: UpdateData<CharacterDocument>;
+  character: DocumentUpdate<CharacterDocument>;
 }
 
-export const updateCharacter = createApiFunction<Params, void>((params) => {
-  const { characterId, character } = params;
+export const updateCharacter = createApiFunction<Params, void>(
+  async (params) => {
+    const { characterId, character } = params;
+    const client = getSupabaseClient();
 
-  return new Promise((resolve, reject) => {
-    updateDoc(getCharacterDoc(characterId), character)
-      .then(() => {
-        resolve();
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
-}, "Failed to update character.");
+    const { data: row, error: fetchError } = await client
+      .from(CHARACTERS_TABLE)
+      .select("*")
+      .eq("id", characterId)
+      .single();
+    if (fetchError || !row) {
+      throw fetchError ?? new Error("Character not found");
+    }
+    const columns = characterUpdateToColumns(
+      row as CharacterRow,
+      character
+    );
+    if (Object.keys(columns).length === 0) {
+      return;
+    }
+    const { data: updated, error } = await client
+      .from(CHARACTERS_TABLE)
+      .update(columns)
+      .eq("id", characterId)
+      .select("id");
+    if (error || !updated || updated.length === 0) {
+      throw error ?? new Error("Character not found");
+    }
+  },
+  "Failed to update character."
+);

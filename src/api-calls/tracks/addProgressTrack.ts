@@ -1,8 +1,9 @@
-import { addDoc } from "firebase/firestore";
+import { getSupabaseClient } from "config/supabase.config";
 import {
-  convertToDatabase,
-  getCampaignTracksCollection,
-  getCharacterTracksCollection,
+  CHARACTER_TRACKS_TABLE,
+  CAMPAIGN_TRACKS_TABLE,
+  characterTrackToColumns,
+  campaignTrackToColumns,
 } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
 import { Track } from "types/Track.type";
@@ -14,28 +15,29 @@ export const addProgressTrack = createApiFunction<
     track: Track;
   },
   void
->((params) => {
+>(async (params) => {
   const { campaignId, characterId, track } = params;
 
-  const storedTrack = convertToDatabase(track);
+  if (!campaignId && !characterId) {
+    throw new Error("Must provide either a character or a campaign ID");
+  }
 
-  return new Promise((resolve, reject) => {
-    if (!campaignId && !characterId) {
-      reject("Must provide either a character or a campaign ID");
-      return;
+  if (campaignId) {
+    const { error } = await getSupabaseClient()
+      .from(CAMPAIGN_TRACKS_TABLE)
+      .insert(campaignTrackToColumns(campaignId, track));
+    if (error) {
+      throw error;
     }
-
-    addDoc(
-      campaignId
-        ? getCampaignTracksCollection(campaignId)
-        : getCharacterTracksCollection(characterId as string),
-      storedTrack
-    )
-      .then(() => {
-        resolve();
-      })
-      .catch((e) => {
-        reject(e);
-      });
-  });
+    return;
+  }
+  if (!characterId) {
+    throw new Error("Must provide either a character or a campaign ID");
+  }
+  const { error } = await getSupabaseClient()
+    .from(CHARACTER_TRACKS_TABLE)
+    .insert(characterTrackToColumns(characterId, track));
+  if (error) {
+    throw error;
+  }
 }, "Failed to add progress track.");

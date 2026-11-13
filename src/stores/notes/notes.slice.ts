@@ -15,7 +15,7 @@ export const createNotesSlice: CreateSliceType<NotesSlice> = (
 ) => ({
   ...defaultNotesSlice,
 
-  subscribe: (campaignId, loadAllCampaignDocs, characterId) => {
+  subscribe: (campaignId, characterId) => {
     if (!campaignId && !characterId) {
       return () => {};
     }
@@ -26,7 +26,6 @@ export const createNotesSlice: CreateSliceType<NotesSlice> = (
     return listenToNotes(
       campaignId,
       characterId,
-      !loadAllCampaignDocs,
       (source, notes) => {
         set((store) => {
           store.notes.loading = false;

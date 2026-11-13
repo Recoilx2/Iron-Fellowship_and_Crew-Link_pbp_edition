@@ -8,7 +8,7 @@ import * as Y from "yjs";
 const FRAGMENT_FIELD = "default";
 
 /**
- * Convert a Yjs update payload (as stored in Firestore note/world docs) to
+ * Convert a Yjs update payload (as stored beside each note/world doc) to
  * markdown. Returns an empty string for empty/missing docs.
  *
  * Runs the conversion through a detached tiptap Editor configured with the

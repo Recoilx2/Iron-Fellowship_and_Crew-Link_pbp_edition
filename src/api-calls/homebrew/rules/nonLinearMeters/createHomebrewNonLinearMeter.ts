@@ -1,20 +1,17 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { addDoc } from "firebase/firestore";
-import { getHomebrewNonLinearMeterCollection } from "./_getRef";
 import { HomebrewNonLinearMeterDocument } from "api-calls/homebrew/rules/nonLinearMeters/_homebrewNonLinearMeter.type";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
+
+const api = createHomebrewContentApi<HomebrewNonLinearMeterDocument>(
+  "homebrew_non_linear_meters"
+);
 
 export const createHomebrewNonLinearMeter = createApiFunction<
-  {
-    meter: HomebrewNonLinearMeterDocument;
-  },
+  { meter: HomebrewNonLinearMeterDocument } & ClientOption,
   void
->((params) => {
-  const { meter } = params;
-  return new Promise((resolve, reject) => {
-    addDoc(getHomebrewNonLinearMeterCollection(), meter)
-      .then(() => {
-        resolve();
-      })
-      .catch(reject);
-  });
-}, "Failed to create meter.");
+>(async (params) => {
+  await api.create({ doc: params.meter, client: params.client });
+}, "Failed to create non-linear meter.");

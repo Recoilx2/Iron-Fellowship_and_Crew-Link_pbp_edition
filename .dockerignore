@@ -1,0 +1,14 @@
+# Build context for the site image (supabase/site/Dockerfile). Keep secrets
+# and bulk out of the context; the image only needs the site sources.
+.git
+node_modules
+dist
+dist-ssr
+*.local
+supabase/.env
+supabase/.env.*
+!supabase/.env.example
+logs
+*.log
+.vscode
+.idea

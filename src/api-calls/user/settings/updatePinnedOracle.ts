@@ -1,20 +1,42 @@
-import { updateDoc } from "firebase/firestore";
-import { encodeDataswornId } from "functions/dataswornIdEncoder";
-import { getUserOracleSettingsDoc } from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
+import { USER_SETTINGS_TABLE } from "./_getRef";
 
+/**
+ * Pins or unpins a single oracle section. Oracle ids are stored as plain
+ * JSON keys: Postgres jsonb accepts any string, so no id encoding is needed
+ * at the edge.
+ */
 export const updatePinnedOracle = createApiFunction<
   { uid: string; oracleId: string; pinned: boolean },
   void
->((params) => {
+>(async (params) => {
   const { uid, oracleId, pinned } = params;
+  const client = getSupabaseClient();
 
-  return new Promise((resolve, reject) => {
-    const encodedId = encodeDataswornId(oracleId);
-    updateDoc(getUserOracleSettingsDoc(uid), {
-      [`pinnedOracleSections.${encodedId}`]: pinned,
-    })
-      .then(() => resolve())
-      .catch((e) => reject(e));
-  });
+  const { data, error } = await client
+    .from(USER_SETTINGS_TABLE)
+    .select("pinned_oracle_sections")
+    .eq("user_id", uid)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  const current =
+    (data?.pinned_oracle_sections as Record<string, boolean> | null) ?? {};
+  const { error: upsertError } = await client
+    .from(USER_SETTINGS_TABLE)
+    .upsert(
+      {
+        user_id: uid,
+        pinned_oracle_sections: { ...current, [oracleId]: pinned },
+      },
+      { onConflict: "user_id" }
+    );
+
+  if (upsertError) {
+    throw upsertError;
+  }
 }, "Failed to pin oracle.");

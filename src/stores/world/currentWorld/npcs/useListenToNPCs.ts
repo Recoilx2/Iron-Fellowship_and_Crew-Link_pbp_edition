@@ -1,14 +1,9 @@
-import { Unsubscribe } from "firebase/firestore";
+import { Unsubscribe } from "api-calls/helpers.type";
 import { useEffect } from "react";
 import { useStore } from "stores/store";
 
 export function useListenToNPCs() {
   const worldId = useStore((store) => store.worlds.currentWorld.currentWorldId);
-  const worldOwnerIds = useStore((store) =>
-    store.worlds.currentWorld.currentWorld
-      ? store.worlds.currentWorld.currentWorld.ownerIds ?? []
-      : undefined
-  );
   const listenToNPCs = useStore(
     (store) => store.worlds.currentWorld.currentWorldNPCs.subscribe
   );
@@ -16,12 +11,12 @@ export function useListenToNPCs() {
   useEffect(() => {
     let unsubscribe: Unsubscribe;
 
-    if (worldId && worldOwnerIds) {
-      unsubscribe = listenToNPCs(worldId, worldOwnerIds ?? []);
+    if (worldId) {
+      unsubscribe = listenToNPCs(worldId);
     }
 
     return () => {
       unsubscribe && unsubscribe();
     };
-  }, [worldId, worldOwnerIds, listenToNPCs]);
+  }, [worldId, listenToNPCs]);
 }

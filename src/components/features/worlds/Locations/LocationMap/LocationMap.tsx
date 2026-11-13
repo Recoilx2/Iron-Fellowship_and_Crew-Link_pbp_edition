@@ -19,7 +19,6 @@ import { useStore } from "stores/store";
 import { useState } from "react";
 import { MapTool, MapTools, draggableMapTools } from "./MapTools.enum";
 import { MapToolChooser } from "./MapToolChooser";
-import { arrayUnion } from "firebase/firestore";
 import { LocationItemAvatar } from "./LocationItemAvatar";
 import { checkIsLocationCell, getValidLocations } from "./checkIsLocationCell";
 import { LocationWithGMProperties } from "stores/world/currentWorld/locations/locations.slice.type";
@@ -99,6 +98,10 @@ export function LocationMap(props: LocationMapProps) {
   const updateLocation = useStore(
     (store) => store.worlds.currentWorld.currentWorldLocations.updateLocation
   );
+  const placeLocationOnMap = useStore(
+    (store) =>
+      store.worlds.currentWorld.currentWorldLocations.placeLocationOnMap
+  );
   const setOpenLocationId = useStore(
     (store) => store.worlds.currentWorld.currentWorldLocations.setOpenLocationId
   );
@@ -155,10 +158,7 @@ export function LocationMap(props: LocationMapProps) {
           : {}),
       })
         .then((id) => {
-          updateLocation(locationId, {
-            [`map.${row}.${col}.type`]: MapEntryType.Location,
-            [`map.${row}.${col}.locationIds`]: arrayUnion(id),
-          }).catch(() => {});
+          placeLocationOnMap(locationId, row, col, id).catch(() => {});
         })
         .catch(() => {});
       setMapTool(undefined);

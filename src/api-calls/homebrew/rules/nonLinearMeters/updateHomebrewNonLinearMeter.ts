@@ -1,21 +1,25 @@
 import { createApiFunction } from "api-calls/createApiFunction";
-import { PartialWithFieldValue, updateDoc } from "firebase/firestore";
-import { getHomebrewNonLinearMeterDoc } from "./_getRef";
+import { DocumentUpdate } from "api-calls/helpers.type";
 import { HomebrewNonLinearMeterDocument } from "api-calls/homebrew/rules/nonLinearMeters/_homebrewNonLinearMeter.type";
+import {
+  ClientOption,
+  createHomebrewContentApi,
+} from "api-calls/homebrew/_supabase";
+
+const api = createHomebrewContentApi<HomebrewNonLinearMeterDocument>(
+  "homebrew_non_linear_meters"
+);
 
 export const updateHomebrewNonLinearMeter = createApiFunction<
   {
     meterId: string;
-    meter: PartialWithFieldValue<HomebrewNonLinearMeterDocument>;
-  },
+    meter: DocumentUpdate<HomebrewNonLinearMeterDocument>;
+  } & ClientOption,
   void
->((params) => {
-  const { meterId, meter } = params;
-  return new Promise((resolve, reject) => {
-    updateDoc(getHomebrewNonLinearMeterDoc(meterId), meter)
-      .then(() => {
-        resolve();
-      })
-      .catch(reject);
+>(async (params) => {
+  await api.update({
+    id: params.meterId,
+    doc: params.meter,
+    client: params.client,
   });
-}, "Failed to update meter.");
+}, "Failed to update non-linear meter.");

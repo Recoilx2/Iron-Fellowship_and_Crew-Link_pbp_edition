@@ -9,7 +9,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import { useId, useRef, useState } from "react";
-import { logout } from "lib/auth.lib";
+import { logout } from "api-calls/auth/logout";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { useToggleTheme } from "providers/ThemeProvider";
 import LightThemeIcon from "@mui/icons-material/LightMode";
@@ -27,16 +27,11 @@ import {
 import AccessibilityIcon from "@mui/icons-material/AccessibilityNew";
 import { AccessibilitySettingsDialog } from "./AccessibilitySettingsDialog";
 import SettingsIcon from "@mui/icons-material/Settings";
-import { BetaTestsDialog } from "./BetaTestsDialog";
-import TestsIcon from "@mui/icons-material/AutoAwesome";
 import { useIsMobile } from "hooks/useIsMobile";
 import { useStore } from "stores/store";
 import { AUTH_STATE } from "stores/auth/auth.slice.type";
 import { UserNameDialog } from "components/shared/UserNameDialog";
 import UsernameIcon from "@mui/icons-material/AccountCircle";
-import TokenIcon from "@mui/icons-material/Contacts";
-import { CustomTokenDialog } from "./CustomTokenDialog/CustomTokenDialog";
-import { activeFeatureFlags } from "hooks/featureFlags/activeFeatureFlags";
 
 export function SettingsMenu() {
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
@@ -51,9 +46,7 @@ export function SettingsMenu() {
   const [accessibilitySettingsOpen, setAccessibilitySettingsOpen] =
     useState(false);
 
-  const [betaTestsOpen, setBetaTestsOpen] = useState(false);
   const [usernameDialogOpen, setUsernameDialogOpen] = useState(false);
-  const [customTokenDialogOpen, setCustomTokenDialogOpen] = useState(false);
 
   const isMobile = useIsMobile();
 
@@ -143,19 +136,6 @@ export function SettingsMenu() {
             <ListItemText>Accessibility Settings</ListItemText>
           </MenuItem>
         )}
-        {activeFeatureFlags.length > 0 && (
-          <MenuItem
-            onClick={() => {
-              setMenuOpen(false);
-              setBetaTestsOpen(true);
-            }}
-          >
-            <ListItemIcon>
-              <TestsIcon />
-            </ListItemIcon>
-            <ListItemText>Beta Tests</ListItemText>
-          </MenuItem>
-        )}
         <MenuItem
           onClick={() => {
             setMenuOpen(false);
@@ -221,34 +201,16 @@ export function SettingsMenu() {
             <ListItemText>Switch System</ListItemText>
           </MenuItem>
         )}
-        {isLocal && (
-          <MenuItem onClick={() => setCustomTokenDialogOpen(true)}>
-            <ListItemIcon>
-              <TokenIcon />
-            </ListItemIcon>
-            <ListItemText>Login with Custom Token</ListItemText>
-          </MenuItem>
-        )}
       </Menu>
       <AccessibilitySettingsDialog
         open={accessibilitySettingsOpen}
         onClose={() => setAccessibilitySettingsOpen(false)}
-      />
-      <BetaTestsDialog
-        open={betaTestsOpen}
-        onClose={() => setBetaTestsOpen(false)}
       />
       <UserNameDialog
         open={usernameDialogOpen}
         handleClose={() => setUsernameDialogOpen(false)}
         updating
       />
-      {isLocal && (
-        <CustomTokenDialog
-          open={customTokenDialogOpen}
-          onClose={() => setCustomTokenDialogOpen(false)}
-        />
-      )}
     </>
   );
 }

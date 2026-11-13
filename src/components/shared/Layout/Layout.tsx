@@ -4,7 +4,6 @@ import { UserNameDialog } from "components/shared/UserNameDialog";
 import { useStore } from "stores/store";
 import { AUTH_STATE } from "stores/auth/auth.slice.type";
 import { SkipToContentButton } from "./SkipToContentButton";
-import { useSyncFeatureFlags } from "hooks/featureFlags/useSyncFeatureFlags";
 import { LinkedDialog } from "components/features/charactersAndCampaigns/LinkedDialog";
 import { LiveRegion } from "../LiveRegion";
 import { RollSnackbarSection } from "./RollSnackbarSection";
@@ -18,7 +17,6 @@ import { useRef } from "react";
 import { useFocusMainOnNavigation } from "hooks/useFocusMainOnNavigation";
 
 export function Layout() {
-  useSyncFeatureFlags();
   const mainRef = useRef<HTMLElement>(null);
   useFocusMainOnNavigation(mainRef);
   const state = useStore((store) => store.auth.status);

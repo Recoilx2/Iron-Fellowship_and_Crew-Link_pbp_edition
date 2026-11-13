@@ -1,5 +1,10 @@
-import { setDoc, updateDoc } from "firebase/firestore";
-import { getCampaignSettingsDoc, getCharacterSettingsDoc } from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
+import {
+  CHARACTER_SETTINGS_TABLE,
+  CAMPAIGN_SETTINGS_TABLE,
+  characterSettingsToColumns,
+  campaignSettingsToColumns,
+} from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
 import { SettingsDocument } from "api-calls/character-campaign-settings/_character-campaign-settings.type";
 
@@ -11,33 +16,31 @@ export const updateSettings = createApiFunction<
     useUpdate?: boolean;
   },
   void
->((params) => {
-  const { campaignId, characterId, settings, useUpdate } = params;
+>(async (params) => {
+  const { campaignId, characterId, settings } = params;
 
-  return new Promise((resolve, reject) => {
-    if (!campaignId && !characterId) {
-      reject(new Error("Either character or campaign ID must be defined."));
-      return;
+  if (!campaignId && !characterId) {
+    throw new Error("Either character or campaign ID must be defined.");
+  }
+
+  if (campaignId) {
+    const columns = campaignSettingsToColumns(campaignId, settings);
+    const { error } = await getSupabaseClient()
+      .from(CAMPAIGN_SETTINGS_TABLE)
+      .upsert(columns, { onConflict: "campaign_id" });
+    if (error) {
+      throw error;
     }
-
-    (useUpdate
-      ? updateDoc(
-          campaignId
-            ? getCampaignSettingsDoc(campaignId)
-            : getCharacterSettingsDoc(characterId as string),
-          settings
-        )
-      : setDoc(
-          campaignId
-            ? getCampaignSettingsDoc(campaignId)
-            : getCharacterSettingsDoc(characterId as string),
-          settings,
-          { merge: true }
-        )
-    )
-      .then(() => resolve())
-      .catch((e) => {
-        reject(e);
-      });
-  });
+    return;
+  }
+  if (!characterId) {
+    throw new Error("Either character or campaign ID must be defined.");
+  }
+  const columns = characterSettingsToColumns(characterId, settings);
+  const { error } = await getSupabaseClient()
+    .from(CHARACTER_SETTINGS_TABLE)
+    .upsert(columns, { onConflict: "character_id" });
+  if (error) {
+    throw error;
+  }
 }, "Failed to update settings.");

@@ -12,7 +12,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { UpdateData } from "firebase/firestore";
+import { DocumentUpdate } from "api-calls/helpers.type";
 import { DialogTitleWithCloseButton } from "components/shared/DialogTitleWithCloseButton";
 import { useEffect, useMemo, useState } from "react";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
@@ -42,11 +42,9 @@ export interface ResizeMapDialogProps {
 }
 
 interface ResizePlan {
-  updates: UpdateData<Location>;
+  updates: DocumentUpdate<Location>;
   affectedLocationNames: string[];
 }
-
-type ResizeUpdates = UpdateData<Location> & Record<string, number | null>;
 
 interface ResizeMapForm {
   rows: string;
@@ -182,7 +180,7 @@ export function ResizeMapDialog(props: ResizeMapDialogProps) {
     nextCols: number,
     nextHexSize: number
   ) => {
-    const updates: ResizeUpdates = {
+    const updates: Record<string, unknown> = {
       mapRows: nextRows,
       mapCols: nextCols,
       mapHexSize: nextHexSize,

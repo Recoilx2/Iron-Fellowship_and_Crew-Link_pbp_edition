@@ -97,15 +97,11 @@ export const createCurrentCampaignSlice: CreateSliceType<
     deleteCampaign: () => {
       const state = getState();
       const campaignId = state.campaigns.currentCampaign.currentCampaignId;
-      const characterIds =
-        state.campaigns.currentCampaign.currentCampaign?.characters.map(
-          (character) => character.characterId
-        );
 
-      if (!campaignId || characterIds === undefined) {
+      if (!campaignId) {
         return new Promise((res, reject) => reject("Campaign is not open"));
       }
-      return deleteCampaign({ campaignId, characterIds });
+      return deleteCampaign({ campaignId });
     },
     leaveCampaign: () => {
       const state = getState();
@@ -113,11 +109,11 @@ export const createCurrentCampaignSlice: CreateSliceType<
       const campaignId = state.campaigns.currentCampaign.currentCampaignId;
       const campaign = state.campaigns.currentCampaign.currentCampaign;
 
-      if (!campaign || !campaignId) {
+      if (!campaign || !campaignId || !uid) {
         return new Promise((res, reject) => reject("Campaign is not open"));
       }
 
-      return leaveCampaign({ uid, campaignId, campaign });
+      return leaveCampaign({ uid, campaignId });
     },
     removePlayerFromCampaign: (uid: string) => {
       const state = getState();
@@ -128,7 +124,7 @@ export const createCurrentCampaignSlice: CreateSliceType<
         return new Promise((res, reject) => reject("Campaign is not open"));
       }
 
-      return leaveCampaign({ uid, campaignId, campaign });
+      return leaveCampaign({ uid, campaignId });
     },
     addCharacter: (characterId) => {
       const state = getState();

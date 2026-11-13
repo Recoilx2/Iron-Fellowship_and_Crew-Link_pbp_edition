@@ -23,7 +23,10 @@ import { useListenToCurrentLocation } from "stores/world/currentWorld/locations/
 import { BondsSection } from "components/features/worlds/BondsSection";
 import { LocationNPCs } from "./LocationNPCs";
 import { useWorldPermissions } from "../useWorldPermissions";
-import { MAX_FILE_SIZE, MAX_FILE_SIZE_LABEL } from "lib/storage.lib";
+import {
+  MAX_FILE_SIZE,
+  MAX_FILE_SIZE_LABEL,
+} from "api-calls/storage/imageLimits";
 import { useSnackbar } from "providers/SnackbarProvider";
 import { GuideAndPlayerHeader, GuideOnlyHeader } from "../common";
 import { VisibilityToggleButton } from "../common/VisibilityToggleButton";
@@ -47,6 +50,7 @@ import MoveLocationIcon from "@mui/icons-material/ModeOfTravel";
 import { useState } from "react";
 import { MoveLocationDialog } from "./MoveLocationDialog";
 import { LocationBreadcrumbs } from "./LocationBreadcrumbs";
+import { getWorldNoteDocumentName } from "config/hocuspocus.config";
 
 export interface OpenLocationProps {
   worldId: string;
@@ -60,7 +64,6 @@ export interface OpenLocationProps {
 
 export function OpenLocation(props: OpenLocationProps) {
   const {
-    worldId,
     locationId,
     location,
     closeLocation,
@@ -395,13 +398,17 @@ export function OpenLocation(props: OpenLocationProps) {
                       />
                     )}
                     <Grid item xs={12}>
-                      <RtcRichTextEditor
-                        id={locationId}
-                        roomPrefix={`iron-fellowship-${worldId}-location-gmnotes-`}
-                        documentPassword={worldId}
-                        onSave={updateLocationGMNotes}
-                        initialValue={location.gmProperties?.gmNotes}
-                      />
+                      {location.gmNoteId && (
+                        <RtcRichTextEditor
+                          id={locationId}
+                          documentName={getWorldNoteDocumentName(
+                            location.gmNoteId
+                          )}
+                          onSave={updateLocationGMNotes}
+                          initialValue={location.gmProperties?.gmNotes}
+                          serverPersisted
+                        />
+                      )}
                     </Grid>
                   </>
                 )}
@@ -438,15 +445,18 @@ export function OpenLocation(props: OpenLocationProps) {
                       </Grid>
                     )}
                     <Grid item xs={12}>
-                      {(location.notes || location.notes === null) && (
-                        <RtcRichTextEditor
-                          id={locationId}
-                          roomPrefix={`iron-fellowship-${worldId}-location-`}
-                          documentPassword={worldId}
-                          onSave={updateLocationNotes}
-                          initialValue={location.notes || undefined}
-                        />
-                      )}
+                      {(location.notes || location.notes === null) &&
+                        location.publicNoteId && (
+                          <RtcRichTextEditor
+                            id={locationId}
+                            documentName={getWorldNoteDocumentName(
+                              location.publicNoteId
+                            )}
+                            onSave={updateLocationNotes}
+                            initialValue={location.notes || undefined}
+                            serverPersisted
+                          />
+                        )}
                     </Grid>
                   </>
                 )}

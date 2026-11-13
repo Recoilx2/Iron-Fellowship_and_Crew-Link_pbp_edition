@@ -10,24 +10,23 @@ import {
 import { PageContent, PageHeader } from "components/shared/Layout";
 import { Head } from "providers/HeadProvider/Head";
 import { useStore } from "stores/store";
-import { CampaignDocument } from "api-calls/campaign/_campaign.type";
 import { useAppName } from "hooks/useAppName";
 
 export function CampaignJoinPage() {
   const { campaignId } = useParams();
   const uid = useStore((store) => store.auth.uid);
 
-  const [campaign, setCampaign] = useState<CampaignDocument>();
-  const getCampaign = useStore((store) => store.campaigns.getCampaign);
+  const [campaign, setCampaign] = useState<{ id: string; name: string }>();
+  const previewCampaign = useStore((store) => store.campaigns.previewCampaign);
   const [getCampaignLoading, setGetCampaignLoading] = useState(true);
   const [getCampaignError, setGetCampaignError] = useState<string>();
 
   useEffect(() => {
     if (campaignId && uid) {
-      getCampaign(campaignId)
-        .then((campaign) => {
+      previewCampaign(campaignId)
+        .then((preview) => {
           setGetCampaignLoading(false);
-          setCampaign(campaign);
+          setCampaign(preview);
         })
         .catch((e) => {
           setGetCampaignLoading(false);
@@ -36,22 +35,19 @@ export function CampaignJoinPage() {
           );
         });
     }
-  }, [getCampaign, campaignId, uid]);
+  }, [previewCampaign, campaignId, uid]);
 
-  const addUserToCampaign = useStore(
-    (store) => store.campaigns.addUserToCampaign
-  );
-  const [addUserToCampaignLoading, setAddUserToCampaignLoading] =
-    useState(false);
+  const joinCampaign = useStore((store) => store.campaigns.joinCampaign);
+  const [joinLoading, setJoinLoading] = useState(false);
 
   const campaigns = useStore((store) => store.campaigns.campaignMap);
 
   const handleJoinCampaign = () => {
     if (campaignId && uid) {
-      setAddUserToCampaignLoading(true);
-      addUserToCampaign(uid, campaignId)
+      setJoinLoading(true);
+      joinCampaign(campaignId)
         .catch(() => {})
-        .finally(() => setAddUserToCampaignLoading(false));
+        .finally(() => setJoinLoading(false));
     }
   };
 
@@ -118,7 +114,7 @@ export function CampaignJoinPage() {
               size={"large"}
               variant={"contained"}
               onClick={() => handleJoinCampaign()}
-              disabled={addUserToCampaignLoading}
+              disabled={joinLoading}
             >
               Join {campaign.name}
             </Button>
