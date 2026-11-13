@@ -54,15 +54,26 @@ export function SpeakerAvatar(props: { speaker: Speaker; authorUid: string; size
   );
 }
 
-export function SpeakerLabel(props: { post: Post }) {
+// IC: character name, then the player's name. OOC (posting as yourself):
+// your name, then your character in this campaign, so people know who's who.
+export function SpeakerLabel(props: { post: Post; showCharacterWhenOOC?: boolean }) {
   const { post } = props;
   const author = people[post.authorUid];
+  const oocCharacter =
+    props.showCharacterWhenOOC && post.speaker.kind === "self"
+      ? Object.values(characters).find((c) => c.uid === post.authorUid)
+      : undefined;
   return (
     <Stack direction={"row"} spacing={0.75} alignItems={"baseline"} flexWrap={"wrap"}>
       <Typography fontWeight={700}>{speakerName(post.speaker, post.authorUid)}</Typography>
       {post.speaker.kind !== "self" && (
         <Typography variant={"caption"} color={"text.secondary"}>
           {author.name}
+        </Typography>
+      )}
+      {oocCharacter && (
+        <Typography variant={"caption"} color={"text.secondary"}>
+          {oocCharacter.name}
         </Typography>
       )}
       {author.isGM && <Chip size={"small"} label={"GM"} color={"primary"} sx={{ height: 18 }} />}

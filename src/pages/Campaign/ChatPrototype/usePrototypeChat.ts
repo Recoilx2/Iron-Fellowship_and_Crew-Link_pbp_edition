@@ -50,7 +50,7 @@ export interface Post {
   deleted?: boolean;
 }
 
-export type RollKind = "move" | "stat" | "progress" | "oracle" | "dice";
+export type RollKind = "move" | "stat" | "progress" | "ask" | "oracle" | "dice";
 
 export const people: Record<string, Person> = {
   gm: { uid: "gm", name: "Rook", isGM: true },
@@ -311,6 +311,7 @@ function makeRoll(kind: RollKind, uid: string, characterId: string | null): Roll
         trackType: TrackTypes.Vow,
       };
     }
+    case "ask":
     case "oracle":
       return {
         ...base,
@@ -340,7 +341,8 @@ export const rollKindLabels: Record<RollKind, string> = {
   move: "Move",
   stat: "Stat",
   progress: "Progress",
-  oracle: "Oracle",
+  ask: "Ask the Oracle",
+  oracle: "Oracles",
   dice: "Dice",
 };
 

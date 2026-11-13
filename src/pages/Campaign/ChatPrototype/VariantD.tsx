@@ -314,7 +314,7 @@ function FlatPost(props: { chat: PrototypeChat; post: Post }) {
       <SpeakerAvatar speaker={post.speaker} authorUid={post.authorUid} size={40} />
       <Box sx={{ minWidth: 0, flexGrow: 1 }}>
         <Stack direction={"row"} alignItems={"center"} spacing={1}>
-          <SpeakerLabel post={post} />
+          <SpeakerLabel post={post} showCharacterWhenOOC />
           <Typography variant={"caption"} color={"text.secondary"}>
             {timeLabel(post.createdAt)}
           </Typography>
@@ -393,7 +393,7 @@ function Composer(props: { chat: PrototypeChat }) {
         ) : (
           <Typography variant={"body2"} color={"text.secondary"}>
             Posting as <b>{speakerName(chat.speaker, chat.myUid)}</b>
-            {chat.channel.kind === "OOC" ? " (out of character)" : ""}
+            {chat.channel.kind === "OOC" && characterOf(chat.myUid) ? ` · ${characterOf(chat.myUid)?.name} (out of character)` : ""}
           </Typography>
         )}
       </Stack>
@@ -424,8 +424,8 @@ function Composer(props: { chat: PrototypeChat }) {
         <Typography variant={"caption"} color={"text.secondary"} sx={{ pr: 0.5 }}>
           Roll:
         </Typography>
-        {(Object.keys(rollKindLabels) as RollKind[])
-          .filter((k) => !chat.viewAsGM || k === "oracle" || k === "dice")
+        {(["move", "stat", "ask", "oracle", "dice"] as RollKind[])
+          .filter((k) => !chat.viewAsGM || k === "ask" || k === "oracle" || k === "dice")
           .map((k) => (
             <Button key={k} size={"small"} variant={"outlined"} color={"inherit"} onClick={() => setPicker(k)} sx={{ flexShrink: 0 }}>
               {rollKindLabels[k]}
