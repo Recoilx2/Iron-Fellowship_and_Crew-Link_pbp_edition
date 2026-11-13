@@ -75,7 +75,7 @@ describe.skipIf(!config)("campaign shared tables end to end", () => {
     const campaignId = await createCampaign({
       uid: gm.userId,
       campaignName: "Shared table",
-      campaignType: CampaignType.Guided,
+      campaignType: CampaignType.Coop,
     });
     await signOut();
     await signInAs(player);
