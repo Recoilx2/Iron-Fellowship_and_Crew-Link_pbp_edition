@@ -125,6 +125,23 @@ export interface StatRollInput {
 }
 
 /**
+ * Rolls a move from chat (spec #9, ticket #123): moves reuse the app's
+ * existing action-roll scoring exactly once, in `scoreStatRoll`, shared with
+ * the character-sheet roller. This wrapper names the move on the roll; the
+ * math stays in `rollChatStat` so fixes to one copy reach the other.
+ */
+export async function rollChatMove(
+  label: string,
+  input: Omit<StatRollInput, "move"> & {
+    move: { name: string; id: string };
+  },
+  context: ChatRollContext,
+  roller: DiceRoller
+): Promise<StatRoll> {
+  return rollChatStat(label, input, context, roller);
+}
+
+/**
  * Rolls a stat (a move's stat or a bare stat) with adds: an action die and
  * two challenge dice, capped at ten, with the negative-momentum rule, in
  * the app's existing stat roll shape.
@@ -208,6 +225,20 @@ export async function rollChatOracleTable(
  * Rolls custom dice notation -- single or mixed -- in the app's existing
  * custom dice shape, extended additively with a per-group breakdown for
  * mixed dice. Old single-group rolls keep their exact shape.
+ *
+ * Ticket #123 reuses the sheet roller where it can (stat scoring via
+ * `scoreStatRoll`, oracle resolution via `resolveOracleRoll`, moves via
+ * `rollChatMove` above). Custom dice stays separate on purpose: the sheet's
+ * `parseDiceExpression` reads one group only (1d6+2), while chat reads mixed
+ * dice (2d6+1d8+2) through `parseMixedDiceNotation`. Unifying the parsers
+ * would either drop mixed-dice support or change the sheet's behavior, so
+ * the single-group shape is kept identical here (notation, dieSides,
+ * dieValues, modifier, total) and mixed dice only add `dieGroups`.
+ *
+ * Progress rolls likewise stay out of chat: the composer never initiates
+ * them (no picker, no roller), and `getChatRollSummary` below handles
+ * `TRACK_PROGRESS` only for rolls posted elsewhere that join the feed
+ * (ticket #30). The existing roller tests keep passing unchanged.
  */
 export async function rollChatCustomDice(
   notation: string,

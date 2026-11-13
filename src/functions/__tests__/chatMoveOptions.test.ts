@@ -111,6 +111,35 @@ describe("getMoveRollOptions", () => {
     ]);
   });
 
+  it("surfaces asset-backed options for display only; chat never rolls them", () => {
+    // Ticket #123 keeps the sheet roll on purpose: the speaker's assets are
+    // not loaded in chat, and loading them would be new data work. The
+    // picker shows these options as chips plus the sheet-roll note (see
+    // ChatRollPickers) and excludes them from the rollable entries, so an
+    // asset-only move offers no Roll button from chat.
+    const options = getMoveRollOptions(
+      move({
+        trigger: {
+          conditions: [
+            conditionWith([
+              {
+                using: "asset_control",
+                assets: null,
+                control: "integrity",
+              },
+            ]),
+          ],
+        },
+      })
+    );
+    expect(options).toEqual([
+      { kind: "asset", key: "integrity", label: "integrity" },
+    ]);
+    expect(
+      options.every((option) => option.kind === "asset")
+    ).toBe(true);
+  });
+
   it("returns no options when a move rolls nothing", () => {
     expect(getMoveRollOptions(move())).toEqual([]);
     expect(

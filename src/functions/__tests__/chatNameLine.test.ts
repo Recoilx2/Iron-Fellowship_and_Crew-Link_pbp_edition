@@ -125,4 +125,42 @@ describe("chat name line", () => {
       })
     ).toEqual({ title: "Elder Moss", subtitle: "Grem", showGM: true });
   });
+
+  it("leads an NPC voice with the NPC in out-of-character channels too", () => {
+    // Ticket #108 shows the NPC as speaker with a GM tag in any channel;
+    // ticket #121 leaves in-character posts unchanged but does not move the
+    // NPC voice behind the author out of character, so OOC keeps the NPC
+    // first with the GM behind it.
+    expect(
+      resolveChatNameLine({
+        channel: { kind: "OOC", visibility: "public" },
+        post: {
+          authorId: "gm-1",
+          speakerCharacterId: null,
+          speakerNpcId: "elder",
+        },
+        characterMap: { ...characterMap, sage: { uid: "gm-1", name: "Sage" } },
+        npcName: "Elder Moss",
+        authorName: "Grem",
+        isGM: true,
+      })
+    ).toEqual({ title: "Elder Moss", subtitle: "Grem", showGM: true });
+  });
+
+  it("leads an NPC voice with the NPC in a direct message too", () => {
+    expect(
+      resolveChatNameLine({
+        channel: { kind: "OOC", visibility: "dm" },
+        post: {
+          authorId: "gm-1",
+          speakerCharacterId: null,
+          speakerNpcId: "elder",
+        },
+        characterMap,
+        npcName: "Elder Moss",
+        authorName: "Grem",
+        isGM: true,
+      })
+    ).toEqual({ title: "Elder Moss", subtitle: "Grem", showGM: true });
+  });
 });

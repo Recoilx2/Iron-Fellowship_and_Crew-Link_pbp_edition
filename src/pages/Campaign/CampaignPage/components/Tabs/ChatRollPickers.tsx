@@ -40,6 +40,7 @@ import {
 import {
   parseMixedDiceNotation,
   rollChatCustomDice,
+  rollChatMove,
   rollChatOracleTable,
   rollChatStat,
 } from "functions/chatRolls";
@@ -359,7 +360,10 @@ function ChatMovePicker(
           ];
         case "asset":
           // Asset-backed options roll from the character sheet, where the
-          // speaker's assets live; here they are shown, not rolled.
+          // speaker's assets live; here they are shown, not rolled. Chat
+          // never rolls them: the speaker's assets are not loaded in chat,
+          // and loading them would be new data work (ticket #123 keeps
+          // the sheet roll, so asset-only moves show the sheet note below).
           return [];
       }
     });
@@ -424,7 +428,7 @@ function ChatMovePicker(
               onRoll={(entry, adds) => {
                 setBusy(true);
                 setError(undefined);
-                rollChatStat(
+                rollChatMove(
                   entry.label,
                   {
                     modifier: entry.value,

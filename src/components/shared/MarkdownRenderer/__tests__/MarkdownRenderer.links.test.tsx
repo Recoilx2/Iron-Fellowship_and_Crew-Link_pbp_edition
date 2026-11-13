@@ -60,6 +60,27 @@ describe("MarkdownRenderer keeps safe links clickable (ticket #119)", () => {
     expect(rendered).toMatch(/rel="noopener noreferrer"/);
   });
 
+  it("http links carry rel too, and stay in the same tab as before", () => {
+    // Ticket #119 asks for rel, not a new tab: the pre-existing behavior
+    // renders no target, and rel is set explicitly (not via spread order)
+    // so no incoming prop can strip it.
+    const rendered = html("[site](http://example.com/map)");
+    expect(rendered).toMatch(/rel="noopener noreferrer"/);
+    expect(rendered).toMatch(/href="http:\/\/example\.com\/map"/);
+    expect(rendered).not.toMatch(/target=/i);
+  });
+
+  it("keeps fragments and relative links clickable without running code", () => {
+    expect(html("[down](#rules-heading)")).toMatch(/<a\b[^>]*href=/i);
+    expect(html("[room](/campaigns/abc/channels/ic)")).toMatch(
+      /<a\b[^>]*href=/i
+    );
+    // A javascript: payload hidden in a fragment-like target still renders
+    // with no clickable href.
+    const tricky = html("[click me](javascript:alert(1))");
+    expect(tricky).not.toMatch(/<a\b/i);
+  });
+
   it("datasworn: links still open the rules dialog", () => {
     const rendered = html(
       "[Ask the Oracle](datasworn:move.oracle_rollable:classic/fate/ask_the_oracle.likely)",
