@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { listenToChannelPosts } from "api-calls/chat/listenToChannelPosts";
-import {
-  CHAT_POST_MAX_WINDOW,
-  CHAT_POST_PAGE_SIZE,
-} from "api-calls/chat/listenToChannelPosts";
+import { CHAT_POST_PAGE_SIZE } from "api-calls/chat/listenToChannelPosts";
+import { fetchOlderChannelPosts } from "api-calls/chat/fetchOlderChannelPosts";
 import { defaultChatSlice } from "stores/chat/chat.slice.default";
 import { createChatSlice } from "stores/chat/chat.slice";
 import type { ChatSlice, ChatSliceData } from "stores/chat/chat.slice.type";
@@ -13,14 +11,17 @@ import type { PostWithId } from "api-calls/chat/listenToChannelPosts";
 import { ROLL_TYPE } from "types/DieRolls.type";
 
 vi.mock("api-calls/chat/listenToChannelPosts");
+vi.mock("api-calls/chat/fetchOlderChannelPosts");
 vi.mock("api-calls/chat/listenToCampaignChannels");
 
 const mockedListen = vi.mocked(listenToChannelPosts);
+const mockedFetchOlder = vi.mocked(fetchOlderChannelPosts);
 
-// Seam under test: the chat slice turns the post listener's rows into the
-// feed's oldest-first window, pages the window back on scroll, and keeps an
-// unsent draft per channel. The listener itself is covered by the live
-// access-rule tests; here it is a stub.
+// Seam under test: the chat slice turns the post listener's latest page
+// into the feed's oldest-first window, pages older windows in front of it
+// with a one-off query on scroll, and keeps an unsent draft per channel.
+// The listener and the page query are covered by their own tests; here both
+// are stubs.
 type CapturedHandler = {
   onPosts: (posts: PostWithId[]) => void;
   onHasOlder: (hasOlder: boolean) => void;
@@ -83,20 +84,19 @@ function setUpSlice() {
 
 describe("chat slice posts", () => {
   let captured: CapturedHandler | undefined;
-  let capturedLimit = 0;
   const seenLimits: number[] = [];
 
   beforeEach(() => {
     captured = undefined;
-    capturedLimit = 0;
     seenLimits.length = 0;
     mockedListen.mockClear();
     mockedListen.mockImplementation((_channelId, limit, handler) => {
       captured = handler as unknown as CapturedHandler;
-      capturedLimit = limit;
       seenLimits.push(limit);
       return () => {};
     });
+    mockedFetchOlder.mockClear();
+    mockedFetchOlder.mockResolvedValue({ posts: [], hasOlder: false });
   });
 
   it("loads the latest page oldest-first with its has-older flag", () => {
@@ -122,23 +122,131 @@ describe("chat slice posts", () => {
     expect(draft().hasOlderByChannel["channel-1"]).toBe(true);
   });
 
-  it("pages the window back on scroll, bounded by the max window", () => {
-    const { slice } = setUpSlice();
-    slice.subscribeToPosts("channel-9");
-    captured?.onPosts(posts(CHAT_POST_PAGE_SIZE));
+  it("pages older posts back without growing the live window", async () => {
+    const { slice, draft } = setUpSlice();
+    slice.subscribeToPosts("channel-page");
+    captured?.onPosts(posts(CHAT_POST_PAGE_SIZE, CHAT_POST_PAGE_SIZE));
+    captured?.onHasOlder(true);
     captured?.onLoaded();
 
-    slice.loadOlderPosts("channel-9");
-    expect(capturedLimit).toBe(CHAT_POST_PAGE_SIZE * 2);
+    // One page back: the fetched window joins the front, the live
+    // subscription stays on its latest page.
+    mockedFetchOlder.mockResolvedValue({
+      posts: posts(CHAT_POST_PAGE_SIZE, 0),
+      hasOlder: true,
+    });
+    await slice.loadOlderPosts("channel-page");
 
-    // Paging past the cap stays at the cap instead of re-fetching more.
-    for (let i = 0; i < 20; i += 1) {
-      slice.loadOlderPosts("channel-9");
-    }
-    expect(capturedLimit).toBe(CHAT_POST_MAX_WINDOW);
-    expect(seenLimits.every((limit) => limit <= CHAT_POST_MAX_WINDOW)).toBe(
+    expect(mockedFetchOlder).toHaveBeenCalledWith(
+      "channel-page",
+      expect.objectContaining({ id: `post-${CHAT_POST_PAGE_SIZE}` }),
+      CHAT_POST_PAGE_SIZE
+    );
+    expect(draft().postsByChannel["channel-page"]?.map((post) => post.id)).toEqual(
+      posts(CHAT_POST_PAGE_SIZE * 2, 0).map((post) => post.id)
+    );
+    expect(draft().hasOlderByChannel["channel-page"]).toBe(true);
+    expect(seenLimits.every((limit) => limit === CHAT_POST_PAGE_SIZE)).toBe(
       true
     );
+  });
+
+  it("keeps paging past old caps to the channel's first post", async () => {
+    const { slice, draft } = setUpSlice();
+    slice.subscribeToPosts("channel-deep");
+    captured?.onPosts(posts(CHAT_POST_PAGE_SIZE, CHAT_POST_PAGE_SIZE * 9));
+    captured?.onLoaded();
+
+    // Ten older pages: far past the old 300-post cap, still paging.
+    for (let page = 8; page >= 1; page -= 1) {
+      mockedFetchOlder.mockResolvedValueOnce({
+        posts: posts(CHAT_POST_PAGE_SIZE, CHAT_POST_PAGE_SIZE * page),
+        hasOlder: true,
+      });
+      await slice.loadOlderPosts("channel-deep");
+    }
+    mockedFetchOlder.mockResolvedValueOnce({
+      posts: posts(CHAT_POST_PAGE_SIZE, 0),
+      hasOlder: false,
+    });
+    await slice.loadOlderPosts("channel-deep");
+
+    expect(draft().postsByChannel["channel-deep"]).toHaveLength(
+      CHAT_POST_PAGE_SIZE * 10
+    );
+    expect(draft().hasOlderByChannel["channel-deep"]).toBe(false);
+    expect(mockedListen).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps paged-in older posts when the live window re-emits", async () => {
+    const { slice, draft, announce } = setUpSlice();
+    draft().channels = [
+      {
+        id: "channel-live",
+        name: "In character",
+        kind: "IC",
+        visibility: "public",
+        isStarting: true,
+        archived: false,
+      },
+    ];
+    slice.subscribeToPosts("channel-live");
+    captured?.onPosts(posts(2, 28));
+    captured?.onLoaded();
+    mockedFetchOlder.mockResolvedValue({
+      posts: posts(2, 26),
+      hasOlder: true,
+    });
+    await slice.loadOlderPosts("channel-live");
+    expect(draft().postsByChannel["channel-live"]?.map((p) => p.id)).toEqual([
+      "post-26",
+      "post-27",
+      "post-28",
+      "post-29",
+    ]);
+
+    // A live arrival replaces the live window but keeps the older pages.
+    announce.mockClear();
+    captured?.onPosts([
+      ...posts(1, 29),
+      {
+        ...posts(1, 30)[0],
+        id: "post-30",
+        text: "A new post arrives.",
+      },
+    ]);
+    expect(draft().postsByChannel["channel-live"]?.map((p) => p.id)).toEqual([
+      "post-26",
+      "post-27",
+      "post-28",
+      "post-29",
+      "post-30",
+    ]);
+    expect(announce).toHaveBeenCalledWith(
+      "New post in # In character: A new post arrives."
+    );
+  });
+
+  it("leaves the has-older flag to the pages once paged back", async () => {
+    const { slice, draft } = setUpSlice();
+    slice.subscribeToPosts("channel-flag");
+    captured?.onHasOlder(true);
+    captured?.onPosts(posts(CHAT_POST_PAGE_SIZE, CHAT_POST_PAGE_SIZE));
+    captured?.onLoaded();
+
+    // The first post arrives with no older page above it.
+    mockedFetchOlder.mockResolvedValue({
+      posts: posts(CHAT_POST_PAGE_SIZE, 0),
+      hasOlder: false,
+    });
+    await slice.loadOlderPosts("channel-flag");
+    expect(draft().hasOlderByChannel["channel-flag"]).toBe(false);
+
+    // A later live lookahead must not resurrect the flag: there is nothing
+    // older than the first post however live the latest page is.
+    captured?.onHasOlder(true);
+    captured?.onPosts(posts(CHAT_POST_PAGE_SIZE, CHAT_POST_PAGE_SIZE));
+    expect(draft().hasOlderByChannel["channel-flag"]).toBe(false);
   });
 
   it("keeps one window per channel and stops the old subscription", () => {

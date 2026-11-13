@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  CHAT_POST_MAX_WINDOW,
   listenToChannelPosts,
 } from "api-calls/chat/listenToChannelPosts";
 import { RECONCILE_INTERVAL_MS } from "api-calls/realtime/listenToRows";
@@ -12,11 +11,11 @@ vi.mock("config/supabase.config");
 
 const mockedClient = vi.mocked(getSupabaseClient);
 
-// Seam under test: the post listener's fetch asks for the whole loaded
-// window (plus one lookahead row) on every fetch -- first load, page back
-// and reconcile tick -- so older pages stay and the window stays capped.
-// The shared reconcile loop itself is covered by its own tests; here the
-// realtime channel and the posts table are stubs.
+// Seam under test: the post listener's fetch asks for its live window (plus
+// one lookahead row) on every fetch -- first load and reconcile tick -- so
+// the live subscription stays one page and older pages arrive through the
+// one-off query instead. The shared reconcile loop itself is covered by its
+// own tests; here the realtime channel and the posts table are stubs.
 function newestFirst(count: number): PostRow[] {
   const base = Date.parse("2026-11-13T12:00:00.000Z");
   return Array.from({ length: count }, (_, i) => {
@@ -123,8 +122,8 @@ describe("chat post window", () => {
     expect(widened).toHaveLength(60);
     expect(widened[0].id).toBe("post-1");
 
-    // The reconcile tick re-fetches that same whole window, so the older
-    // page stays; with nothing changed nothing re-emits.
+    // The reconcile tick re-fetches that same window, so the live page
+    // stays; with nothing changed nothing re-emits.
     const callsBeforeTick = onPosts.mock.calls.length;
     await vi.advanceTimersByTimeAsync(RECONCILE_INTERVAL_MS);
     expect(
@@ -135,16 +134,12 @@ describe("chat post window", () => {
     expect(retained).toHaveLength(60);
     expect(retained[0].id).toBe("post-1");
 
-    // Past the cap the fetch stays bounded instead of growing with the limit.
+    // The window is not capped: a caller asking for more gets more, and the
+    // lookahead row still rides along.
     listenToChannelPosts("channel-1", 99_999, handler, onError);
     client.fireSubscribed();
     await vi.advanceTimersByTimeAsync(0);
-    expect(client.seenLimits[client.seenLimits.length - 1]).toBe(
-      CHAT_POST_MAX_WINDOW + 1
-    );
-    expect(Math.max(...client.seenLimits)).toBeLessThanOrEqual(
-      CHAT_POST_MAX_WINDOW + 1
-    );
+    expect(client.seenLimits[client.seenLimits.length - 1]).toBe(100_000);
 
     stopPage2();
     expect(onError).not.toHaveBeenCalled();

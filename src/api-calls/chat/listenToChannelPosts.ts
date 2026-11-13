@@ -16,23 +16,23 @@ export interface PostWithId extends PostDocument {
 }
 
 /**
- * How many posts a fresh channel view loads, and how far back a reader may
- * page. The shared listener re-fetches the whole loaded window on every
- * reconcile tick, so the window stays bounded: paging in older posts grows
- * the window one page at a time up to this cap instead of re-fetching a
- * long channel in full.
+ * How many posts a fresh channel view loads on its live subscription. The
+ * shared listener re-fetches this window on every reconcile tick, so the
+ * window stays one page: scrolling back pages older posts in with a one-off
+ * query (fetchOlderChannelPosts) instead of growing the live subscription,
+ * and a long channel is never re-fetched in full.
  */
 export const CHAT_POST_PAGE_SIZE = 30;
-export const CHAT_POST_MAX_WINDOW = 300;
 
 /**
  * Follows one channel's posts newest-first in the database, oldest-first to
- * the reader: the latest page loads first and older pages join the front as
- * the reader pages back. `limit` is the whole loaded window (latest page
- * plus every older page scrolled in), so callers grow it to page back and
- * re-subscribe. New, edited and deleted posts arrive live; outsiders see
- * nothing, because the post access rules (not an interface filter) decide
- * which rows arrive. Returns a plain unsubscribe function.
+ * the reader: the latest page loads first and stays live, while older pages
+ * join the front through fetchOlderChannelPosts as the reader pages back.
+ * `limit` is the live window (one page in the app): new, edited and deleted
+ * posts arrive live, and the extra lookahead row past the window tells the
+ * reader an older page exists without loading it. Outsiders see nothing,
+ * because the post access rules (not an interface filter) decide which rows
+ * arrive. Returns a plain unsubscribe function.
  */
 export function listenToChannelPosts(
   channelId: string,
@@ -50,7 +50,7 @@ export function listenToChannelPosts(
     onError(new Error("Must open a channel to read its posts."));
     return () => {};
   }
-  const window = Math.max(1, Math.min(limit, CHAT_POST_MAX_WINDOW));
+  const window = Math.max(1, limit);
   const client = getSupabaseClient();
   let loaded = false;
 

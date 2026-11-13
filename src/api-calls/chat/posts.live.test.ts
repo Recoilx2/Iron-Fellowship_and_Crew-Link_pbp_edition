@@ -14,6 +14,7 @@ import {
   listenToChannelPosts,
   type PostWithId,
 } from "api-calls/chat/listenToChannelPosts";
+import { fetchOlderChannelPosts } from "api-calls/chat/fetchOlderChannelPosts";
 import { createWorld } from "api-calls/world/createWorld";
 import { updateCampaignWorld } from "api-calls/campaign/updateCampaignWorld";
 import { createNPC } from "api-calls/world/npcs/createNPC";
@@ -423,6 +424,69 @@ describe.skipIf(!config)("chat text posts end to end", () => {
     );
     expect(full.at(-1)?.map((post) => post.text)).toEqual(texts);
     expect(fullOlder.at(-1)).toBe(false);
+  });
+
+  it("pages older posts back to the channel's first post", { timeout: 120000 }, async () => {
+    const { gm, player, campaignId, icChannelId } = await setUpCampaign();
+    const kira = await createCharacterAs(player, campaignId, "Kira Vey");
+
+    // A long channel: forty posts a minute apart, so the order is fixed.
+    const base = Date.now() - 40 * 60_000;
+    const texts = Array.from(
+      { length: 40 },
+      (_, i) => `page-${String(i).padStart(2, "0")}`
+    );
+    const { error } = await player.client.from(CHAT_POSTS_TABLE).insert(
+      texts.map((text, i) => ({
+        id: crypto.randomUUID(),
+        channel_id: icChannelId,
+        author_id: player.userId,
+        speaker_character_id: kira,
+        text,
+        created_at: new Date(base + i * 60_000).toISOString(),
+      }))
+    );
+    expect(error).toBeNull();
+
+    await signInAs(gm);
+
+    // The live subscription stays on its latest page while the one-off
+    // pages walk back past it, one window at a time.
+    const first: PostWithId[][] = [];
+    let firstLoaded = false;
+    unsubscribes.push(
+      listenToChannelPosts(
+        icChannelId,
+        10,
+        {
+          onPosts: (posts) => first.push(posts),
+          onHasOlder: () => {},
+          onLoaded: () => {
+            firstLoaded = true;
+          },
+        },
+        (error) => {
+          throw error;
+        }
+      )
+    );
+    await waitFor(() => (firstLoaded && first.length >= 1 ? first : null));
+    const live = first.at(-1) ?? [];
+    expect(live.map((post) => post.text)).toEqual(texts.slice(30));
+
+    const older: PostWithId[] = [...live];
+    let hasOlder = true;
+    while (hasOlder) {
+      const oldest = older[0];
+      const page = await fetchOlderChannelPosts(
+        icChannelId,
+        { createdAt: oldest.createdAt, id: oldest.id },
+        10
+      );
+      older.unshift(...page.posts);
+      hasOlder = page.hasOlder;
+    }
+    expect(older.map((post) => post.text)).toEqual(texts);
   });
 
   it("lets a campaign GM post as an NPC of the campaign's world", { timeout: 90000 }, async () => {
