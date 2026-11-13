@@ -10,6 +10,11 @@ import { createPost } from "api-calls/chat/createPost";
 import { editPost } from "api-calls/chat/editPost";
 import { deletePost } from "api-calls/chat/deletePost";
 import {
+  CHAT_IMAGES_BUCKET,
+  uploadChatImage,
+} from "api-calls/chat/chatImages";
+import { ROLL_RESULT, ROLL_TYPE, type Roll } from "types/DieRolls.type";
+import {
   listenToChannelPosts,
   type PostWithId,
 } from "api-calls/chat/listenToChannelPosts";
@@ -55,6 +60,7 @@ describe.skipIf(!config)("chat post edits and soft deletes", () => {
     player: LivePerson;
     other: LivePerson;
     outsider: LivePerson;
+    campaignId: string;
     icChannelId: string;
   }> {
     const gm = await createPerson(cfg, "gm");
@@ -88,8 +94,35 @@ describe.skipIf(!config)("chat post edits and soft deletes", () => {
       player,
       other,
       outsider,
+      campaignId,
       icChannelId: (data as { id: string }).id,
     };
+  }
+
+  function png(name = "lantern.png"): File {
+    return new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], name, {
+      type: "image/png",
+    });
+  }
+
+  async function createCharacterAs(
+    person: LivePerson,
+    campaignId: string,
+    name: string
+  ): Promise<string> {
+    // The id is generated here so the insert needs no RETURNING clause: the
+    // characters SELECT policy re-queries its own table, which cannot see a
+    // just-inserted row in the same statement, so insert-then-select always
+    // fails RLS (#69).
+    const id = crypto.randomUUID();
+    const { error } = await person.client.from("characters").insert({
+      id,
+      owner_id: person.userId,
+      name,
+      campaign_id: campaignId,
+    });
+    expect(error).toBeNull();
+    return id;
   }
 
   async function postAs(
@@ -352,5 +385,92 @@ describe.skipIf(!config)("chat post edits and soft deletes", () => {
     expect(
       moderated.find((row) => row.id === theirsId)
     ).toMatchObject({ text: "" });
+  });
+
+  it("clears a deleted post's images and roll and removes its files", { timeout: 180000 }, async () => {
+    const { gm, player, campaignId, icChannelId } = await setUpCampaign();
+    const kira = await createCharacterAs(player, campaignId, "Kira Vey");
+
+    function statRoll(): Roll {
+      return {
+        type: ROLL_TYPE.STAT,
+        rollLabel: "Edge",
+        action: 4,
+        challenge1: 3,
+        challenge2: 8,
+        result: ROLL_RESULT.WEAK_HIT,
+        timestamp: new Date(),
+        characterId: kira,
+        uid: player.userId,
+        gmsOnly: false,
+      };
+    }
+
+    // The author posts images and dice together, then takes the post back:
+    // the row keeps only its marker, and the stored bytes are gone.
+    await signInAs(player);
+    const ownPostId = crypto.randomUUID();
+    const ownPath = await uploadChatImage(campaignId, ownPostId, png());
+    await createPost({
+      channelId: icChannelId,
+      postId: ownPostId,
+      text: "Kira dives for cover.",
+      speakerCharacterId: kira,
+      imagePaths: [ownPath],
+      roll: statRoll(),
+    });
+    await deletePost({ postId: ownPostId });
+    await signOut();
+
+    const reread = await readPostsAs(player, icChannelId);
+    expect(reread.find((row) => row.id === ownPostId)).toMatchObject({
+      text: "",
+      image_paths: [],
+      roll: null,
+    });
+    expect(
+      reread.find((row) => row.id === ownPostId)?.deleted_at
+    ).not.toBeNull();
+    const { error: ownDownloadError } = await player.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .download(ownPath);
+    expect(ownDownloadError).not.toBeNull();
+
+    // A GM clearing another member's post removes its files too: the files
+    // go while the row still names them, because afterwards the storage
+    // rules no longer attribute them to the post.
+    await signInAs(player);
+    const moderatedPostId = crypto.randomUUID();
+    const moderatedPath = await uploadChatImage(
+      campaignId,
+      moderatedPostId,
+      png("map.png")
+    );
+    await createPost({
+      channelId: icChannelId,
+      postId: moderatedPostId,
+      text: "Needs moderation.",
+      speakerCharacterId: kira,
+      imagePaths: [moderatedPath],
+      roll: statRoll(),
+    });
+    await signOut();
+    await signInAs(gm);
+    await deletePost({ postId: moderatedPostId });
+    await signOut();
+
+    const moderated = await readPostsAs(player, icChannelId);
+    expect(moderated.find((row) => row.id === moderatedPostId)).toMatchObject({
+      text: "",
+      image_paths: [],
+      roll: null,
+    });
+    expect(
+      moderated.find((row) => row.id === moderatedPostId)?.deleted_at
+    ).not.toBeNull();
+    const { error: moderatedDownloadError } = await gm.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .download(moderatedPath);
+    expect(moderatedDownloadError).not.toBeNull();
   });
 });

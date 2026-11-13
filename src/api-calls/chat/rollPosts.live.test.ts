@@ -294,4 +294,57 @@ describe.skipIf(!config)("chat roll posts end to end", () => {
     expect((data as unknown as PostRow).text).toBe("The mists part!");
     expect((data as unknown as PostRow).gms_only).toBe(false);
   });
+
+  it("rejects a roll forged for another character", { timeout: 120000 }, async () => {
+    const { gm, player, campaignId, icChannelId } = await setUpCampaign();
+    const kira = await createCharacterAs(player, campaignId, "Kira Vey");
+    const warden = await createCharacterAs(gm, campaignId, "Warden Rey");
+
+    // A player files dice under another player's character through a
+    // direct insert: the database refuses the row.
+    await signInAs(player);
+    const forgedCharacter = await player.client.from(CHAT_POSTS_TABLE).insert({
+      id: crypto.randomUUID(),
+      channel_id: icChannelId,
+      author_id: player.userId,
+      speaker_character_id: kira,
+      text: "Kira strikes.",
+      roll: { ...statRoll(kira, player.userId, false), characterId: warden, timestamp: new Date().toISOString() },
+      gms_only: false,
+    });
+    expect(forgedCharacter.error).not.toBeNull();
+
+    // Filing under another author's name fails the same way.
+    const forgedAuthor = await player.client.from(CHAT_POSTS_TABLE).insert({
+      id: crypto.randomUUID(),
+      channel_id: icChannelId,
+      author_id: player.userId,
+      speaker_character_id: kira,
+      text: "Kira strikes.",
+      roll: { ...statRoll(kira, gm.userId, false), timestamp: new Date().toISOString() },
+      gms_only: false,
+    });
+    expect(forgedAuthor.error).not.toBeNull();
+
+    // Claiming a character while posting as oneself fails as well.
+    const forgedSelf = await player.client.from(CHAT_POSTS_TABLE).insert({
+      id: crypto.randomUUID(),
+      channel_id: icChannelId,
+      author_id: player.userId,
+      speaker_character_id: null,
+      text: "Table talk.",
+      roll: { ...statRoll(kira, player.userId, false), timestamp: new Date().toISOString() },
+      gms_only: false,
+    });
+    expect(forgedSelf.error).not.toBeNull();
+
+    // Nothing forged reached the channel.
+    const { data, error } = await player.client
+      .from(CHAT_POSTS_TABLE)
+      .select("id")
+      .eq("channel_id", icChannelId);
+    expect(error).toBeNull();
+    expect(data ?? []).toEqual([]);
+    await signOut();
+  });
 });

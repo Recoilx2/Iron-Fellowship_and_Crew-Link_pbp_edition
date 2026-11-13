@@ -7,6 +7,7 @@ import { CampaignType } from "api-calls/campaign/_campaign.type";
 import { CHAT_CHANNELS_TABLE } from "api-calls/chat/_getRef";
 import { CHAT_POSTS_TABLE, type PostRow } from "api-calls/chat/_postRef";
 import { createPost } from "api-calls/chat/createPost";
+import { deletePost } from "api-calls/chat/deletePost";
 import { listenToCampaignRollPosts } from "api-calls/chat/listenToCampaignRollPosts";
 import { postCampaignRoll } from "api-calls/chat/postCampaignRoll";
 import { listenToLogs } from "api-calls/game-log/listenToLogs";
@@ -384,5 +385,40 @@ describe.skipIf(!config)("campaign roll log as a view of roll posts", () => {
     });
     await waitFor(() => (seen.some(([id]) => id === postId) ? seen : null));
     expect(seen.at(-1)?.[1].rollLabel).toBe("wits");
+  });
+
+  it("drops a deleted roll post from the roll log", { timeout: 120000 }, async () => {
+    const { player, campaignId } = await setUpLog();
+
+    await signInAs(player);
+    const updated: Array<[string, Roll]> = [];
+    const removed: string[] = [];
+    unsubscribes.push(
+      listenToLogs({
+        isGM: false,
+        campaignId,
+        totalLogsToLoad: 25,
+        updateLog: (rollId, roll) => updated.push([rollId, roll]),
+        removeLog: (rollId) => removed.push(rollId),
+        onError: (error) => {
+          throw new Error(error);
+        },
+      })
+    );
+    const postId = await postCampaignRoll({
+      campaignId,
+      speakerCharacterId: null,
+      roll: statRoll(null, player.userId),
+    });
+    await waitFor(() =>
+      updated.some(([id]) => id === postId) ? updated : null
+    );
+
+    // Deleting the post clears its roll beside its text, so the log reads
+    // the post as gone live and the export leaves it out.
+    await deletePost({ postId });
+    await waitFor(() => (removed.includes(postId) ? removed : null));
+    const exported = await getAllLogsForExport({ campaignId, isGM: false });
+    expect(exported.map((entry) => entry.id)).not.toContain(postId);
   });
 });

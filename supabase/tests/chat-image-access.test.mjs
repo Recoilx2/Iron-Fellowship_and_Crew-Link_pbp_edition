@@ -27,8 +27,11 @@ describe("chat image access rules (#118)", () => {
   it("follows the <UTC timestamp>_<short-name>.sql convention on a later stamp", () => {
     assert.match(accessFile(), /^\d{14}_chat_image_access\.sql$/);
     const stamp = accessFile().slice(0, 14);
+    // Migrations that landed after #118 (e.g. #120 roll cleanup,
+    // 20261115000000) sort later by design, so they are excluded here.
+    const landedLater = new Set(["20261115000000_chat_roll_cleanup.sql"]);
     const others = readdirSync(migrationsDir).filter(
-      (f) => /^\d{14}_/.test(f) && f !== accessFile()
+      (f) => /^\d{14}_/.test(f) && f !== accessFile() && !landedLater.has(f)
     );
     for (const other of others) {
       assert.ok(

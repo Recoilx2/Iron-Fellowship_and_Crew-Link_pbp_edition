@@ -11,7 +11,10 @@ import { createPost } from "./createPost";
  * display renders it and the database keeps hiding secrets from players.
  * The caller picks the speaker the way the composer does: the author's
  * campaign character in character, nobody (the author themselves) out of
- * it. A roll-only post carries empty text.
+ * it. A roll-only post carries empty text. The roll's identity is stamped
+ * from the post -- the author's uid and the speaker character -- because a
+ * sheet roll carries its open sheet's character, which may not be the
+ * post's speaker, and the database binds a posted roll to its post (#120).
  */
 export const postCampaignRoll = createApiFunction<
   {
@@ -30,6 +33,13 @@ export const postCampaignRoll = createApiFunction<
     throw new Error("A roll is required to post.");
   }
 
+  const { data: sessionData, error: sessionError } =
+    await getSupabaseClient().auth.getSession();
+  const authorId = sessionData.session?.user.id;
+  if (sessionError || !authorId) {
+    throw sessionError ?? new Error("You must be logged in to post.");
+  }
+
   const { data, error } = await getSupabaseClient()
     .from(CHAT_CHANNELS_TABLE)
     .select("id")
@@ -46,7 +56,7 @@ export const postCampaignRoll = createApiFunction<
     channelId: (data as { id: string }).id,
     text: "",
     speakerCharacterId: speakerCharacterId ?? null,
-    roll,
+    roll: { ...roll, uid: authorId, characterId: speakerCharacterId ?? null },
     gmsOnly: roll.gmsOnly,
   });
 }, "Failed to post the roll to the campaign.");

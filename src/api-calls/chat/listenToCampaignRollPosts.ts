@@ -11,7 +11,7 @@ import type { Roll } from "types/DieRolls.type";
 import { CHAT_CHANNELS_TABLE } from "./_getRef";
 import {
   CHAT_POSTS_TABLE,
-  postRowToRoll,
+  postRowToLogRoll,
   type PostRow,
 } from "./_postRef";
 
@@ -22,7 +22,10 @@ import {
  * channel of the campaign, newest first with a client-side window. The
  * live filter below keeps text-only posts and other campaigns out;
  * GM-only rolls never reach non-GMs because the database refuses the
- * rows, and the listener skips them as well.
+ * rows, and the listener skips them as well. The roller of every entry
+ * comes from the post's author and speaker columns (postRowToLogRoll),
+ * never from the roll JSON, so no stored roll can attribute dice to
+ * another character (#120).
  */
 
 export type KnownRollChannels = Set<string>;
@@ -155,7 +158,8 @@ export function listenToCampaignRollPosts(params: {
         }
         // The fetch and the live filter only let roll posts through; the
         // guard keeps the type honest if a row ever arrives without one.
-        const roll = postRowToRoll(row.roll);
+        // The roller reads from the post's columns, never the roll JSON.
+        const roll = postRowToLogRoll(row);
         if (!roll) {
           continue;
         }
