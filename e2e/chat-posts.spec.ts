@@ -97,6 +97,71 @@ test.describe("chat text posts", () => {
     }
   });
 
+  test("an out-of-character post shows the display name and campaign character", async ({
+    browser,
+  }) => {
+    const gmContext = await browser.newContext();
+    const playerContext = await browser.newContext();
+    const gmPage = await gmContext.newPage();
+    const playerPage = await playerContext.newPage();
+    try {
+      await signInAs(gmPage, config, gm, campaignUrl(campaignId));
+      await signInAs(playerPage, config, player, campaignUrl(campaignId));
+
+      await expect(playerPage.getByRole("tab", { name: "Chat" })).toBeVisible();
+      await expect(gmPage.getByRole("tab", { name: "Chat" })).toBeVisible();
+
+      // Both browsers move to the starting out-of-character channel.
+      await playerPage
+        .getByRole("button", { name: "# Out of character" })
+        .first()
+        .click();
+      await gmPage
+        .getByRole("button", { name: "# Out of character" })
+        .first()
+        .click();
+
+      // The player posts as themselves: the name line leads with their
+      // display name, then their campaign character beside it.
+      const playerText = `brb, consulting the map ${Date.now()}`;
+      await playerPage
+        .getByRole("textbox", { name: /Post in #/ })
+        .fill(playerText);
+      await playerPage.getByRole("button", { name: "Send" }).click();
+
+      const playerFeed = playerPage.locator(
+        '[aria-label="Posts in # Out of character"]'
+      );
+      await expect(playerFeed.getByText(playerText)).toBeVisible();
+      await expect(playerFeed.getByText("e2e-player")).toBeVisible();
+      await expect(playerFeed.getByText("E2E Kira")).toBeVisible();
+      const gmFeed = gmPage.locator(
+        '[aria-label="Posts in # Out of character"]'
+      );
+      await expect(gmFeed.getByText(playerText)).toBeVisible();
+      await expect(gmFeed.getByText("e2e-player")).toBeVisible();
+      await expect(gmFeed.getByText("E2E Kira")).toBeVisible();
+
+      // The GM posts as themselves: display name with a GM tag beside it.
+      const gmText = `Ruling: the map is wrong ${Date.now()}`;
+      await gmPage.getByRole("textbox", { name: /Post in #/ }).fill(gmText);
+      await gmPage.getByRole("button", { name: "Send" }).click();
+
+      await expect(gmFeed.getByText(gmText)).toBeVisible();
+      await expect(gmFeed.getByText("e2e-gm")).toBeVisible();
+      await expect(
+        gmFeed.getByText("GM", { exact: true }).first()
+      ).toBeVisible();
+      await expect(playerFeed.getByText(gmText)).toBeVisible();
+      await expect(
+        playerFeed.getByText("GM", { exact: true }).first()
+      ).toBeVisible();
+    } finally {
+      await playerContext.close().catch(() => {});
+      await gmContext.close().catch(() => {});
+    }
+  });
+
   test("a GM post as a world NPC shows the NPC with a GM tag", async ({
     browser,
   }) => {

@@ -33,6 +33,7 @@ function timeLabel(iso: string): string {
 }
 
 import { ChatRollPost } from "./ChatRollPost";
+import { resolveChatNameLine } from "functions/chatNameLine";
 
 /**
  * The channel's flat feed (spec #9, prototype variant D): avatar, name
@@ -243,16 +244,19 @@ function ChatPost(props: {
   };
 
   // An NPC voice leads with the NPC, then the GM behind it; otherwise IC
-  // leads with the character, then the player, and OOC leads with the
-  // player's display name, then their character beside it.
-  const title = npc?.name ?? (channel.kind === "IC" ? (character?.name ?? authorName) : authorName);
-  const subtitle = npc
-    ? authorName
-    : channel.kind === "IC"
-      ? character
-        ? authorName
-        : undefined
-      : character?.name;
+  // leads with the character, then the player, and OOC (with direct
+  // messages) leads with the player's display name, then their campaign
+  // character beside it.
+  const nameLine = resolveChatNameLine({
+    channel,
+    post,
+    characterMap,
+    npcName: npc?.name,
+    authorName,
+    isGM,
+  });
+  const title = nameLine.title;
+  const subtitle = nameLine.subtitle;
 
   return (
     <Stack
@@ -291,7 +295,7 @@ function ChatPost(props: {
               {subtitle}
             </Typography>
           )}
-          {isGM && <Chip size={"small"} label={"GM"} sx={{ height: 18 }} />}
+          {nameLine.showGM && <Chip size={"small"} label={"GM"} sx={{ height: 18 }} />}
           <Typography variant={"caption"} color={"text.secondary"}>
             {timeLabel(post.createdAt)}
           </Typography>

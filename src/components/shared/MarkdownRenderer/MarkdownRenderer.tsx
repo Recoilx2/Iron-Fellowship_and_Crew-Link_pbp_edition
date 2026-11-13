@@ -23,6 +23,34 @@ export interface MarkdownRendererProps {
   sx?: SxProps<Theme>;
 }
 
+const SAFE_LINK_SCHEMES = new Set(["http", "https", "mailto", "datasworn"]);
+
+/**
+ * Lowercased scheme of a link target, or null when the target is relative.
+ * All whitespace is stripped before the check because browsers drop
+ * tab and newline characters from URLs, which would otherwise hide a scheme
+ * such as `java\tscript:` from a plain prefix test.
+ */
+function linkScheme(href: string): string | null {
+  const compact = href.replace(/\s+/g, "");
+  const match = compact.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);
+  return match ? match[1].toLowerCase() : null;
+}
+
+/**
+ * Only web, mail, the app's own datasworn, and relative links are safe to
+ * follow. Anything else - javascript:, data:, vbscript:, ... - must never
+ * render as a clickable link, since post text comes from other players.
+ */
+function isSafeLink(href: string): boolean {
+  if (!href || !href.trim()) {
+    return false;
+  }
+  const scheme = linkScheme(href);
+  // No scheme means a relative link inside the app - safe to follow.
+  return scheme === null || SAFE_LINK_SCHEMES.has(scheme);
+}
+
 export function MarkdownRenderer(props: MarkdownRendererProps) {
   const {
     inlineParagraph,
@@ -198,8 +226,10 @@ export function MarkdownRenderer(props: MarkdownRendererProps) {
 
           const href = typeof propertiesHref === "string" ? propertiesHref : "";
 
-          if (href.startsWith("datasworn:")) {
-            const strippedHref = href.replace("datasworn:", "");
+          const trimmedHref = href.trim();
+
+          if (/^datasworn:/i.test(trimmedHref)) {
+            const strippedHref = trimmedHref.replace(/^datasworn:/i, "");
             // We have a datasworn id
             const id = idMap[strippedHref] ?? strippedHref;
 
@@ -237,22 +267,16 @@ export function MarkdownRenderer(props: MarkdownRendererProps) {
             }
           }
 
-          let url: URL | undefined = undefined;
-          try {
-            url = new URL(href);
-          } catch {
-            console.warn("Was not a url");
-            // Empty - if url is undefined we will continue parsing
+          // Post text comes from other players, so only safe links render as
+          // clickable anchors. Anything else (javascript:, data:,
+          // vbscript:, ...) renders as plain text with no href to run.
+          if (!isSafeLink(href)) {
+            return <>{linkProps.children}</>;
           }
-          if (url) {
-            return <a {...linkProps} />;
-          } else {
-            // TODO - add error styling
-            return <Typography>{linkProps.children}</Typography>;
-          }
+          return <a {...linkProps} rel="noopener noreferrer" />;
         },
       }}
-      urlTransform={(url) => url}
+      urlTransform={(url) => (isSafeLink(url) ? url : "")}
     >
       {markdown}
     </ReactMarkdown>

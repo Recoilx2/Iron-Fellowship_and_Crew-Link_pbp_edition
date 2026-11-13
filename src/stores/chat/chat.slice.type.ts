@@ -30,8 +30,8 @@ export interface ChatSliceActions {
   subscribe: (campaignId: string | undefined) => Unsubscribe;
   setOpenChannelId: (channelId: string | undefined) => void;
   subscribeToPosts: (channelId: string | undefined) => Unsubscribe;
-  /** Grows the channel's loaded window one page and re-subscribes. */
-  loadOlderPosts: (channelId: string) => void;
+  /** Pages one older window in front of the live latest page, on scroll. */
+  loadOlderPosts: (channelId: string) => Promise<void>;
   setDraft: (channelId: string, text: string) => void;
   /** Attaches a roll to the channel's draft, or clears it with null. */
   setPendingRoll: (channelId: string, roll: Roll | null) => void;

@@ -32,6 +32,23 @@ _Avoid_: Log entry, game log (for a single roll)
 A named stream of posts within a campaign. Every campaign has an in-character channel and an out-of-character channel; GMs can create more.
 _Avoid_: Room, thread, chat (for a single stream)
 
+**Private channel**:
+A channel visible only to the people on its roster plus the campaign's GMs. A GM creates it for chosen members and can add or remove people at any time; someone removed loses access straight away, including live updates.
+_Avoid_: Secret channel
+
+**Direct message**:
+A channel between exactly two campaign members, opened from the People list. Only those two people can read it; even a GM who is not in it cannot read it or see that it exists.
+_Avoid_: DM (in prose), private message, whisper
+
+The code shortens "direct message" to `dm` in identifiers only: the `dm`
+value of `ChannelVisibility` (see `api-calls/chat/_chat.type.ts`), the
+database function `get_or_create_dm_channel`, and the `getOrCreateDirectChannel`
+data-layer wrapper. That `dm` never means "dungeon master" (the glossary
+avoids DM for GM, above), and it never appears in user-facing prose, which
+says "direct message". Renaming those identifiers would touch stored
+visibility values, access rules and the client wrapper, so the docs say
+this instead.
+
 **In-character (IC)**:
 Speech or action written as a character in the fiction.
 

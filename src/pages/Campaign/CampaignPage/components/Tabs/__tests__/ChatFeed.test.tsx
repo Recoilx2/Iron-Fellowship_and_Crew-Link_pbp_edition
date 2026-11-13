@@ -60,6 +60,10 @@ const state = {
     loadUserDocument: vi.fn(),
     loadUserDocuments: vi.fn(),
   },
+  characters: {
+    loadCharacterPortrait: vi.fn(),
+    characterPortraitMap: {},
+  },
 };
 
 vi.mock("stores/store", () => ({
@@ -100,12 +104,14 @@ const ic: ChannelWithId = {
 };
 
 // Seam under test: the feed readers see. A GM's NPC voice shows the NPC's
-// name and portrait with a GM tag beside the author. Edited posts show
-// their new text with an edited marker, soft-deleted posts keep a "post
-// deleted" marker in place of their content, and authors and GMs get the
-// controls the access rules allow them to use. Posting itself is covered by
-// the data-layer live tests and the browser test; here the mutations are
-// stubbed.
+// name and portrait with a GM tag beside the author. Out-of-character posts
+// and direct messages lead with the author's display name, then their
+// campaign character, while in-character posts still lead with the speaking
+// character. Edited posts show their new text with an edited marker,
+// soft-deleted posts keep a "post deleted" marker in place of their content,
+// and authors and GMs get the controls the access rules allow them to use.
+// Posting itself is covered by the data-layer live tests and the browser
+// test; here the mutations are stubbed.
 describe("ChatFeed NPC voices", () => {
   let root: Root | undefined;
   let container: HTMLDivElement | undefined;
@@ -175,6 +181,71 @@ describe("ChatFeed NPC voices", () => {
     } finally {
       npcs["elder"] = withPortrait;
     }
+  });
+});
+
+describe("ChatFeed name lines", () => {
+  let root: Root | undefined;
+  let container: HTMLDivElement | undefined;
+
+  const ooc: ChannelWithId = {
+    id: "ooc",
+    name: "Out of character",
+    kind: "OOC",
+    visibility: "public",
+    isStarting: true,
+    archived: false,
+  };
+
+  afterEach(() => {
+    act(() => root?.unmount());
+    container?.remove();
+    root = undefined;
+    container = undefined;
+    state.chat.postsByChannel = { ic: [post()] };
+    state.campaigns.currentCampaign.characters.characterMap = {};
+    vi.clearAllMocks();
+  });
+
+  function render(channel: ChannelWithId) {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <ThemeProvider theme={theme}>
+          <ChatFeed channel={channel} />
+        </ThemeProvider>
+      );
+    });
+    return container as HTMLDivElement;
+  }
+
+  it("leads an out-of-character post with the display name and campaign character", () => {
+    state.campaigns.currentCampaign.characters.characterMap = {
+      kira: { uid: "player-1", name: "Kira Vey" },
+    } as typeof state.campaigns.currentCampaign.characters.characterMap;
+    state.chat.postsByChannel = {
+      ooc: [post({ channelId: "ooc", speakerCharacterId: null })],
+    };
+    const view = render(ooc);
+
+    expect(view.textContent).toContain("Sam");
+    expect(view.textContent).toContain("Kira Vey");
+    expect(view.textContent).toContain("We push on through the bog.");
+  });
+
+  it("still leads an in-character post with the speaking character", () => {
+    state.campaigns.currentCampaign.characters.characterMap = {
+      kira: { uid: "player-1", name: "Kira Vey" },
+    } as typeof state.campaigns.currentCampaign.characters.characterMap;
+    state.chat.postsByChannel = {
+      ic: [post({ speakerCharacterId: "kira" })],
+    };
+    const view = render(ic);
+
+    expect(view.textContent).toContain("Kira Vey");
+    expect(view.textContent).toContain("Sam");
   });
 });
 
