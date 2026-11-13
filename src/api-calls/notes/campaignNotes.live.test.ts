@@ -419,15 +419,30 @@ describe.skipIf(!config)("campaign notes end to end", () => {
     const { gm, player, campaignId } = await setUpCampaign();
     await signInAs(player);
     const noteId = await addNote({ campaignId, order: 0 });
+    await signOut();
 
-    // While still a member the author may retitle their own unshared draft.
-    // The player's own returning SELECT stays empty (unshared notes are
-    // invisible to players), so the GM re-reads to prove the write landed.
+    // Share the player's draft so the author can see it while a member.
+    // (Unshared notes are invisible to players, so even the returning
+    // SELECT stays empty; sharing keeps the write proof readable.)
+    const shared = await gm.client
+      .from("campaign_notes")
+      .update({ shared: true })
+      .eq("id", noteId)
+      .select("id");
+    expect(shared.error).toBeNull();
+
+    // While still a member the author may retitle the shared note.
     const allowedWhileMember = await player.client
       .from("campaign_notes")
       .update({ title: "Draft" })
-      .eq("id", noteId);
+      .eq("id", noteId)
+      .select("id");
     expect(allowedWhileMember.error).toBeNull();
+    expect(
+      ((allowedWhileMember.data ?? []) as Array<{ id: string }>).map(
+        (row) => row.id
+      )
+    ).toEqual([noteId]);
     const draftRead = await gm.client
       .from("campaign_notes")
       .select("id, title")
@@ -454,7 +469,7 @@ describe.skipIf(!config)("campaign notes end to end", () => {
     expect(deniedUpdate.error ? [] : (deniedUpdate.data ?? [])).toEqual([]);
     const deniedShared = await player.client
       .from("campaign_notes")
-      .update({ shared: true })
+      .update({ shared: false })
       .eq("id", noteId)
       .select("id");
     expect(deniedShared.error ? [] : (deniedShared.data ?? [])).toEqual([]);
@@ -474,7 +489,7 @@ describe.skipIf(!config)("campaign notes end to end", () => {
     expect(gmRead.error).toBeNull();
     expect(gmRead.data?.id).toBe(noteId);
     expect(gmRead.data?.title).toBe("Draft");
-    expect(gmRead.data?.shared).toBe(false);
+    expect(gmRead.data?.shared).toBe(true);
   });
 
   it("deleting an author's account keeps the note and clears the author (#106)", { timeout: 90000 }, async () => {
