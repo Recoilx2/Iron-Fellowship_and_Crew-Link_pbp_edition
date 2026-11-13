@@ -73,17 +73,22 @@ CREATE TRIGGER chat_channels_updated_at
   BEFORE UPDATE ON public.chat_channels
   FOR EACH ROW EXECUTE FUNCTION public.handle_campaign_updated_at();
 
--- The starting channels stay: no archive may retire them, no un-start may
--- strip their flag, and no delete may remove them. Renaming stays allowed
--- so a GM can title the opening scene. The flag itself is immutable from
--- the client: inserts already reject starting rows above, and this trigger
--- backstops updates and deletes.
+-- The starting channels stay: no archive may retire them, no delete may
+-- remove them, and the starting flag itself never flips either way.
+-- Renaming stays allowed so a GM can title the opening scene. Inserts
+-- already reject starting rows above; this trigger backstops the rest.
 CREATE OR REPLACE FUNCTION public.keep_starting_channels()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  IF OLD.is_starting AND NEW.is_starting IS NOT TRUE THEN
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.is_starting THEN
+      RAISE EXCEPTION 'starting channels cannot be deleted';
+    END IF;
+    RETURN OLD;
+  END IF;
+  IF OLD.is_starting IS DISTINCT FROM NEW.is_starting THEN
     RAISE EXCEPTION 'starting channels stay starting channels';
   END IF;
   IF OLD.is_starting AND NEW.archived THEN

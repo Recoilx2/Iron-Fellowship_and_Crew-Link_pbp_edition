@@ -20,7 +20,7 @@ type CapturedHandler = {
 type CapturedFail = (error: unknown) => void;
 
 function setUpSlice(campaignId: string | undefined = "campaign-1") {
-  let draft: { chat: ChatSliceData } = {
+  const draft: { chat: ChatSliceData } = {
     chat: { ...defaultChatSlice },
   };
   const set = (fn: (store: { chat: ChatSliceData }) => void) => {

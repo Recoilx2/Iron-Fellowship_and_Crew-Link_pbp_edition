@@ -148,6 +148,16 @@ describe.skipIf(!config)("chat channels end to end", () => {
       name: "Harbor side scene",
       archived: false,
     });
+
+    // Even the GM cannot forge starting channels.
+    const forged = await gm.client.from(CHAT_CHANNELS_TABLE).insert({
+      id: crypto.randomUUID(),
+      campaign_id: campaignId,
+      name: "Fake start",
+      kind: "IC",
+      is_starting: true,
+    });
+    expect(forged.error).not.toBeNull();
   });
 
   it("keeps the starting channels unarchivable but renamable", { timeout: 90000 }, async () => {

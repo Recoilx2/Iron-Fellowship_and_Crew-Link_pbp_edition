@@ -74,6 +74,14 @@ describe("chat channels migration", () => {
       /is_starting[\s\S]*?archived/i.test(sql),
       "nothing stops the starting channels from being archived"
     );
+    assert.ok(
+      /starting channels cannot be archived/i.test(sql),
+      "archiving a starting channel is not refused"
+    );
+    assert.ok(
+      /starting channels stay starting channels/i.test(sql),
+      "the starting flag itself is not immutable"
+    );
   });
 
   it("creates the IC and OOC channels with the campaign", () => {
