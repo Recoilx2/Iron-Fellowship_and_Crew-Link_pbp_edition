@@ -103,7 +103,11 @@ describe("listenToRows", () => {
     });
 
     expect(channels).toHaveLength(1);
-    expect(channels[0].name).toBe("user-settings:abc");
+    // One topic per subscription (issue #116): the topic keeps the
+    // requested channel name as a prefix (realtime-auth LIKE allowlist)
+    // plus a per-subscription suffix, so it is never byte-identical.
+    expect(channels[0].name.startsWith("user-settings:abc")).toBe(true);
+    expect(channels[0].name.length).toBeGreaterThan("user-settings:abc".length);
     // Subset-match: the installed SDK merges broadcast/presence defaults into
     // the params in place, so exact equality is brittle. Private must stay true.
     expect(channels[0].options).toMatchObject({ config: { private: true } });
@@ -804,6 +808,186 @@ describe("listenToRows", () => {
       unsubscribe();
       await vi.advanceTimersByTimeAsync(RECONCILE_INTERVAL_MS * 3);
       expect(fetchRows.mock.calls.length).toBe(callsWhileSubscribed);
+    });
+  });
+
+  describe("concurrent subscriptions sharing one channel name (issue #116)", () => {
+    // Seam under test: two listenToRows calls with the same channelName,
+    // active at the same time (campaign screen Active + Completed tracks on
+    // character-tracks:<id>; character sheet + campaign screen on one
+    // character). supabase-js channel() creates-OR-REUSES by topic, so a
+    // shared topic hands the second listenToRows an already-subscribed
+    // channel and realtime-js throws on the second .on().
+    //
+    // The fake below reproduces exactly that contract: channels are keyed
+    // by topic, subscribe() marks the channel joined synchronously, and a
+    // postgres_changes .on() after subscribe throws.
+    type ReuseStatusCallback = (status: string, err?: unknown) => void;
+    type ReuseEventCallback = (payload: unknown) => void;
+
+    interface ReuseChannel {
+      topic: string;
+      joinedOnce: boolean;
+      postgresCbs: ReuseEventCallback[];
+      subscribeCbs: ReuseStatusCallback[];
+      on(
+        type: string,
+        filter: unknown,
+        cb: ReuseEventCallback
+      ): ReuseChannel;
+      subscribe(cb: ReuseStatusCallback): ReuseChannel;
+    }
+
+    function makeTopicReusingClient() {
+      const channels = new Map<string, ReuseChannel>();
+      const removeChannel = vi.fn((channel: ReuseChannel) => {
+        channels.delete(channel.topic);
+        return Promise.resolve("ok");
+      });
+      const client = {
+        channel(topic: string): ReuseChannel {
+          const existing = channels.get(topic);
+          if (existing) return existing;
+          const record = {} as ReuseChannel;
+          record.topic = topic;
+          record.joinedOnce = false;
+          record.postgresCbs = [];
+          record.subscribeCbs = [];
+          record.on = (
+            type: string,
+            _filter: unknown,
+            cb: ReuseEventCallback
+          ) => {
+            if (type === "postgres_changes" && record.joinedOnce) {
+              throw new Error(
+                `cannot add postgres_changes callbacks for realtime:${topic} after subscribe()`
+              );
+            }
+            record.postgresCbs.push(cb);
+            return record;
+          };
+          record.subscribe = (cb: ReuseStatusCallback) => {
+            record.joinedOnce = true;
+            record.subscribeCbs.push(cb);
+            return record;
+          };
+          channels.set(topic, record);
+          return record;
+        },
+        removeChannel,
+      };
+      return { client, channels, removeChannel };
+    }
+
+    const activeRow: Row = {
+      id: "track-active",
+      value: "vow",
+      updated_at: "2026-11-12T00:00:01Z",
+    };
+    const completedRow: Row = {
+      id: "track-done",
+      value: "vow",
+      updated_at: "2026-11-12T00:00:02Z",
+    };
+
+    function subscribeBoth(client: unknown) {
+      const activeSeen: Row[][] = [];
+      const completedSeen: Row[][] = [];
+      const binding = () =>
+        postgresChanges<Row>("character_tracks", (payload) =>
+          payload.new?.id ? { kind: "upsert", row: payload.new } : null
+        );
+      let unActive!: () => void;
+      let unCompleted!: () => void;
+      expect(() => {
+        unActive = listenToRows<Row>({
+          client: client as never,
+          channelName: "character-tracks:char-1",
+          bindings: [binding()],
+          fetchRows: () => Promise.resolve([activeRow]),
+          getKey: keyOf,
+          getUpdatedAt: stampOf,
+          onRows: (rows) => activeSeen.push(rows),
+        });
+        unCompleted = listenToRows<Row>({
+          client: client as never,
+          channelName: "character-tracks:char-1",
+          bindings: [binding()],
+          fetchRows: () => Promise.resolve([completedRow]),
+          getKey: keyOf,
+          getUpdatedAt: stampOf,
+          onRows: (rows) => completedSeen.push(rows),
+        });
+      }).not.toThrow();
+      return { unActive, unCompleted, activeSeen, completedSeen };
+    }
+
+    function settleAll(channels: Map<string, ReuseChannel>) {
+      for (const channel of channels.values()) {
+        for (const cb of channel.subscribeCbs) cb("SUBSCRIBED");
+      }
+    }
+
+    it("two concurrent subscriptions with the same channelName both receive rows and neither throws", async () => {
+      const { client, channels } = makeTopicReusingClient();
+      const { unActive, unCompleted, activeSeen, completedSeen } =
+        subscribeBoth(client);
+
+      // One realtime topic per subscription: sharing a topic is what made
+      // the second .on() throw.
+      expect(channels.size).toBe(2);
+
+      settleAll(channels);
+      await flush();
+      await flush();
+
+      expect(activeSeen).toEqual([[activeRow]]);
+      expect(completedSeen).toEqual([[completedRow]]);
+
+      unActive();
+      unCompleted();
+    });
+
+    it("keeps every subscription topic inside the realtime allowlist family", async () => {
+      const { client, channels } = makeTopicReusingClient();
+      const { unActive, unCompleted } = subscribeBoth(client);
+
+      // realtime-auth matches topic prefixes with LIKE (character%,
+      // campaign:%, world%, ...): every topic must still start with the
+      // requested channel name, so no auth change is needed.
+      expect(channels.size).toBeGreaterThan(0);
+      for (const topic of channels.keys()) {
+        expect(topic.startsWith("character-tracks:char-1")).toBe(true);
+      }
+
+      unActive();
+      unCompleted();
+    });
+
+    it("unsubscribing one listener leaves the other working", async () => {
+      const { client, channels, removeChannel } = makeTopicReusingClient();
+      const { unActive, activeSeen, completedSeen } = subscribeBoth(client);
+
+      settleAll(channels);
+      await flush();
+      await flush();
+      expect(activeSeen).toEqual([[activeRow]]);
+      expect(completedSeen).toEqual([[completedRow]]);
+
+      unActive();
+      expect(removeChannel).toHaveBeenCalledTimes(1);
+
+      // A live change lands on the surviving subscription only.
+      const survivor = [...channels.values()][0];
+      expect(channels.size).toBe(1);
+      const fresh: Row = {
+        id: "track-done",
+        value: "vow-advanced",
+        updated_at: "2026-11-12T00:00:09Z",
+      };
+      for (const cb of survivor.postgresCbs) cb({ new: fresh, old: null });
+      expect(completedSeen.at(-1)).toEqual([fresh]);
+      expect(activeSeen).toEqual([[activeRow]]);
     });
   });
 });
