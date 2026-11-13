@@ -11,6 +11,9 @@ export interface Channel {
   kind: ChannelKind;
   starting: boolean;
   archived: boolean;
+  // Private channels and DMs: only these people (plus GMs) can see them.
+  members?: string[];
+  dm?: boolean;
 }
 
 export type Speaker =
@@ -29,6 +32,9 @@ export interface Character {
   name: string;
   uid: string;
   colour: string;
+  portrait?: string;
+  stats: Record<string, number>;
+  tracks: { label: string; type: "vow" | "journey" | "bond"; progress: number }[];
 }
 
 export interface Post {
@@ -52,10 +58,29 @@ export const people: Record<string, Person> = {
   jo: { uid: "jo", name: "Jo", isGM: false },
 };
 
+const portrait = (bg: string, fg: string) =>
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'><rect width='96' height='96' fill='${bg}'/><circle cx='48' cy='38' r='18' fill='${fg}'/><path d='M14 96 Q48 50 82 96Z' fill='${fg}'/></svg>`
+  );
+
+const stats = { Edge: 2, Heart: 3, Iron: 1, Shadow: 2, Wits: 3 };
 export const characters: Record<string, Character> = {
-  kira: { id: "kira", name: "Kira Vey", uid: "me", colour: "#8e5b3c" },
-  tamsin: { id: "tamsin", name: "Old Tamsin", uid: "me", colour: "#4a6b5d" },
-  brannoc: { id: "brannoc", name: "Brannoc", uid: "jo", colour: "#5a4f7a" },
+  kira: {
+    id: "kira",
+    name: "Kira Vey",
+    uid: "me",
+    colour: "#8e5b3c",
+    portrait: portrait("#c9a27e", "#5b3a22"),
+    stats,
+    tracks: [
+      { label: "Free the Hollow Shrine", type: "vow", progress: 6 },
+      { label: "To the drowned coast", type: "journey", progress: 3 },
+      { label: "Bonds", type: "bond", progress: 2 },
+    ],
+  },
+  tamsin: { id: "tamsin", name: "Old Tamsin", uid: "solo", colour: "#4a6b5d", stats, tracks: [] },
+  brannoc: { id: "brannoc", name: "Brannoc", uid: "jo", colour: "#5a4f7a", stats: { Edge: 3, Heart: 1, Iron: 3, Shadow: 1, Wits: 2 }, tracks: [] },
 };
 
 export const npcs = ["Warden Elsa", "The Hollow Voice"];
@@ -110,6 +135,8 @@ const startingChannels: Channel[] = [
     archived: false,
   },
   { id: "s0", name: "Session 0", kind: "OOC", starting: false, archived: true },
+  { id: "dm-jo", name: "Jo", kind: "OOC", starting: false, archived: false, members: ["me", "jo"], dm: true },
+  { id: "sq", name: "Side quest: Brannoc's debt", kind: "IC", starting: false, archived: false, members: ["jo"] },
 ];
 
 const startingPosts: Post[] = [
@@ -201,6 +228,24 @@ const startingPosts: Post[] = [
     createdAt: minutesAgo(30),
   },
   {
+    id: "dm1",
+    channelId: "dm-jo",
+    authorUid: "jo",
+    speaker: { kind: "self" },
+    text: "Psst, should we tell Rook's NPC the truth about the lantern?",
+    images: [],
+    createdAt: minutesAgo(50),
+  },
+  {
+    id: "sq1",
+    channelId: "sq",
+    authorUid: "gm",
+    speaker: { kind: "npc", name: "Warden Elsa" },
+    text: "*You owe the Wardens a debt, Brannoc. Tonight you pay it.*",
+    images: [],
+    createdAt: minutesAgo(40),
+  },
+  {
     id: "o1",
     channelId: "ooc",
     authorUid: "jo",
@@ -222,8 +267,8 @@ const startingPosts: Post[] = [
     id: "s1",
     channelId: "shrine",
     authorUid: "me",
-    speaker: { kind: "character", characterId: "tamsin" },
-    text: "Tamsin stays at the ridge, watching the road behind them.",
+    speaker: { kind: "character", characterId: "kira" },
+    text: "Kira circles the shrine, looking for another way in.",
     images: [],
     roll: {
       type: ROLL_TYPE.TRACK_PROGRESS,
@@ -234,7 +279,7 @@ const startingPosts: Post[] = [
       result: ROLL_RESULT.WEAK_HIT,
       trackType: TrackTypes.Journey,
       timestamp: new Date(),
-      characterId: "tamsin",
+      characterId: "kira",
       uid: "me",
       gmsOnly: false,
     },
@@ -321,7 +366,9 @@ export function usePrototypeChat() {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [speakerByChannel, setSpeakerByChannel] = useState<Record<string, Speaker>>({});
 
-  const channel = channels.find((c) => c.id === channelId) ?? channels[0];
+  const canSee = (c: Channel) => !c.members || viewAsGM || c.members.includes(myUid);
+  const visibleChannels = channels.filter(canSee);
+  const channel = visibleChannels.find((c) => c.id === channelId) ?? visibleChannels[0];
 
   const mySpeakers: Speaker[] = useMemo(() => {
     if (viewAsGM) {
@@ -362,8 +409,23 @@ export function usePrototypeChat() {
     viewAsGM,
     setViewAsGM,
     myUid,
-    channels,
+    channels: visibleChannels,
     channel,
+    createPrivateChannel: (name: string, members: string[]) => {
+      const id = `c${Date.now()}`;
+      setChannels((cs) => [...cs, { id, name, kind: "IC", starting: false, archived: false, members }]);
+      setChannelId(id);
+    },
+    setMembers: (id: string, members: string[]) =>
+      setChannels((cs) => cs.map((c) => (c.id === id ? { ...c, members } : c))),
+    openDM: (uid: string) => {
+      const existing = channels.find((c) => c.dm && c.members?.includes(uid) && c.members.includes(myUid));
+      if (existing) return setChannelId(existing.id);
+      const id = `dm${Date.now()}`;
+      setChannels((cs) => [...cs, { id, name: people[uid].name, kind: "OOC", starting: false, archived: false, members: [myUid, uid], dm: true }]);
+      setChannelId(id);
+    },
+    attachExactRoll: (roll: Roll) => setDraft({ roll: { ...roll, uid: myUid, characterId } }),
     setChannelId,
     createChannel: (name: string, kind: ChannelKind) => {
       const id = `c${Date.now()}`;

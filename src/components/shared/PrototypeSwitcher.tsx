@@ -68,7 +68,10 @@ export function PrototypeSwitcher(props: PrototypeSwitcherProps) {
         <LeftIcon />
       </IconButton>
       <Typography sx={{ fontFamily: "monospace", fontSize: 14 }}>
-        {variants[index].key} ({variants[index].name})
+        {variants[index].key}
+        <Box component={"span"} sx={{ display: { xs: "none", sm: "inline" } }}>
+          {" "}({variants[index].name})
+        </Box>
       </Typography>
       <IconButton size={"small"} onClick={() => go(1)} sx={{ color: "#fff" }} aria-label={"Next variant"}>
         <RightIcon />

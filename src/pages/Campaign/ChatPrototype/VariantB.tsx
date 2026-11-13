@@ -49,7 +49,7 @@ import {
 
 export const name = "Three panes";
 
-function rollSummary(roll: Roll) {
+export function rollSummary(roll: Roll) {
   const outcome = (r: ROLL_RESULT) => (r === ROLL_RESULT.HIT ? "Strong hit" : r === ROLL_RESULT.WEAK_HIT ? "Weak hit" : "Miss");
   switch (roll.type) {
     case ROLL_TYPE.STAT:

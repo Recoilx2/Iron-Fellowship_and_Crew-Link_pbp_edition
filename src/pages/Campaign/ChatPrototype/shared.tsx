@@ -42,8 +42,9 @@ export function SpeakerAvatar(props: { speaker: Speaker; authorUid: string; size
       : speaker.kind === "npc"
         ? "#7a3b3b"
         : "#555";
+  const portrait = speaker.kind === "character" ? characters[speaker.characterId].portrait : undefined;
   return (
-    <Avatar sx={{ width: size, height: size, bgcolor: colour, fontSize: size * 0.4 }}>
+    <Avatar src={portrait} alt={name} sx={{ width: size, height: size, bgcolor: colour, fontSize: size * 0.4 }}>
       {name
         .split(" ")
         .map((w) => w[0])

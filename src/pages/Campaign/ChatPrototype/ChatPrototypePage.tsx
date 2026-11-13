@@ -10,16 +10,18 @@ import { usePrototypeChat, speakerName } from "./usePrototypeChat";
 import { VariantA, name as nameA } from "./VariantA";
 import { VariantB, name as nameB } from "./VariantB";
 import { VariantC, name as nameC } from "./VariantC";
+import { VariantD, name as nameD } from "./VariantD";
 
 const variants = [
   { key: "A", name: nameA },
   { key: "B", name: nameB },
   { key: "C", name: nameC },
+  { key: "D", name: nameD },
 ];
 
 export function Component() {
   const [params] = useSearchParams();
-  const variant = params.get("variant") ?? "A";
+  const variant = params.get("variant") ?? "D";
   const chat = usePrototypeChat();
 
   return (
@@ -30,6 +32,7 @@ export function Component() {
           {variant === "A" && <VariantA chat={chat} />}
           {variant === "B" && <VariantB chat={chat} />}
           {variant === "C" && <VariantC chat={chat} />}
+          {variant === "D" && <VariantD chat={chat} />}
         </Box>
       </PageContent>
       <PrototypeSwitcher
