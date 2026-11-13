@@ -13,9 +13,18 @@ export function createApiFunction<Params, Result>(
       apiFunction(params)
         .then(resolve)
         .catch((e) => {
-          console.error(e);
+          // Short reference code per failure (story 38): the user sees only
+          // the generic message plus this code, while details stay in logs.
+          const referenceCode = Math.random()
+            .toString(36)
+            .slice(2, 8)
+            .toUpperCase()
+            .padEnd(6, "0");
+          console.error(`API call failed (ref: ${referenceCode})`, e);
           try {
-            createErrorSnackbar(friendlyErrorMessage);
+            createErrorSnackbar(
+              `${friendlyErrorMessage} (ref: ${referenceCode})`
+            );
           } catch {
             // No SnackbarProvider mounted (e.g. vitest): the toast cannot be
             // shown, but the caller must still get the rejection below.

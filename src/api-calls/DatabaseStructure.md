@@ -14,7 +14,8 @@ characters                   one row per character (+ assets, tracks, notes,
 campaigns                    one row per campaign (+ members, assets, tracks,
                              notes, note contents, settings, roll log)
 worlds                       one row per world (+ locations, lore, npcs,
-                             sectors, notes, images metadata)
+                             notes, images metadata; no sectors: Starforged
+                             locations replaced them, see ticket #21)
 homebrew_collections         one row per collection (+ stats, moves, oracles,
                              assets, editors, viewers, invite keys)
 ```
@@ -30,11 +31,9 @@ homebrew_collections         one row per collection (+ stats, moves, oracles,
 | SettingsDocument             | [\_character-campaign-settings.type](./character-campaign-settings/_character-campaign-settings.type.ts) |
 | **Worlds**                   |                                                                                                          |
 | WorldDocument                | [\_world.type](./world/_world.type.ts)                                                                   |
-| LocationDocument (and related) | [\_location.type](./world/locations/_locations.type.ts)                                                |
-| LoreDocument (and related)   | [\_lore.type](./world/lore/_lore.type.ts)                                                                |
-| NPCDocument (and related)    | [\_npcs.type](./world/npcs/_npcs.type.ts)                                                                |
-| SectorDocument (and related) | [\_sectors.type](./world/sectors/_sectors.type.ts)                                                       |
-| SectorLocationDocument       | [\_sectorLocations.type](./world/sectors/sectorLocations/_sectorLocations.type.ts)                       |
+| Location (and related)         | [Locations.type](../types/Locations.type.ts)                                                            |
+| Lore (and related)           | [Lore.type](../types/Lore.type.ts)                                                                        |
+| NPC (and related)            | [NPCs.type](../types/NPCs.type.ts)                                                                        |
 | **Homebrew**                 |                                                                                                          |
 | HomebrewCollectionDocument   | [\_homebrewCollection.type](./homebrew/_homebrewCollection.type.ts)                                      |
 | UserDocument (device prefs)  | [\_user.type](./user/_user.type.ts)                                                                      |

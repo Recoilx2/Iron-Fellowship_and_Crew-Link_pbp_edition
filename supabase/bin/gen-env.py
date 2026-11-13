@@ -45,6 +45,9 @@ def mint_jwt(secret: str, role: str) -> str:
 
 def fresh_secrets() -> dict:
     jwt_secret = secrets.token_urlsafe(36)  # ~48 chars, well over the 32 minimum
+    # GM assistant LLM keys (GM_ASSISTANT_ENDPOINT/API_KEY/ALLOWED_MODELS) are
+    # intentionally not generated: they stay blank until the operator fills
+    # them, and the assistant reports "not set up" until then (spec #10).
     return {
         "POSTGRES_PASSWORD": secrets.token_urlsafe(32),
         "JWT_SECRET": jwt_secret,

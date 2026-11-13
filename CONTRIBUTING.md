@@ -11,15 +11,14 @@ See [SETUP.md](./SETUP.md) for instructions on how to get everything running.
 
 ## Picking Up Tickets
 
-My todo list for this application can be found [here](https://github.com/users/scottbenton/projects/5/views/13).
-If you would like to work on something that is not on that list, please open up an issue or reach out on discord so that we can discuss your proposed changes!
-I don't want you spending time on something that doesn't fit with the application.
-If you are new to the project, I would recommend looking for issues that are tagged with `good first issue`.
-The tickets I've created are not well fleshed out, so feel free to ask any clarifying questions you have before you begin!
+Work is tracked in this fork's issues (Recoilx2/Iron-Fellowship_and_Crew-Link_pbp_edition). Take the lowest-numbered open issue labelled `ready-for-agent` with no assignee and no open blockers (see `AGENTS.md`); never pick up issues labelled `spec` or `wayfinder:*`.
+Never file issues or PRs upstream (scottbenton/Iron-Fellowship_and_Crew-Link) and never sync from upstream: this fork stays off upstream by design (see ADR 0001). Port upstream changes by hand, if at all.
+If you would like to work on something without a ticket, open an issue in this fork first so it can be triaged before you start.
 
-## Swapping between Iron Fellowship and Crew Link in development
+## Game system in development vs deployed copies
 
-In order to switch between the different systems while running locally, click the settings icon in the bottom left, and then click "Switch System" to swap your local environment to a different game.
+Each deployed copy serves one game system, baked in at build time via the `GAME_SYSTEM` build arg (see `supabase/site/Dockerfile` and `supabase/.env.example`); there is no switching on a deployed site.
+The settings "Switch System" control only works in local development (`npm run dev` on localhost with no `VITE_GAME_SYSTEM` configured) via a `game-system` local-storage override (see `src/hooks/useGameSystem.ts`, `src/functions/getGameSystem.ts`).
 
 ![Settings Icon Menu / Switch System](readme_assets/LocalDevSwitchSystems.png)
 
@@ -65,5 +64,4 @@ Try your best to abide by the following "organization", but don't let it worry y
 
 ## Getting Help
 
-I am **always** happy to help troubleshoot issues and guide development that you are working on!
-Feel free to reach out to me here, or on Discord (username: scottbenton) for help.
+Open an issue in this fork's tracker for help or questions about a ticket. Do not contact the upstream maintainer (no Discord, no upstream issues): this fork is maintained separately.

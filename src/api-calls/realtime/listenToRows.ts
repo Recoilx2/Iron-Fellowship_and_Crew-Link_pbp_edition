@@ -7,9 +7,11 @@ import type { Unsubscribe } from "api-calls/helpers.type";
  * rows once subscribed, merges the two by primary key, and re-fetches after
  * every reconnect. It returns a plain unsubscribe function.
  *
- * Two binding kinds cover both live-update mechanisms: plain row streaming
- * for rows only their owner sees, and database broadcasts on private topics
- * for shared campaign data. Neither mechanism delivers an initial snapshot
+ * Two binding kinds are supported: plain row streaming for rows only their
+ * owner sees, and database broadcasts on private topics for shared campaign
+ * data. Broadcast delivery is deferred per ADR 0002 (no production callers
+ * yet): every current caller uses plain row streaming only. Neither
+ * mechanism delivers an initial snapshot
  * or replays missed events, so the fetch-on-subscribe (and re-fetch on every
  * later subscribe) is what keeps subscribers current.
  *
