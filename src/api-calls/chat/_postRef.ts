@@ -17,6 +17,7 @@ export interface PostRow {
   channel_id: string;
   author_id: string;
   speaker_character_id: string | null;
+  speaker_npc_id: string | null;
   text: string;
   created_at: string;
   updated_at: string;
@@ -35,6 +36,7 @@ export function postRowToDocument(row: PostRow): PostDocument {
     channelId: row.channel_id,
     authorId: row.author_id,
     speakerCharacterId: row.speaker_character_id,
+    speakerNpcId: row.speaker_npc_id,
     text: row.text,
     createdAt: row.created_at,
   };

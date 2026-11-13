@@ -14,6 +14,9 @@ import {
   listenToChannelPosts,
   type PostWithId,
 } from "api-calls/chat/listenToChannelPosts";
+import { createWorld } from "api-calls/world/createWorld";
+import { updateCampaignWorld } from "api-calls/campaign/updateCampaignWorld";
+import { createNPC } from "api-calls/world/npcs/createNPC";
 import {
   createPerson,
   deletePerson,
@@ -413,6 +416,101 @@ describe.skipIf(!config)("chat text posts end to end", () => {
     );
     expect(full.at(-1)?.map((post) => post.text)).toEqual(texts);
     expect(fullOlder.at(-1)).toBe(false);
+  });
+
+  it("lets a campaign GM post as an NPC of the campaign's world", { timeout: 90000 }, async () => {
+    const { gm, player, campaignId, icChannelId } = await setUpCampaign();
+    await signInAs(gm);
+    const worldId = await createWorld({ name: "Bog realm" });
+    await updateCampaignWorld({ campaignId, gmIds: [], worldId });
+    const elderId = await createNPC({ worldId, npc: { name: "Elder Moss" } });
+
+    // The GM speaks as the NPC: no character voice beside it.
+    const postId = await createPost({
+      channelId: icChannelId,
+      text: "The bog remembers.",
+      speakerNpcId: elderId,
+    });
+    expect(await readPostsAs(gm, icChannelId)).toContainEqual(
+      expect.objectContaining({
+        id: postId,
+        channel_id: icChannelId,
+        author_id: gm.userId,
+        speaker_character_id: null,
+        speaker_npc_id: elderId,
+        text: "The bog remembers.",
+      })
+    );
+
+    // The GM's NPC voice reaches every member of the campaign.
+    expect(await readPostsAs(player, icChannelId)).toHaveLength(1);
+  });
+
+  it("refuses NPC voices to players and to NPCs outside the campaign's world", { timeout: 90000 }, async () => {
+    const { gm, player, campaignId, icChannelId } = await setUpCampaign();
+    await signInAs(gm);
+    const worldId = await createWorld({ name: "Bog realm" });
+    const elderId = await createNPC({ worldId, npc: { name: "Elder Moss" } });
+
+    // With no world on the campaign, even the GM has no NPC voice.
+    await expect(
+      createPost({
+        channelId: icChannelId,
+        text: "The bog remembers.",
+        speakerNpcId: elderId,
+      })
+    ).rejects.toBeTruthy();
+
+    await updateCampaignWorld({ campaignId, gmIds: [], worldId });
+    await signOut();
+
+    // A player never speaks as an NPC, through the call or direct.
+    await signInAs(player);
+    await expect(
+      createPost({
+        channelId: icChannelId,
+        text: "I am the elder",
+        speakerNpcId: elderId,
+      })
+    ).rejects.toBeTruthy();
+    const forged = await player.client.from(CHAT_POSTS_TABLE).insert({
+      id: crypto.randomUUID(),
+      channel_id: icChannelId,
+      author_id: player.userId,
+      speaker_npc_id: elderId,
+      text: "I am the elder",
+    });
+    expect(forged.error).not.toBeNull();
+    await signOut();
+
+    // A GM never speaks as an NPC from another world.
+    await signInAs(gm);
+    const elsewhereId = await createWorld({ name: "Elsewhere" });
+    const strayId = await createNPC({
+      worldId: elsewhereId,
+      npc: { name: "Drifter" },
+    });
+    await expect(
+      createPost({
+        channelId: icChannelId,
+        text: "A drifter speaks",
+        speakerNpcId: strayId,
+      })
+    ).rejects.toBeTruthy();
+
+    // One voice per post: never a character and an NPC together.
+    const kira = await createCharacterAs(gm, campaignId, "Kira Vey");
+    const dual = await gm.client.from(CHAT_POSTS_TABLE).insert({
+      id: crypto.randomUUID(),
+      channel_id: icChannelId,
+      author_id: gm.userId,
+      speaker_character_id: kira,
+      speaker_npc_id: elderId,
+      text: "Two voices at once",
+    });
+    expect(dual.error).not.toBeNull();
+
+    expect(await readPostsAs(player, icChannelId)).toEqual([]);
   });
 
   it("refuses posts into archived channels", { timeout: 90000 }, async () => {

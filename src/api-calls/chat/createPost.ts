@@ -4,16 +4,22 @@ import { CHAT_POSTS_TABLE } from "./_postRef";
 
 /**
  * Posts formatted text to a channel as the speaker the interface chose: one
- * of the author's characters in the campaign, or nobody for posting as
- * self (players out of character, GMs everywhere). Members post into open
- * channels only; the post access rules refuse outsiders, foreign speakers
- * and archived channels, and the caller sees the failure.
+ * of the author's characters in the campaign, one of the campaign world's
+ * NPCs (GMs alone), or nobody for posting as self (players out of
+ * character, GMs everywhere). Members post into open channels only; the post
+ * access rules refuse outsiders, foreign speakers and archived channels,
+ * and the caller sees the failure.
  */
 export const createPost = createApiFunction<
-  { channelId: string; text: string; speakerCharacterId?: string | null },
+  {
+    channelId: string;
+    text: string;
+    speakerCharacterId?: string | null;
+    speakerNpcId?: string | null;
+  },
   string
 >(async (params) => {
-  const { channelId, text, speakerCharacterId } = params;
+  const { channelId, text, speakerCharacterId, speakerNpcId } = params;
   if (!channelId) {
     throw new Error("A channel is required to post.");
   }
@@ -36,6 +42,7 @@ export const createPost = createApiFunction<
     channel_id: channelId,
     author_id: authorId,
     speaker_character_id: speakerCharacterId ?? null,
+    speaker_npc_id: speakerNpcId ?? null,
     text: trimmed,
   });
   if (error) {

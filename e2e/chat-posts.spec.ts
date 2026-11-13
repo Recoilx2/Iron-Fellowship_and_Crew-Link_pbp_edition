@@ -96,4 +96,72 @@ test.describe("chat text posts", () => {
       await gmContext.close().catch(() => {});
     }
   });
+
+  test("a GM post as a world NPC shows the NPC with a GM tag", async ({
+    browser,
+  }) => {
+    // The campaign links a world with an NPC the GM can voice.
+    const { error: worldError, data: world } = await gm.client
+      .from("worlds")
+      .insert({ name: "E2E Bog realm", owner_ids: [gm.userId] })
+      .select("id")
+      .single();
+    if (worldError || !world) {
+      throw new Error(`e2e: could not create world: ${worldError?.message}`);
+    }
+    const worldId = (world as { id: string }).id;
+    const { error: linkError } = await gm.client
+      .from("campaigns")
+      .update({ world_id: worldId })
+      .eq("id", campaignId);
+    if (linkError) {
+      throw new Error(`e2e: could not link world: ${linkError.message}`);
+    }
+    const { error: npcError, data: npc } = await gm.client
+      .from("world_npcs")
+      .insert({ world_id: worldId, name: "E2E Elder" })
+      .select("id")
+      .single();
+    if (npcError || !npc) {
+      throw new Error(`e2e: could not create NPC: ${npcError?.message}`);
+    }
+
+    const gmContext = await browser.newContext();
+    const playerContext = await browser.newContext();
+    const gmPage = await gmContext.newPage();
+    const playerPage = await playerContext.newPage();
+    try {
+      await signInAs(gmPage, config, gm, campaignUrl(campaignId));
+      await signInAs(playerPage, config, player, campaignUrl(campaignId));
+
+      await expect(gmPage.getByRole("tab", { name: "Chat" })).toBeVisible();
+      await expect(playerPage.getByRole("tab", { name: "Chat" })).toBeVisible();
+
+      // The GM picks the NPC voice; the player has no picker at all.
+      const voice = gmPage.getByLabel("Posting as");
+      await expect(voice).toContainText("E2E Elder");
+      await voice.selectOption({ label: "E2E Elder" });
+      await expect(gmPage.getByText("Posting as E2E Elder")).toBeVisible();
+      await expect(playerPage.getByLabel("Posting as")).toHaveCount(0);
+
+      const text = `The bog remembers ${Date.now()}`;
+      await gmPage.getByRole("textbox", { name: /Message #/ }).fill(text);
+      await gmPage.getByRole("button", { name: "Send" }).click();
+
+      // Both browsers show the NPC as speaker with a GM tag beside it.
+      await expect(gmPage.getByText("E2E Elder").first()).toBeVisible();
+      await expect(gmPage.getByText(text)).toBeVisible();
+      await expect(
+        gmPage.getByText("GM", { exact: true }).first()
+      ).toBeVisible();
+      await expect(playerPage.getByText("E2E Elder").first()).toBeVisible();
+      await expect(playerPage.getByText(text)).toBeVisible();
+      await expect(
+        playerPage.getByText("GM", { exact: true }).first()
+      ).toBeVisible();
+    } finally {
+      await playerContext.close().catch(() => {});
+      await gmContext.close().catch(() => {});
+    }
+  });
 });
