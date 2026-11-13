@@ -428,16 +428,26 @@ describe.skipIf(!config)("chat images end to end", () => {
       await setUpMembers();
     const path = await postImageAs(player, campaignId, icChannelId);
 
-    // A fellow member who posted nothing cannot discard the file ...
-    const { error: strangerError } = await bystander.client.storage
+    // A fellow member who posted nothing cannot discard the file. Storage
+    // answers a policy-blocked remove with an empty file list and no error,
+    // so "nothing removed" plus "the author still reads it" is the denial.
+    const { data: strangerRemoved, error: strangerError } =
+      await bystander.client.storage.from(CHAT_IMAGES_BUCKET).remove([path]);
+    expect(strangerError).toBeNull();
+    expect(strangerRemoved ?? []).toEqual([]);
+    const { error: stillThereError } = await player.client.storage
       .from(CHAT_IMAGES_BUCKET)
-      .remove([path]);
-    expect(strangerError).not.toBeNull();
+      .download(path);
+    expect(stillThereError).toBeNull();
 
-    // ... while a GM clearing the post can.
+    // ... while a GM clearing the post can, and then the file is gone.
     const { error: gmError } = await gm.client.storage
       .from(CHAT_IMAGES_BUCKET)
       .remove([path]);
     expect(gmError).toBeNull();
+    const { error: goneError } = await player.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .download(path);
+    expect(goneError).not.toBeNull();
   });
 });
