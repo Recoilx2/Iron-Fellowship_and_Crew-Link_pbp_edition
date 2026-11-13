@@ -5,6 +5,8 @@ import { PostWithId } from "api-calls/chat/listenToChannelPosts";
 export interface ChatSliceData {
   channels: ChannelWithId[];
   openChannelId?: string;
+  /** The roster of every visible channel, keyed by channel id. */
+  membersByChannel: Record<string, string[]>;
   loading: boolean;
   error?: string;
   /** The loaded window per channel, oldest-first for the feed. */

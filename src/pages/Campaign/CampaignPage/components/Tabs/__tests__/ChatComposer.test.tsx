@@ -50,6 +50,7 @@ const ic = {
   id: "ic",
   name: "In character",
   kind: "IC" as const,
+  visibility: "public" as const,
   isStarting: true,
   archived: false,
 };
@@ -57,6 +58,7 @@ const ooc = {
   id: "ooc",
   name: "Out of character",
   kind: "OOC" as const,
+  visibility: "public" as const,
   isStarting: true,
   archived: false,
 };
