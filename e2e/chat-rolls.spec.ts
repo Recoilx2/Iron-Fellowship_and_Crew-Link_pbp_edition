@@ -162,9 +162,9 @@ test.describe("chat rolls from the composer", () => {
 
       // The GM sees their own secret roll post.
       await expect(
-        gmPage.getByRole("button", { name: /^2d6: \d+ \(.+\)$/ })
+        gmPage.getByRole("button", { name: /^2d6: \d+ \(.+\)(, GM only)?$/ })
       ).toBeVisible();
-      await expect(gmPage.getByText(secret)).toBeVisible();
+      await expect(gmPage.getByText(secret, { exact: true })).toBeVisible();
 
       // Past live delivery, the player still sees neither the roll nor a
       // trace of its text.
