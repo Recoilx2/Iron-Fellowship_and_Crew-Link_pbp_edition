@@ -299,13 +299,17 @@ describe.skipIf(!config)("chat post edits and soft deletes", () => {
       expect(resurrect.error).not.toBeNull();
 
       // Nobody hard-deletes: SQL DELETE fails closed for the author, a
-      // fellow player, the GM and outsiders alike.
+      // fellow player, the GM and outsiders alike. RLS filters denied
+      // DELETE rows instead of raising, so the denial surfaces as zero
+      // matched rows (same as the campaign-members house pattern).
       for (const person of [player, other, gm, outsider]) {
         const hard = await person.client
           .from(CHAT_POSTS_TABLE)
           .delete()
-          .eq("id", postId);
-        expect(hard.error).not.toBeNull();
+          .eq("id", postId)
+          .select("id");
+        expect(hard.error).toBeNull();
+        expect(hard.data ?? []).toEqual([]);
       }
       expect(await readPostsAs(player, icChannelId)).toHaveLength(1);
     }

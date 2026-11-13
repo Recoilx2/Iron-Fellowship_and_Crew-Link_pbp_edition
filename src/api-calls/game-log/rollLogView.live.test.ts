@@ -181,6 +181,10 @@ describe.skipIf(!config)("campaign roll log as a view of roll posts", () => {
       .eq("channel_id", icChannelId);
     expect(outsiderRows.error).toBeNull();
     expect(outsiderRows.data ?? []).toEqual([]);
+    // The singleton still holds the player's session here, so sign in as
+    // the outsider first: otherwise the roll posts as a member and
+    // succeeds instead of rejecting.
+    await signInAs(outsider);
     await expect(
       postCampaignRoll({
         campaignId,
@@ -188,6 +192,7 @@ describe.skipIf(!config)("campaign roll log as a view of roll posts", () => {
         roll: statRoll(null, outsider.userId),
       })
     ).rejects.toBeTruthy();
+    await signOut();
   });
 
   it("hides GM-only rolls from players over reads and live updates", { timeout: 180000 }, async () => {

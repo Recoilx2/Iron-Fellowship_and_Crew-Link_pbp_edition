@@ -39,7 +39,7 @@ test.describe("chat post edits and deletes", () => {
   });
 
   test.beforeEach(async () => {
-    campaignId = await createCampaignAs(gm, `E2E Edits ${Date.now()}`);
+    campaignId = await createCampaignAs(gm, `E2E Edits ${Date.now()}`, "co-op");
     await joinCampaignAs(player, campaignId);
     // The player's one campaign character: the IC composer posts as them.
     const { error } = await player.client.from("characters").insert({

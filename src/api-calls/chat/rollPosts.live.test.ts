@@ -79,7 +79,7 @@ describe.skipIf(!config)("chat roll posts end to end", () => {
     const campaignId = await createCampaign({
       uid: gm.userId,
       campaignName: "Rolling quest",
-      campaignType: CampaignType.Guided,
+      campaignType: CampaignType.Coop,
     });
     await signOut();
     await signInAs(player);
