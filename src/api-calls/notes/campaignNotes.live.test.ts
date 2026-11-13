@@ -228,6 +228,10 @@ describe.skipIf(!config)("campaign notes end to end", () => {
     expect(playerContents.data ?? []).toEqual([]);
 
     // The player follows the notes live; the unshared note never arrives.
+    // The singleton takes the player's session before subscribing and
+    // keeps it for the whole live phase: the GM acts through their own
+    // client, so the subscription never rides a mid-stream identity
+    // switch (which stalls the channel).
     await signOut();
     await signInAs(player);
     const seen: Note[][] = [];
@@ -246,15 +250,17 @@ describe.skipIf(!config)("campaign notes end to end", () => {
     await new Promise((resolve) => setTimeout(resolve, 3000));
     expect(seen.every((notes) => notes.length === 0)).toBe(true);
 
-    // Sharing opens exactly that note to the player, live.
-    await signOut();
-    await signInAs(gm);
-    await updateNoteShared({
-      campaignId,
-      characterId: undefined,
-      noteId,
-      shared: true,
-    });
+    // Sharing opens exactly that note to the player, live. The GM writes
+    // through their own client — byte-identical to updateNoteShared —
+    // while the player still listens.
+    const sharedOn = await gm.client
+      .from("campaign_notes")
+      .update({ shared: true })
+      .eq("id", noteId)
+      .eq("campaign_id", campaignId)
+      .select("id");
+    expect(sharedOn.error).toBeNull();
+    expect(sharedOn.data ?? []).not.toEqual([]);
     const shared = await waitFor(() =>
       seen.at(-1)?.some((note) => note.noteId === noteId) ? seen : null
     );
@@ -263,13 +269,16 @@ describe.skipIf(!config)("campaign notes end to end", () => {
       shared: true,
     });
 
-    // Unsharing hides it again, live.
-    await updateNoteShared({
-      campaignId,
-      characterId: undefined,
-      noteId,
-      shared: false,
-    });
+    // Unsharing hides it again, live: the GM writes through their own
+    // client while the player still listens.
+    const sharedOff = await gm.client
+      .from("campaign_notes")
+      .update({ shared: false })
+      .eq("id", noteId)
+      .eq("campaign_id", campaignId)
+      .select("id");
+    expect(sharedOff.error).toBeNull();
+    expect(sharedOff.data ?? []).not.toEqual([]);
     await waitFor(() =>
       seen.at(-1)?.every((note) => note.noteId !== noteId) ? seen : null
     );
