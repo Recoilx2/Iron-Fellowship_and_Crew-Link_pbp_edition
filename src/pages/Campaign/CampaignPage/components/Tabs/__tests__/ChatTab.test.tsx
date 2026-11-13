@@ -137,26 +137,46 @@ const theme = createTheme();
   globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-describe("ChatTab channels", () => {
-  let root: Root | undefined;
-  let container: HTMLDivElement | undefined;
-
-  beforeEach(() => {
-    // Wide viewport: the desktop right pane with the campaign screens is
-    // part of the DOM, like the phone bottom navigation below it.
-    Object.defineProperty(window, "matchMedia", {
-      writable: true,
-      configurable: true,
-      value: (query: string) => ({
-        matches: true,
+/**
+ * Width-aware matchMedia stub: MUI answers useMediaQuery from the query
+ * string, so parsing the min/max width out of it simulates a viewport.
+ * 1400 behaves like a wide desktop, 1000 like a mid-width tablet or
+ * window, 390 like a phone.
+ */
+function mockViewport(width: number) {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    configurable: true,
+    value: (query: string) => {
+      const minWidth = query.match(/min-width:\s*([\d.]+)px/);
+      const maxWidth = query.match(/max-width:\s*([\d.]+)px/);
+      let matches = true;
+      if (minWidth) {
+        matches = width >= parseFloat(minWidth[1]);
+      } else if (maxWidth) {
+        matches = width <= parseFloat(maxWidth[1]);
+      }
+      return {
+        matches,
         media: query,
         addEventListener: () => {},
         removeEventListener: () => {},
         addListener: () => {},
         removeListener: () => {},
         dispatchEvent: () => false,
-      }),
-    });
+      };
+    },
+  });
+}
+
+describe("ChatTab channels", () => {
+  let root: Root | undefined;
+  let container: HTMLDivElement | undefined;
+
+  beforeEach(() => {
+    // Wide viewport: the desktop side screens with the campaign screens
+    // are part of the DOM, like the phone bottom navigation below it.
+    mockViewport(1400);
   });
 
   afterEach(() => {
@@ -419,5 +439,36 @@ describe("ChatTab channels", () => {
     });
     expect(view.textContent).toContain("My notes pane");
     expect(view.textContent).not.toContain("Posts in this channel appear here");
+  });
+
+  it("shows the side screens beside chat at mid widths (md, below lg)", () => {
+    mockViewport(1000);
+    const view = render();
+
+    const tabs = view.querySelectorAll('[role="tab"]');
+    const names = Array.from(tabs).map((tab) => tab.textContent ?? "");
+    expect(names).toContain("My notes");
+
+    act(() => {
+      Array.from(tabs)
+        .find((tab) => tab.textContent === "My notes")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(view.textContent).toContain("My notes pane");
+  });
+
+  it("leaves the side screens out below md, where the bottom bar takes over", () => {
+    mockViewport(390);
+    const view = render();
+
+    expect(view.querySelectorAll('[role="tab"]').length).toBe(0);
+    const myNotesAction = Array.from(view.querySelectorAll("button")).find(
+      (button) => button.textContent === "My notes"
+    );
+    expect(myNotesAction).toBeTruthy();
+    act(() => {
+      myNotesAction?.click();
+    });
+    expect(view.textContent).toContain("My notes pane");
   });
 });

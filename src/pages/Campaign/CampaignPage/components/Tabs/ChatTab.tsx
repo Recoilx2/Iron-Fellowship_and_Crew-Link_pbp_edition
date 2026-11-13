@@ -89,11 +89,12 @@ function sortChannels(channels: ChannelWithId[]): ChannelWithId[] {
 
 /**
  * Chat-first campaign screen (spec #9, prototype variant D): the channel
- * list beside the feed, with the other campaign tabs one step away. Posts
+ * list beside the feed, with the other campaign screens one step away. Posts
  * arrive in the feed below: the latest page first, older pages on scroll,
  * new posts live, and the composer keeps an unsent draft per channel.
- * My notes (ticket #31) sits in the right pane on desktop and on the bottom
- * navigation on phones.
+ * My notes (ticket #31) sits in the side screens from md up and on the
+ * bottom navigation below md, so it stays one step from chat at every
+ * width (ticket #122).
  *
  * Private channels sit under their own section with a lock: GMs create them
  * for chosen people and move people in and out at any time, and only their
@@ -106,7 +107,7 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
   useListenToChatChannels();
   useListenToChannelPosts();
   const theme = useTheme();
-  const wide = useMediaQuery(theme.breakpoints.up("lg"));
+  const showSideScreens = useMediaQuery(theme.breakpoints.up("md"));
 
   const channels = useStore((store) => store.chat.channels);
   const membersByChannel = useStore(
@@ -308,7 +309,7 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
         )}
         <PhoneBottomNavigation screen={phoneScreen} onPick={setPhoneScreen} />
       </Box>
-      {wide && (
+      {showSideScreens && (
         <Box
           sx={{
             width: 360,
@@ -864,7 +865,12 @@ function CampaignScreens(props: { openInviteDialog: () => void }) {
   const [tab, setTab] = useState("Character");
   return (
     <>
-      <StyledTabs value={tab} onChange={(_, v) => setTab(v)} variant={"scrollable"}>
+      <StyledTabs
+        value={tab}
+        onChange={(_, v) => setTab(v)}
+        variant={"scrollable"}
+        aria-label={"Chat side screens"}
+      >
         {["Character", "Tracks", "World", "My notes"].map((name) => (
           <StyledTab key={name} label={name} value={name} />
         ))}
