@@ -157,22 +157,21 @@ describe.skipIf(!config)("chat private channels and direct messages end to end",
     await signInAs(player);
     const seen: PostWithId[][] = [];
     let loaded = false;
-    unsubscribes.push(
-      listenToChannelPosts(
-        channelId,
-        30,
-        {
-          onPosts: (posts) => seen.push(posts),
-          onHasOlder: () => {},
-          onLoaded: () => {
-            loaded = true;
-          },
+    const stopListening = listenToChannelPosts(
+      channelId,
+      30,
+      {
+        onPosts: (posts) => seen.push(posts),
+        onHasOlder: () => {},
+        onLoaded: () => {
+          loaded = true;
         },
-        (error) => {
-          throw error;
-        }
-      )
+      },
+      (error) => {
+        throw error;
+      }
     );
+    unsubscribes.push(stopListening);
     await waitFor(() => (loaded && seen.length >= 1 ? seen : null));
     expect(seen.at(-1)).toEqual([]);
 
@@ -192,7 +191,12 @@ describe.skipIf(!config)("chat private channels and direct messages end to end",
     });
 
     // A member outside the channel reads nothing and writes nothing.
+    // The live assertions are done: stop the subscription before the
+    // identity switch below — switching the singleton with a channel open
+    // closes it server-side (CLOSED → onError), which the throw-on-error
+    // handler would surface as an uncaught failure.
     expect(await readPostsAs(bystander, channelId)).toEqual([]);
+    stopListening();
     await signOut();
     await signInAs(bystander);
     const { error: refused } = await bystander.client

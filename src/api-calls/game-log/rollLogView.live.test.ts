@@ -202,10 +202,12 @@ describe.skipIf(!config)("campaign roll log as a view of roll posts", () => {
   it("hides GM-only rolls from players over reads and live updates", { timeout: 180000 }, async () => {
     const { gm, player, campaignId, icChannelId } = await setUpLog();
 
-    // The player follows the log live. The singleton keeps the player's
-    // session until the live assertions are done; the GM acts through
-    // their own client throughout, so the subscription never rides a
-    // mid-stream identity switch.
+    // Sign in before opening the subscription: the join goes out as the
+    // player, never as anon/stale identity (Unauthorized). The singleton
+    // keeps the player's session until the live assertions are done; the
+    // GM acts through their own client throughout, so the subscription
+    // never rides a mid-stream identity switch.
+    await signInAs(player);
     const updated: Array<[string, Roll]> = [];
     const stopListening = listenToLogs({
       isGM: false,
@@ -219,7 +221,6 @@ describe.skipIf(!config)("campaign roll log as a view of roll posts", () => {
     });
     unsubscribes.push(stopListening);
 
-    await signInAs(player);
     const openId = await postCampaignRoll({
       campaignId,
       speakerCharacterId: null,
@@ -293,14 +294,16 @@ describe.skipIf(!config)("campaign roll log as a view of roll posts", () => {
   it("cuts a removed member off the roll log at once", { timeout: 120000 }, async () => {
     const { gm, player, campaignId } = await setUpLog();
 
-    // The player follows the log live. The listener stays open past
-    // removal to prove the later roll never arrives, so the revocation
-    // surfaces as a channel error: record it instead of throwing. Cutoff
-    // is proven by the data assertions below (no gm roll in `updated`,
-    // empty `playerRows`), not by the error count — silent-drop vs error
-    // is server-version dependent.
+    // The player follows the log live, signed in before the subscription
+    // opens so the join never goes out as anon/stale identity. The
+    // listener stays open past removal to prove the later roll never
+    // arrives, so the revocation surfaces as a channel error: record it
+    // instead of throwing. Cutoff is proven by the data assertions below
+    // (no gm roll in `updated`, empty `playerRows`), not by the error
+    // count — silent-drop vs error is server-version dependent.
     const updated: Array<[string, Roll]> = [];
     const errors: string[] = [];
+    await signInAs(player);
     unsubscribes.push(
       listenToLogs({
         isGM: false,
@@ -313,7 +316,6 @@ describe.skipIf(!config)("campaign roll log as a view of roll posts", () => {
         },
       })
     );
-    await signInAs(player);
     const firstId = await postCampaignRoll({
       campaignId,
       speakerCharacterId: null,
