@@ -36,7 +36,7 @@ test.describe("chat text posts", () => {
     gm = await createPerson(config, "e2e-gm");
     player = await createPerson(config, "e2e-player");
     people = [gm, player];
-    campaignId = await createCampaignAs(gm, campaignName);
+    campaignId = await createCampaignAs(gm, campaignName, "co-op");
     await joinCampaignAs(player, campaignId);
     // The player's one campaign character: the IC composer posts as them.
     const { error } = await player.client.from("characters").insert({

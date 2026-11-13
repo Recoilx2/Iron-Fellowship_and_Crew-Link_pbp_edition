@@ -39,7 +39,7 @@ test.describe("chat private channels", () => {
     chosen = await createPerson(config, `e2e-chosen-${stamp}`);
     leftOut = await createPerson(config, `e2e-leftout-${stamp}`);
     people = [gm, chosen, leftOut];
-    campaignId = await createCampaignAs(gm, `E2E Private ${Date.now()}`);
+    campaignId = await createCampaignAs(gm, `E2E Private ${Date.now()}`, "co-op");
     await joinCampaignAs(chosen, campaignId);
     await joinCampaignAs(leftOut, campaignId);
   });

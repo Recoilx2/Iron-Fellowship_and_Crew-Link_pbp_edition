@@ -245,15 +245,15 @@ describe.skipIf(!config)("chat channels end to end", () => {
     expect(seen.at(-1)).toHaveLength(2);
 
     // A channel the GM adds through another client arrives live.
-    const created = await gm.client
-      .from(CHAT_CHANNELS_TABLE)
-      .insert({
-        id: crypto.randomUUID(),
-        campaign_id: campaignId,
-        name: "Side scene",
-        kind: "OOC",
-      })
-      .select("id");
+    // No RETURNING clause: the chat_channels SELECT policy re-queries its
+    // own table, which cannot see a just-inserted row in the same
+    // statement, so insert-then-select always fails RLS (#69).
+    const created = await gm.client.from(CHAT_CHANNELS_TABLE).insert({
+      id: crypto.randomUUID(),
+      campaign_id: campaignId,
+      name: "Side scene",
+      kind: "OOC",
+    });
     expect(created.error).toBeNull();
     await waitFor(() =>
       seen.at(-1)?.some((channel) => channel.name === "Side scene")
