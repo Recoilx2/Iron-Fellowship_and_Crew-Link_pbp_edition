@@ -95,7 +95,21 @@ describe.skipIf(!config)("listenToRows against the local stack", () => {
           toChange: (payload) => {
             const row = payload.new as Partial<SettingsRow>;
             if (row && typeof row.user_id === "string") {
-              return { kind: "upsert", row: row as SettingsRow };
+              // Issue #97: the seed-upsert WAL echo arrives after subscribe
+              // as the full user_settings row (all 5 columns) while the
+              // REST fetch selected 3. Project the event row to the REST
+              // columns so the echo signs identically and the helper's
+              // dedup suppresses it; otherwise the ordering sees
+              // [false,false,true,false].
+              return {
+                kind: "upsert",
+                row: {
+                  user_id: row.user_id,
+                  verbose_roll_results:
+                    row.verbose_roll_results as boolean,
+                  updated_at: row.updated_at as string,
+                },
+              };
             }
             return null;
           },
@@ -150,7 +164,18 @@ describe.skipIf(!config)("listenToRows against the local stack", () => {
           toChange: (payload) => {
             const row = payload.new as Partial<SettingsRow>;
             if (row && typeof row.user_id === "string") {
-              return { kind: "upsert", row: row as SettingsRow };
+              // Same projection as the ordering test (issue #97): without
+              // it the seed-upsert WAL echo re-emits and stays hidden here
+              // because this test only asserts on `seen.at(-1)`.
+              return {
+                kind: "upsert",
+                row: {
+                  user_id: row.user_id,
+                  verbose_roll_results:
+                    row.verbose_roll_results as boolean,
+                  updated_at: row.updated_at as string,
+                },
+              };
             }
             return null;
           },
@@ -166,6 +191,11 @@ describe.skipIf(!config)("listenToRows against the local stack", () => {
     try {
       await waitFor(() => (seen.length >= 1 ? seen : null));
       expect(seen.at(-1)).toEqual([false]);
+      // Audit pin for issue #97: with the projection above, the
+      // seed-upsert echo is suppressed, so the initial fetch must be the
+      // only emission. An unprojected `toChange` would show a second
+      // `[false]` emission here that `at(-1)` alone would mask.
+      expect(seen).toHaveLength(1);
 
       // Drop the live connection, change the row while it is down, reconnect.
       await owner.client.realtime.disconnect();
