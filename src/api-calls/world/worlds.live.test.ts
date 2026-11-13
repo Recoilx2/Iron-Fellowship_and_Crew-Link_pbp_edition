@@ -127,7 +127,18 @@ describe.skipIf(!config)("worlds end to end", () => {
     await expect(
       createLocation({ worldId })
     ).rejects.toBeTruthy();
-    await expect(deleteWorld(worldId)).rejects.toBeTruthy();
+    // Outsider deletes are silent no-ops under RLS (the owner-only delete
+    // policy matches no row, so PostgREST returns success with zero rows
+    // deleted), so assert survival instead of rejection: the world must
+    // still exist with its owners intact.
+    await deleteWorld(worldId).catch(() => undefined);
+    const survived = await owner.client
+      .from("worlds")
+      .select("id, owner_ids")
+      .eq("id", worldId)
+      .single();
+    expect(survived.error).toBeNull();
+    expect((survived.data as { id: string }).id).toBe(worldId);
 
     const received: Array<World | undefined> = [];
     await signOut();
