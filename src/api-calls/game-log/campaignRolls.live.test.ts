@@ -279,7 +279,11 @@ describe.skipIf(!config)("campaign roll log end to end", () => {
       campaignId,
       isGM: false,
     });
-    expect(playerExport.map((entry) => entry.id)).toEqual([openId]);
+    // Post-reveal the secret roll is open (gms_only=false), so the player
+    // export holds both open rolls.
+    expect(playerExport.map((entry) => entry.id).sort()).toEqual(
+      [openId, secretId].sort()
+    );
 
     // A player cannot mark their roll GM-only to hide it.
     await expect(
