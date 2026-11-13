@@ -22,6 +22,8 @@ The agent sandbox has no Docker. Run the plain tests (`npm test`), lint and the 
 
 The stack tests (`src/**/*.live.test.ts`) skip without a stack, so plain `npm test` stays green. Against one local copy they run via `supabase/tests/live.sh` (see its header; it fails the run when any test is skipped). In CI the `live` job in `.github/workflows/supabase-smoke.yml` starts one copy from the template and runs that script on every pull request.
 
+Browser tests (Playwright, spec #9) run against one running copy plus the site container it serves. Start the copy from `supabase/` (generate the env first with `python3 bin/gen-env.py --copy ironsworn --port 8000 --out .env.live`, then `ENV_FILE=.env.live docker compose -p live --env-file .env.live -f docker-compose.yml up -d --build`), then run `npm run test:e2e` from the repo root (it fails the run when any browser test is skipped). The first run on a machine also needs `npx playwright install chromium`. In CI the `e2e` job in `.github/workflows/supabase-smoke.yml` does all of this on every pull request and keeps traces and screenshots as CI artifacts on failure. UI tickets add a browser test for their main flow under `e2e/`.
+
 ## Agent skills
 
 ### Issue tracker
