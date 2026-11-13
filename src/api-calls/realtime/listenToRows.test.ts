@@ -503,6 +503,97 @@ describe("listenToRows", () => {
     expect(onRows).toHaveBeenCalledTimes(2);
   });
 
+  it("suppresses a projected seed-upsert echo (issue #97)", async () => {
+    // The live ordering test seeds user_settings before subscribing; the
+    // seed's WAL echo lands after the initial fetch as the full 5-column
+    // row while REST selected 3 (user_id, verbose_roll_results,
+    // updated_at). The caller projects the event row to the REST columns,
+    // so the echo signs identically and the helper stays silent. This pin
+    // passes against the current helper and proves that contract: only the
+    // genuinely newer row re-emits.
+    interface SettingsRow {
+      user_id: string;
+      verbose_roll_results: boolean;
+      updated_at: string;
+    }
+
+    const { client, channels } = makeFakeRealtime();
+    const onRows = vi.fn();
+
+    listenToRows<SettingsRow>({
+      client: client as never,
+      channelName: "user-settings:u1",
+      bindings: [
+        {
+          type: "postgres_changes",
+          table: "user_settings",
+          toChange: (payload) => {
+            const row = payload.new as Partial<SettingsRow>;
+            if (row && typeof row.user_id === "string") {
+              return {
+                kind: "upsert",
+                row: {
+                  user_id: row.user_id,
+                  verbose_roll_results: row.verbose_roll_results as boolean,
+                  updated_at: row.updated_at as string,
+                },
+              };
+            }
+            return null;
+          },
+        },
+      ],
+      fetchRows: () =>
+        Promise.resolve([
+          {
+            user_id: "u1",
+            verbose_roll_results: false,
+            updated_at: "2026-11-12T00:00:01+00:00",
+          },
+        ]),
+      getKey: (row) => row.user_id,
+      getUpdatedAt: (row) => row.updated_at,
+      onRows,
+    });
+    settle(channels);
+    await flush();
+    expect(onRows).toHaveBeenCalledTimes(1);
+
+    // Seed-upsert WAL echo: the full row (extra columns included) lands
+    // after subscribe; projected to the REST columns it changes nothing.
+    emitPostgres(channels, {
+      new: {
+        user_id: "u1",
+        verbose_roll_results: false,
+        pinned_oracle_sections: {},
+        created_at: "2026-11-12T00:00:01.123456+00:00",
+        updated_at: "2026-11-12T00:00:01Z",
+      },
+      old: null,
+    });
+    expect(onRows).toHaveBeenCalledTimes(1);
+
+    // A genuinely newer row still emits.
+    emitPostgres(channels, {
+      new: {
+        user_id: "u1",
+        verbose_roll_results: true,
+        pinned_oracle_sections: {},
+        created_at: "2026-11-12T00:00:01.123456+00:00",
+        updated_at: "2026-11-12T00:00:02Z",
+      },
+      old: null,
+    });
+    expect(onRows).toHaveBeenCalledTimes(2);
+    expect(onRows).toHaveBeenLastCalledWith([
+      {
+        user_id: "u1",
+        verbose_roll_results: true,
+        updated_at: "2026-11-12T00:00:02Z",
+      },
+    ]);
+  });
+
   it("surfaces a failed fetch to onError instead of stalling", async () => {
     const { client, channels } = makeFakeRealtime();
     const onRows = vi.fn();
