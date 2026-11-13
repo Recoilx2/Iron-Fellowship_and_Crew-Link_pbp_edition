@@ -5,6 +5,7 @@ import { createCampaign } from "api-calls/campaign/createCampaign";
 import { joinCampaign } from "api-calls/campaign/joinCampaign";
 import { CampaignType } from "api-calls/campaign/_campaign.type";
 import { CHAT_CHANNELS_TABLE } from "api-calls/chat/_getRef";
+import { CHAT_CHANNEL_MEMBERS_TABLE } from "api-calls/chat/_getRef";
 import { CHAT_POSTS_TABLE, type PostRow } from "api-calls/chat/_postRef";
 import { listenToCampaignChannels } from "api-calls/chat/listenToCampaignChannels";
 import {
@@ -129,6 +130,18 @@ describe.skipIf(!config)("chat private channels and direct messages end to end",
       .order("created_at", { ascending: true });
     expect(error).toBeNull();
     return (data ?? []) as unknown as PostRow[];
+  }
+
+  async function readRosterAs(
+    person: LivePerson,
+    channelId: string
+  ): Promise<Array<{ channel_id: string; user_id: string }>> {
+    const { data, error } = await person.client
+      .from(CHAT_CHANNEL_MEMBERS_TABLE)
+      .select("channel_id, user_id")
+      .eq("channel_id", channelId);
+    expect(error).toBeNull();
+    return (data ?? []) as Array<{ channel_id: string; user_id: string }>;
   }
 
   it("shows private posts to members and GMs only, live", { timeout: 180000 }, async () => {
@@ -388,6 +401,227 @@ describe.skipIf(!config)("chat private channels and direct messages end to end",
         text: "I see all.",
       });
     expect(gmPostError).not.toBeNull();
+  });
+
+  it("a removed campaign member reads no posts from a private channel or DM they were in", { timeout: 180000 }, async () => {
+    const { gm, player, other, campaignId } = await setUpCampaign();
+    const channelId = await createPrivateChannelAs(gm, campaignId, [
+      player.userId,
+    ]);
+    const { data: dmData, error: dmError } = await player.client.rpc(
+      "get_or_create_dm_channel",
+      { cid: campaignId, other_id: other.userId }
+    );
+    expect(dmError).toBeNull();
+    const dmId = firstId(dmData);
+
+    const { error: privatePostError } = await gm.client
+      .from(CHAT_POSTS_TABLE)
+      .insert({
+        id: crypto.randomUUID(),
+        channel_id: channelId,
+        author_id: gm.userId,
+        text: "The plan, for your ears only.",
+      });
+    expect(privatePostError).toBeNull();
+    const { error: dmPostError } = await other.client
+      .from(CHAT_POSTS_TABLE)
+      .insert({
+        id: crypto.randomUUID(),
+        channel_id: dmId,
+        author_id: other.userId,
+        text: "Meet me after the moot.",
+      });
+    expect(dmPostError).toBeNull();
+    expect(await readPostsAs(player, channelId)).toHaveLength(1);
+    expect(await readPostsAs(player, dmId)).toHaveLength(1);
+
+    // The player watches the channel list and the private feed with open
+    // subscriptions while the GM acts through another client.
+    await signInAs(player);
+    const channelsSeen: string[][] = [];
+    let channelsLoaded = false;
+    unsubscribes.push(
+      listenToCampaignChannels(
+        campaignId,
+        {
+          onChannels: (channels) =>
+            channelsSeen.push(channels.map((channel) => channel.id)),
+          onLoaded: () => {
+            channelsLoaded = true;
+          },
+        },
+        (error) => {
+          throw error;
+        }
+      )
+    );
+    const postsSeen: PostWithId[][] = [];
+    let postsLoaded = false;
+    unsubscribes.push(
+      listenToChannelPosts(
+        channelId,
+        30,
+        {
+          onPosts: (posts) => postsSeen.push(posts),
+          onHasOlder: () => {},
+          onLoaded: () => {
+            postsLoaded = true;
+          },
+        },
+        (error) => {
+          throw error;
+        }
+      )
+    );
+    await waitFor(() =>
+      channelsLoaded && postsLoaded && channelsSeen.length >= 1 && postsSeen.length >= 1
+        ? true
+        : null
+    );
+    expect(channelsSeen.at(-1)).toContain(channelId);
+    expect(postsSeen.at(-1)).toHaveLength(1);
+
+    // The GM removes the player from the campaign: the open list drops
+    // every channel and the open feed empties on the reconcile re-fetch,
+    // because every read re-checks current membership.
+    const { error: removeError } = await gm.client.rpc(
+      "remove_campaign_member",
+      { cid: campaignId, target_uid: player.userId }
+    );
+    expect(removeError).toBeNull();
+    await waitFor(
+      () =>
+        channelsSeen.at(-1)?.length === 0 && postsSeen.at(-1)?.length === 0
+          ? true
+          : null,
+      60000
+    );
+    expect(await readChannelsAs(player, campaignId)).toEqual([]);
+    expect(await readPostsAs(player, channelId)).toEqual([]);
+    expect(await readPostsAs(player, dmId)).toEqual([]);
+    expect(
+      (await readRosterAs(gm, channelId)).map((row) => row.user_id)
+    ).not.toContain(player.userId);
+
+    // New posts stop at the access rules: nothing arrives live either.
+    const { error: laterPrivateError } = await gm.client
+      .from(CHAT_POSTS_TABLE)
+      .insert({
+        id: crypto.randomUUID(),
+        channel_id: channelId,
+        author_id: gm.userId,
+        text: "You will never read this.",
+      });
+    expect(laterPrivateError).toBeNull();
+    const { error: laterDmError } = await other.client
+      .from(CHAT_POSTS_TABLE)
+      .insert({
+        id: crypto.randomUUID(),
+        channel_id: dmId,
+        author_id: other.userId,
+        text: "Nor this.",
+      });
+    expect(laterDmError).toBeNull();
+    const count = postsSeen.length;
+    await new Promise((resolve) => setTimeout(resolve, 12000));
+    expect(postsSeen.length).toBe(count);
+    expect(postsSeen.at(-1)).toEqual([]);
+    expect(await readPostsAs(player, channelId)).toEqual([]);
+    expect(await readPostsAs(player, dmId)).toEqual([]);
+
+    // No collateral: the other member still reads the DM and the GM still
+    // reads the private channel.
+    expect(await readPostsAs(other, dmId)).toHaveLength(2);
+    expect(await readPostsAs(gm, channelId)).toHaveLength(2);
+  });
+
+  it("leaving the campaign clears the member's channel roster rows", { timeout: 120000 }, async () => {
+    const { gm, player, campaignId } = await setUpCampaign();
+    const channelId = await createPrivateChannelAs(gm, campaignId, [
+      player.userId,
+    ]);
+    expect(
+      (await readRosterAs(gm, channelId)).map((row) => row.user_id)
+    ).toContain(player.userId);
+
+    // A member leaves by deleting their own roster row, outside the
+    // remove_campaign_member function: the roster cleanup still fires.
+    const { error: leaveError } = await player.client
+      .from("campaign_members")
+      .delete()
+      .eq("campaign_id", campaignId)
+      .eq("user_id", player.userId);
+    expect(leaveError).toBeNull();
+
+    expect(
+      (await readRosterAs(gm, channelId)).map((row) => row.user_id)
+    ).not.toContain(player.userId);
+    expect(await readPostsAs(player, channelId)).toEqual([]);
+  });
+
+  it("sends an outsider no membership-change events", { timeout: 120000 }, async () => {
+    const { gm, player, other, outsider, campaignId } =
+      await setUpCampaign();
+    const channelId = await createPrivateChannelAs(gm, campaignId, [
+      player.userId,
+      other.userId,
+    ]);
+
+    // A raw postgres_changes probe on the roster table, as someone in no
+    // campaign: before the fix, roster DELETEs skipped row-level security
+    // and reached every subscriber; the probe fails loudly if it never
+    // goes live so silence below is never a broken subscription.
+    const received: unknown[] = [];
+    const probe = outsider.client.channel(
+      `campaign-channel-members:${campaignId}:probe-${Date.now()}`,
+      { config: { private: true } }
+    );
+    probe.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: CHAT_CHANNEL_MEMBERS_TABLE },
+      (payload) => {
+        received.push(payload);
+      }
+    );
+    const subscribed = await new Promise<boolean>((resolve) => {
+      let done = false;
+      probe.subscribe((status) => {
+        if (!done && status === "SUBSCRIBED") {
+          done = true;
+          resolve(true);
+        }
+      });
+      setTimeout(() => {
+        if (!done) {
+          done = true;
+          resolve(false);
+        }
+      }, 30000);
+    });
+    expect(subscribed).toBe(true);
+    try {
+      // Churn the roster twice: removing then re-adding a member.
+      const { error: removeError } = await gm.client.rpc(
+        "set_channel_members",
+        { chid: channelId, member_ids: [player.userId] }
+      );
+      expect(removeError).toBeNull();
+      const { error: addError } = await gm.client.rpc(
+        "set_channel_members",
+        { chid: channelId, member_ids: [player.userId, other.userId] }
+      );
+      expect(addError).toBeNull();
+      // The churn provably committed: the roster reads back whole.
+      expect(
+        (await readRosterAs(gm, channelId)).map((row) => row.user_id).sort()
+      ).toEqual([other.userId, player.userId].sort());
+
+      await new Promise((resolve) => setTimeout(resolve, 12000));
+      expect(received).toEqual([]);
+    } finally {
+      await outsider.client.removeChannel(probe);
+    }
   });
 
   it("lets only GMs manage private channels but any member DM", { timeout: 120000 }, async () => {

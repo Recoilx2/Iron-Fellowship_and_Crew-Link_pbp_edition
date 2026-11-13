@@ -2,9 +2,10 @@ import { getSupabaseClient } from "config/supabase.config";
 import type { Unsubscribe } from "api-calls/helpers.type";
 import { listenToRows } from "api-calls/realtime/listenToRows";
 import {
+  CHAT_CHANNELS_TABLE,
   CHAT_CHANNEL_MEMBERS_TABLE,
-  channelMemberPayloadToChange,
   constructCampaignChannelMembersChannelName,
+  constructCampaignChannelsFilter,
   type ChannelMemberRow,
 } from "./_getRef";
 
@@ -16,6 +17,13 @@ import {
  * and leave live; outsiders see nothing, because the roster access rules
  * (not an interface filter) decide which rows arrive. Returns a plain
  * unsubscribe function.
+ *
+ * The roster rows themselves carry no live stream: the roster table left
+ * the realtime publication (#117), because membership DELETEs skip
+ * row-level security and reached subscribers outside the channel. Every
+ * roster write instead bumps the parent channel's updated_at, so this
+ * listener watches the campaign's channels and re-fetches the roster on
+ * every bump.
  */
 export function listenToCampaignChannelMembers(
   campaignId: string,
@@ -40,8 +48,9 @@ export function listenToCampaignChannelMembers(
     bindings: [
       {
         type: "postgres_changes",
-        table: CHAT_CHANNEL_MEMBERS_TABLE,
-        toChange: channelMemberPayloadToChange,
+        table: CHAT_CHANNELS_TABLE,
+        filter: constructCampaignChannelsFilter(campaignId),
+        toChange: () => ({ kind: "refresh" }),
       },
     ],
     fetchRows: async () => {

@@ -26,7 +26,8 @@ import type { Unsubscribe } from "api-calls/helpers.type";
 
 export type RowChange<T> =
   | { kind: "upsert"; row: T }
-  | { kind: "remove"; key: string };
+  | { kind: "remove"; key: string }
+  | { kind: "refresh" };
 
 export interface PostgresChangePayload<T> {
   eventType: "INSERT" | "UPDATE" | "DELETE" | "*";
@@ -162,7 +163,9 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
     return JSON.stringify(entries);
   };
 
-  const applyChange = (change: RowChange<T>): boolean => {
+  const applyChange = (
+    change: Exclude<RowChange<T>, { kind: "refresh" }>
+  ): boolean => {
     if (change.kind === "remove") {
       return rows.delete(change.key);
     }
@@ -200,6 +203,7 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
     // would only re-emit the same snapshot.
     if (refreshing) return;
     refreshing = true;
+    let refreshAgain = false;
     try {
       const my = ++epoch;
       settled = false;
@@ -209,7 +213,14 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
         rows = new Map(snapshot.map((row) => [getKey(row), row]));
         const queued = pending;
         pending = [];
-        for (const change of queued) applyChange(change);
+        for (const change of queued) {
+          // A refresh queued before the snapshot landed (a related table
+          // bumped while the first fetch was in flight): the snapshot may
+          // predate the bump, so follow it with a fresh fetch instead of
+          // settling on possibly stale rows.
+          if (change.kind === "refresh") refreshAgain = true;
+          else applyChange(change);
+        }
         settled = true;
         emit();
       } catch (error) {
@@ -221,10 +232,22 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
     } finally {
       refreshing = false;
     }
+    if (refreshAgain && !removed) void refresh({ silent: true });
   };
 
   const handleChange = (change: RowChange<T> | null) => {
     if (!change || removed) return;
+    if (change.kind === "refresh") {
+      // A related table changed (a channel bump for the roster listener,
+      // whose own table carries no live stream): re-read what this
+      // listener shows. Silent like the reconcile tick: a blip here heals
+      // on the next tick, and the reader never asked for this refresh.
+      if (settled) void refresh({ silent: true });
+      // Before the first snapshot there is nothing to re-read yet: queue
+      // the signal so the landing fetch is followed by a fresh one.
+      else pending.push(change);
+      return;
+    }
     if (settled) {
       if (applyChange(change)) emit();
     } else {
