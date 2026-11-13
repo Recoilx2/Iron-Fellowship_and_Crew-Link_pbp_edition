@@ -29,6 +29,10 @@ supabase/.env.ironsworn
 supabase/.env.starforged
 supabase/.env.live
 
+# Playwright browser-test output (kept as CI artifacts on failure, never committed)
+test-results/
+playwright-report/
+
 # @3d-dice/dice-box install script generates unused copies here.
 /public/assets/ammo/
 /public/assets/themes/
