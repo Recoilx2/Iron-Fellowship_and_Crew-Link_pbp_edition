@@ -137,16 +137,20 @@ export async function ensureWorldItemNotes(
   }
   const column = kindToColumn[kind];
   const client = getSupabaseClient();
+  // The id is generated here so the insert needs no RETURNING clause: the
+  // world_notes SELECT policy re-queries its own table, which cannot see a
+  // just-inserted row in the same statement, so insert-then-select always
+  // fails RLS (#74). The plain INSERT policy compares the world against
+  // is_world_gm directly and accepts the row.
   const insertNote = async (gmOnly: boolean): Promise<string> => {
-    const { data, error } = await client
+    const id = crypto.randomUUID();
+    const { error } = await client
       .from(WORLD_NOTES_TABLE)
-      .insert({ world_id: worldId, [column]: itemId, gm_only: gmOnly })
-      .select("id")
-      .single();
-    if (error || !data) {
-      throw error ?? new Error("Failed to create world note.");
+      .insert({ id, world_id: worldId, [column]: itemId, gm_only: gmOnly });
+    if (error) {
+      throw error;
     }
-    return (data as { id: string }).id;
+    return id;
   };
   // A concurrent creator may win the race: fall back to a re-read.
   const getOrInsert = async (
