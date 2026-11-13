@@ -116,6 +116,7 @@ check_copy() {
   # below go through the anon key like a real client.
   wait_for "$project rest" -H "apikey: $service_key" "$gw/rest/v1/"
   wait_for "$project storage" "$gw/storage/v1/status"
+  wait_for "$project hocuspocus" "$gw/hocuspocus/"
   poll_for "$project realtime" realtime_healthy "$project" "$env_file" "$key"
   poll_for "$project functions" functions_placeholder_ok "$gw" "$key"
   poll_for "$project migrations" migrate_done "$project" "$env_file"

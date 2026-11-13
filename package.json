@@ -32,6 +32,7 @@
     "@emotion/styled": "^11.11.5",
     "@fontsource-variable/rubik": "^5.0.22",
     "@fontsource/bebas-neue": "^5.0.20",
+    "@hocuspocus/provider": "^4.8.0",
     "@hocuspocus/transformer": "^2.12.3",
     "@mui/icons-material": "^5.15.18",
     "@mui/lab": "^5.0.0-alpha.150",
@@ -65,7 +66,7 @@
     "remark-gfm": "^4.0.0",
     "tiptap-markdown": "^0.8.10",
     "y-prosemirror": "^1.2.5",
-    "y-webrtc": "^10.3.0",
+    "y-protocols": "^1.0.7",
     "yjs": "^13.6.15",
     "zustand": "^4.5.2"
   },

@@ -30,20 +30,22 @@ export const createCharacter = createApiFunction<
     throw sessionError ?? new Error("You must be logged in to create a character");
   }
 
-  const { data, error } = await client
-    .from(CHARACTERS_TABLE)
-    .insert({
-      owner_id: ownerId,
-      name,
-      stats,
-      ...(expansionIds ? { expansion_ids: expansionIds } : {}),
-    })
-    .select("id")
-    .single();
-  if (error || !data) {
-    throw error ?? new Error("Failed to create your character");
+  // The id is generated here so the insert needs no RETURNING clause: the
+  // characters SELECT policy re-queries its own table, which cannot see a
+  // just-inserted row in the same statement, so insert-then-select always
+  // fails RLS (#69). The plain INSERT policy compares owner_id directly and
+  // accepts the row.
+  const id = crypto.randomUUID();
+  const { error } = await client.from(CHARACTERS_TABLE).insert({
+    id,
+    owner_id: ownerId,
+    name,
+    stats,
+    ...(expansionIds ? { expansion_ids: expansionIds } : {}),
+  });
+  if (error) {
+    throw error;
   }
-  const id = (data as { id: string }).id;
 
   if (assets.length > 0) {
     const { error: assetsError } = await client

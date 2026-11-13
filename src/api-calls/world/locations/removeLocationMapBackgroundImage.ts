@@ -1,9 +1,11 @@
 import { createApiFunction } from "api-calls/createApiFunction";
+import { removeWorldImageFile } from "api-calls/world/worldImageStorage";
 import { updateLocation } from "./updateLocation";
-import { constructLocationImagesPath } from "./_getRef";
-import { deleteImage } from "api-calls/storage/deleteImage";
-import { deleteField } from "firebase/firestore";
 
+/**
+ * Removes a location's map background image. Only world GMs may write;
+ * the database and the bucket enforce it.
+ */
 export const removeLocationMapBackgroundImage = createApiFunction<
   {
     worldId: string;
@@ -11,22 +13,14 @@ export const removeLocationMapBackgroundImage = createApiFunction<
     filename: string;
   },
   void
->((params) => {
+>(async (params) => {
   const { worldId, locationId, filename } = params;
-
-  return new Promise((resolve, reject) => {
-    updateLocation({
-      worldId,
-      locationId,
-      location: { mapBackgroundImageFilename: deleteField() },
-    })
-      .then(() => {
-        deleteImage(
-          constructLocationImagesPath(worldId, locationId),
-          filename
-        ).catch(() => console.error("Failed to remove image from storage."));
-        resolve();
-      })
-      .catch(reject);
+  await updateLocation({
+    worldId,
+    locationId,
+    location: { mapBackgroundImageFilename: null },
   });
+  await removeWorldImageFile(worldId, locationId, filename).catch((e) =>
+    console.error(e)
+  );
 }, "Failed to delete location image.");

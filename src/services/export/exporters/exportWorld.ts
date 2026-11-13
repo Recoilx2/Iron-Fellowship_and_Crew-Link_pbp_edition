@@ -22,8 +22,9 @@ function throwIfAborted(signal?: AbortSignal): void {
 }
 
 /**
- * Determine whether userId is an owner/guide of the world.
- * ownerIds in the decoded World already includes campaignGuides (see decodeWorld).
+ * Determine whether userId owns the world. Campaign GMs of campaigns using
+ * the world manage it through the access rules (decision #12), so only the
+ * owners list matters here.
  */
 function resolveOwnership(world: World, userId: string): boolean {
   return world.ownerIds.includes(userId);
@@ -94,7 +95,6 @@ export class WorldExporter implements Exporter {
       name: world.name,
       settingKey: world.settingKey,
       ownerIds: world.ownerIds,
-      campaignGuides: world.campaignGuides,
       newTruths: world.newTruths,
       descriptionMarkdown: yjsUpdateToMarkdown(world.worldDescription ?? null),
     };

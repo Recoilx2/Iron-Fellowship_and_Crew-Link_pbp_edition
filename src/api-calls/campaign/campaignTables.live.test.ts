@@ -75,7 +75,7 @@ describe.skipIf(!config)("campaign shared tables end to end", () => {
     const campaignId = await createCampaign({
       uid: gm.userId,
       campaignName: "Shared table",
-      campaignType: CampaignType.Guided,
+      campaignType: CampaignType.Coop,
     });
     await signOut();
     await signInAs(player);
@@ -89,6 +89,7 @@ describe.skipIf(!config)("campaign shared tables end to end", () => {
     // The player follows campaign tracks live.
     const seen: Array<Record<string, { label: string }>> = [];
     const gone: string[] = [];
+    const errors: unknown[] = [];
     unsubscribes.push(
       listenToProgressTracks(
         campaignId,
@@ -96,7 +97,7 @@ describe.skipIf(!config)("campaign shared tables end to end", () => {
         TrackStatus.Active,
         (tracks) => seen.push(tracks as Record<string, { label: string }>),
         (trackId) => gone.push(trackId),
-        () => {}
+        (error) => errors.push(error)
       )!
     );
     await addProgressTrack({
@@ -151,18 +152,20 @@ describe.skipIf(!config)("campaign shared tables end to end", () => {
     await removeProgressTrack({ campaignId, id: trackId });
     await waitFor(() => (gone.includes(trackId) ? gone : null));
     await deleteAllProgressTracks({ campaignId });
+    expect(errors).toEqual([]);
   });
 
   it("shares assets live with members, and nobody else", { timeout: 120000 }, async () => {
     const { gm, outsider, campaignId } = await setUpTable();
 
     const seen: Array<Record<string, AssetDocument>> = [];
+    const errors: unknown[] = [];
     unsubscribes.push(
       listenToAssets(
         undefined,
         campaignId,
         (assets) => seen.push(assets),
-        () => {}
+        (error) => errors.push(error)
       )
     );
     await addAsset({
@@ -216,16 +219,21 @@ describe.skipIf(!config)("campaign shared tables end to end", () => {
       seen.length > 0 && !seen.at(-1)?.[assetId] ? seen : null
     );
     await deleteAllAssets({ campaignId });
+    expect(errors).toEqual([]);
   });
 
   it("shares settings with members, and nobody else", { timeout: 120000 }, async () => {
     const { gm, outsider, campaignId } = await setUpTable();
 
     const seen: SettingsDocument[] = [];
+    const errors: unknown[] = [];
+    // Campaign scope comes first, as in the settings store: the swapped
+    // order subscribed to character settings for a campaign id and could
+    // never see the campaign writes below.
     unsubscribes.push(
-      listenToSettings(undefined, campaignId, (settings) =>
+      listenToSettings(campaignId, undefined, (settings) =>
         seen.push(settings)
-      , () => {})
+      , (error) => errors.push(error))
     );
     await updateSettings({
       campaignId,
@@ -260,6 +268,7 @@ describe.skipIf(!config)("campaign shared tables end to end", () => {
     await signOut();
     await signInAs(gm);
     await updateSettings({ campaignId, settings: { customStats: [] } });
+    expect(errors).toEqual([]);
   });
 
   it("cuts a removed member off the shared tables at once", { timeout: 120000 }, async () => {

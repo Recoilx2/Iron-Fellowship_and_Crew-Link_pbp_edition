@@ -103,20 +103,26 @@ describe.skipIf(!config)("campaign membership access rules", () => {
       });
     expect(byOutsider.error).not.toBeNull();
 
-    // A player cannot promote themselves or remove anyone.
+    // A player cannot promote themselves or remove anyone. RLS filters
+    // denied UPDATE/DELETE rows instead of raising, so the denial surfaces
+    // as zero matched rows (same as the homebrew outsider-writes pattern).
     const promoted = await player.client
       .from("campaign_members")
       .update({ role: "gm" })
       .eq("campaign_id", campaignId)
-      .eq("user_id", player.userId);
-    expect(promoted.error).not.toBeNull();
+      .eq("user_id", player.userId)
+      .select();
+    expect(promoted.error).toBeNull();
+    expect(promoted.data ?? []).toEqual([]);
 
     const removedByPlayer = await player.client
       .from("campaign_members")
       .delete()
       .eq("campaign_id", campaignId)
-      .eq("user_id", newcomer.userId);
-    expect(removedByPlayer.error).not.toBeNull();
+      .eq("user_id", newcomer.userId)
+      .select();
+    expect(removedByPlayer.error).toBeNull();
+    expect(removedByPlayer.data ?? []).toEqual([]);
 
     // The GM removes the newcomer again.
     const removed = await gm.client

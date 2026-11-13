@@ -73,6 +73,10 @@ function settle(channels: ReturnType<typeof makeFakeRealtime>["channels"]) {
   for (const cb of channels[0].subscribeCbs) cb("SUBSCRIBED");
 }
 
+function flush(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 function emitPostgres(
   channels: ReturnType<typeof makeFakeRealtime>["channels"],
   payload: unknown
@@ -395,6 +399,128 @@ describe("listenToRows", () => {
     for (const cb of channels[0].subscribeCbs) cb("SUBSCRIBED");
     await Promise.resolve();
     await Promise.resolve();
+    expect(onRows).not.toHaveBeenCalled();
+  });
+
+  it("coalesces a second subscribe while the first fetch is still in flight", async () => {
+    const { client, channels } = makeFakeRealtime();
+    const onRows = vi.fn();
+    const snapshot: Row[] = [
+      { id: "a", value: "one", updated_at: "2026-11-12T00:00:01Z" },
+    ];
+    let resolveFetch!: (rows: Row[]) => void;
+    const fetchRows = vi.fn(
+      () =>
+        new Promise<Row[]>((resolve) => {
+          resolveFetch = resolve;
+        })
+    );
+
+    listenToRows<Row>({
+      client: client as never,
+      channelName: "rows",
+      bindings: [postgresChanges<Row>("user_settings", () => null)],
+      fetchRows,
+      getKey: keyOf,
+      getUpdatedAt: stampOf,
+      onRows,
+    });
+
+    // Double SUBSCRIBED (the round-2 flake): the second subscribe must not
+    // stack a second fetch that re-emits the same snapshot.
+    settle(channels);
+    settle(channels);
+    expect(fetchRows).toHaveBeenCalledTimes(1);
+
+    resolveFetch(snapshot);
+    await flush();
+    expect(onRows).toHaveBeenCalledTimes(1);
+    expect(onRows).toHaveBeenCalledWith(snapshot);
+  });
+
+  it("does not re-emit when a later refresh finds identical rows", async () => {
+    const { client, channels } = makeFakeRealtime();
+    const onRows = vi.fn();
+    const snapshot: Row[] = [
+      { id: "a", value: "one", updated_at: "2026-11-12T00:00:01Z" },
+    ];
+
+    listenToRows<Row>({
+      client: client as never,
+      channelName: "rows",
+      bindings: [postgresChanges<Row>("user_settings", () => null)],
+      fetchRows: () => Promise.resolve(snapshot),
+      getKey: keyOf,
+      getUpdatedAt: stampOf,
+      onRows,
+    });
+
+    settle(channels);
+    await flush();
+    expect(onRows).toHaveBeenCalledTimes(1);
+
+    // A later SUBSCRIBED (reconnect) with nothing changed stays silent.
+    settle(channels);
+    await flush();
+    expect(onRows).toHaveBeenCalledTimes(1);
+  });
+
+  it("suppresses live changes that leave the rows identical", async () => {
+    const { client, channels } = makeFakeRealtime();
+    const onRows = vi.fn();
+
+    listenToRows<Row>({
+      client: client as never,
+      channelName: "rows",
+      bindings: [
+        postgresChanges<Row>("user_settings", (payload) =>
+          payload.new?.id ? { kind: "upsert", row: payload.new } : null
+        ),
+      ],
+      fetchRows: () => Promise.resolve([]),
+      getKey: keyOf,
+      getUpdatedAt: stampOf,
+      onRows,
+    });
+    settle(channels);
+    await flush();
+    expect(onRows).toHaveBeenCalledTimes(1);
+
+    emitPostgres(channels, {
+      new: { id: "a", value: "one", updated_at: "2026-11-12T00:00:01Z" },
+      old: null,
+    });
+    expect(onRows).toHaveBeenCalledTimes(2);
+
+    // The same row arriving again changes nothing, so nobody is notified.
+    emitPostgres(channels, {
+      new: { id: "a", value: "one", updated_at: "2026-11-12T00:00:01Z" },
+      old: null,
+    });
+    expect(onRows).toHaveBeenCalledTimes(2);
+  });
+
+  it("surfaces a failed fetch to onError instead of stalling", async () => {
+    const { client, channels } = makeFakeRealtime();
+    const onRows = vi.fn();
+    const onError = vi.fn();
+    const failure = new Error("select failed");
+
+    listenToRows<Row>({
+      client: client as never,
+      channelName: "rows",
+      bindings: [postgresChanges<Row>("user_settings", () => null)],
+      fetchRows: () => Promise.reject(failure),
+      getKey: keyOf,
+      getUpdatedAt: stampOf,
+      onRows,
+      onError,
+    });
+
+    settle(channels);
+    await flush();
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(failure);
     expect(onRows).not.toHaveBeenCalled();
   });
 });

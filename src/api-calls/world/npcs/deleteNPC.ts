@@ -1,12 +1,7 @@
-import { deleteDoc } from "firebase/firestore";
-import {
-  constructNPCImagesPath,
-  getNPCDoc,
-  getPrivateDetailsNPCDoc,
-  getPublicNotesNPCDoc,
-} from "./_getRef";
+import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
-import { deleteImage } from "api-calls/storage/deleteImage";
+import { WORLD_IMAGES_BUCKET } from "api-calls/world/worldImageStorage";
+import { WORLD_NPCS_TABLE } from "./_getRef";
 
 interface Params {
   worldId: string;
@@ -14,24 +9,35 @@ interface Params {
   imageFilename?: string;
 }
 
-export const deleteNPC = createApiFunction<Params, void>((params) => {
-  const { worldId, npcId, imageFilename } = params;
-
-  return new Promise((resolve, reject) => {
-    const promises: Promise<unknown>[] = [];
-    promises.push(deleteDoc(getNPCDoc(worldId, npcId)));
-    promises.push(deleteDoc(getPrivateDetailsNPCDoc(worldId, npcId)));
-    promises.push(deleteDoc(getPublicNotesNPCDoc(worldId, npcId)));
-    if (imageFilename) {
-      promises.push(
-        deleteImage(constructNPCImagesPath(worldId, npcId), imageFilename)
+/**
+ * Deletes an NPC: its stored images go first (best-effort), then the row,
+ * whose GM details and notes follow through cascade deletes. Only world
+ * GMs may delete; the database enforces it.
+ */
+export const deleteNPC = createApiFunction<Params, void>(
+  async (params) => {
+    const { worldId, npcId } = params;
+    const client = getSupabaseClient();
+    try {
+      const { data: files } = await client.storage
+        .from(WORLD_IMAGES_BUCKET)
+        .list(`${worldId}/${npcId}`);
+      const paths = (files ?? []).map(
+        (file) => `${worldId}/${npcId}/${file.name}`
       );
+      if (paths.length > 0) {
+        await client.storage.from(WORLD_IMAGES_BUCKET).remove(paths);
+      }
+    } catch (e) {
+      console.error(e);
     }
-
-    Promise.all(promises)
-      .then(() => resolve())
-      .catch((e) => {
-        reject(e);
-      });
-  });
-}, "Failed to delete npc.");
+    const { error } = await client
+      .from(WORLD_NPCS_TABLE)
+      .delete()
+      .eq("id", npcId);
+    if (error) {
+      throw error;
+    }
+  },
+  "Failed to delete npc."
+);

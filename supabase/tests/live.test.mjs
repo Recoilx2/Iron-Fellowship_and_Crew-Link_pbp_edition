@@ -22,6 +22,8 @@ const liveFiles = [
   "src/api-calls/character/characters.live.test.ts",
   "src/api-calls/character/characterChildren.live.test.ts",
   "src/api-calls/character/portraits.live.test.ts",
+  "src/api-calls/notes/campaignNotes.live.test.ts",
+  "src/api-calls/notes/hocuspocus.live.test.ts",
 ];
 
 describe("docker behavior tests", () => {
