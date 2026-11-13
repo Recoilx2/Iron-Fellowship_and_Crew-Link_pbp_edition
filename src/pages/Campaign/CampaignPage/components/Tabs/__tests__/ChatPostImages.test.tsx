@@ -7,6 +7,7 @@ import { ThemeProvider, createTheme } from "@mui/material";
 const getChatImageUrl = vi.fn();
 
 vi.mock("api-calls/chat/chatImages", () => ({
+  CHAT_IMAGE_SIGNED_URL_TTL_SECONDS: 10 * 60,
   getChatImageUrl: (...args: unknown[]) => getChatImageUrl(...args),
 }));
 
@@ -80,5 +81,38 @@ describe("ChatPostImages", () => {
     await act(async () => {});
 
     expect(view.querySelector("img")).toBeNull();
+  });
+
+  it("re-signs a stale image when it is shown again", async () => {
+    getChatImageUrl.mockImplementation(async (path: unknown) => `signed:${path}`);
+    const view = render(["campaign-1/post-9/stale.png"]);
+    await act(async () => {});
+    expect(getChatImageUrl).toHaveBeenCalledTimes(1);
+
+    // The feed re-renders with a fresh array for the same post: the cached
+    // link has outlived its minutes-long life, so showing the image signs
+    // it again instead of serving the expired URL.
+    const realNow = Date.now();
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(realNow + 60 * 60 * 1000);
+    try {
+      act(() => {
+        root?.render(
+          <ThemeProvider theme={theme}>
+            <ChatPostImages paths={["campaign-1/post-9/stale.png"]} />
+          </ThemeProvider>
+        );
+      });
+      await act(async () => {});
+    } finally {
+      nowSpy.mockRestore();
+    }
+    expect(getChatImageUrl).toHaveBeenCalledTimes(2);
+    const thumbnail = view.querySelector(
+      'img[alt="Attached image 1"]'
+    ) as HTMLImageElement | null;
+    if (!thumbnail) {
+      throw new Error("no thumbnail");
+    }
+    expect(thumbnail.src).toContain("signed:campaign-1/post-9/stale.png");
   });
 });

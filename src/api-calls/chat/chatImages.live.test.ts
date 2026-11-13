@@ -213,4 +213,231 @@ describe.skipIf(!config)("chat images end to end", () => {
       uploadChatImage(crypto.randomUUID(), crypto.randomUUID(), big)
     ).rejects.toThrow(/10 MB/);
   });
+
+  async function setUpMembers(): Promise<{
+    gm: LivePerson;
+    player: LivePerson;
+    other: LivePerson;
+    bystander: LivePerson;
+    outsider: LivePerson;
+    campaignId: string;
+    icChannelId: string;
+  }> {
+    const gm = await createPerson(cfg, "gm");
+    const player = await createPerson(cfg, "player");
+    const other = await createPerson(cfg, "other");
+    const bystander = await createPerson(cfg, "bystander");
+    const outsider = await createPerson(cfg, "outsider");
+    people.push(gm, player, other, bystander, outsider);
+    await signInAs(gm);
+    const campaignId = await createCampaign({
+      uid: gm.userId,
+      campaignName: "Lantern quest",
+      campaignType: CampaignType.Coop,
+    });
+    await signOut();
+    for (const member of [player, other, bystander]) {
+      await signInAs(member);
+      await joinCampaign({ campaignId });
+      await signOut();
+    }
+    const { data, error } = await gm.client
+      .from(CHAT_CHANNELS_TABLE)
+      .select("id")
+      .eq("campaign_id", campaignId)
+      .eq("kind", "IC")
+      .eq("is_starting", true)
+      .single();
+    expect(error).toBeNull();
+    return {
+      gm,
+      player,
+      other,
+      bystander,
+      outsider,
+      campaignId,
+      icChannelId: (data as { id: string }).id,
+    };
+  }
+
+  async function postImageAs(
+    person: LivePerson,
+    campaignId: string,
+    channelId: string,
+    text = "A lantern for the road."
+  ): Promise<string> {
+    await signInAs(person);
+    const postId = crypto.randomUUID();
+    const path = await uploadChatImage(campaignId, postId, png());
+    await createPost({
+      channelId,
+      postId,
+      text,
+      imagePaths: [path],
+    });
+    await signOut();
+    return path;
+  }
+
+  it("hides private-channel images from members outside the channel", { timeout: 180000 }, async () => {
+    const { gm, player, bystander, campaignId } = await setUpMembers();
+    const { data, error } = await gm.client.rpc("create_private_channel", {
+      cid: campaignId,
+      cname: "Side quest",
+      ckind: "IC",
+      member_ids: [player.userId],
+    });
+    expect(error).toBeNull();
+    const channelId = (Array.isArray(data) ? data[0] : data) as string;
+    const path = await postImageAs(player, campaignId, channelId);
+
+    // A member outside the channel reads neither the bytes nor a signed URL.
+    const { error: downloadError } = await bystander.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .download(path);
+    expect(downloadError).not.toBeNull();
+    await signInAs(bystander);
+    await expect(getChatImageUrl(path)).rejects.toBeTruthy();
+    await signOut();
+
+    // The channel member who posted it still reads it back.
+    await signInAs(player);
+    await expect(getChatImageUrl(path)).resolves.toMatch(/^https?:/);
+    await signOut();
+  });
+
+  it("hides direct-message images from everyone outside the pair", { timeout: 180000 }, async () => {
+    const { gm, player, other, bystander, campaignId } = await setUpMembers();
+    const { data, error } = await player.client.rpc("get_or_create_dm_channel", {
+      cid: campaignId,
+      other_id: other.userId,
+    });
+    expect(error).toBeNull();
+    const channelId = data as string;
+    const path = await postImageAs(player, campaignId, channelId);
+
+    // A fellow member outside the DM, and a GM who is not in it, read nothing.
+    for (const stranger of [bystander, gm]) {
+      const { error: downloadError } = await stranger.client.storage
+        .from(CHAT_IMAGES_BUCKET)
+        .download(path);
+      expect(downloadError).not.toBeNull();
+    }
+    await signInAs(bystander);
+    await expect(getChatImageUrl(path)).rejects.toBeTruthy();
+    await signOut();
+
+    // The other side of the DM reads the image.
+    const { error: pairError } = await other.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .download(path);
+    expect(pairError).toBeNull();
+  });
+
+  it("keeps GM-only roll images from players", { timeout: 180000 }, async () => {
+    const { gm, player, campaignId, icChannelId } = await setUpMembers();
+
+    await signInAs(gm);
+    const postId = crypto.randomUUID();
+    const path = await uploadChatImage(campaignId, postId, png());
+    await createPost({
+      channelId: icChannelId,
+      postId,
+      text: "A secret roll.",
+      imagePaths: [path],
+      gmsOnly: true,
+    });
+    await signOut();
+
+    // A player reads neither the bytes nor a signed URL ...
+    const { error: downloadError } = await player.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .download(path);
+    expect(downloadError).not.toBeNull();
+    await signInAs(player);
+    await expect(getChatImageUrl(path)).rejects.toBeTruthy();
+    await signOut();
+
+    // ... while a GM reads them back.
+    const { error: gmError } = await gm.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .download(path);
+    expect(gmError).toBeNull();
+  });
+
+  it("lets nobody overwrite another person's image", { timeout: 120000 }, async () => {
+    const { player, other, campaignId } = await setUpMembers();
+
+    await signInAs(player);
+    const path = await uploadChatImage(campaignId, crypto.randomUUID(), png());
+    await signOut();
+
+    // Another member cannot replace the file, even with upsert.
+    const { error: overwriteError } = await other.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .upload(path, png("intruder.png"), { upsert: true });
+    expect(overwriteError).not.toBeNull();
+
+    // The uploader can still replace their own file before posting.
+    await signInAs(player);
+    const { error: ownError } = await player.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .upload(path, png("lantern.png"), { upsert: true });
+    expect(ownError).toBeNull();
+    await signOut();
+  });
+
+  it("refuses non-image uploads on the server", { timeout: 120000 }, async () => {
+    const { player, campaignId } = await setUpMembers();
+
+    const evil = new File(["not an image"], "evil.pdf", {
+      type: "application/pdf",
+    });
+    const { error } = await player.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .upload(chatImageFilePath(campaignId, crypto.randomUUID(), "evil.pdf"), evil);
+    expect(error).not.toBeNull();
+  });
+
+  it("keeps an unsent upload readable only by its uploader", { timeout: 120000 }, async () => {
+    const { player, other, campaignId } = await setUpMembers();
+
+    // The file lands before its post exists.
+    await signInAs(player);
+    const path = await uploadChatImage(campaignId, crypto.randomUUID(), png());
+    await signOut();
+
+    // Another member reads neither the bytes nor a signed URL ...
+    const { error: downloadError } = await other.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .download(path);
+    expect(downloadError).not.toBeNull();
+    await signInAs(other);
+    await expect(getChatImageUrl(path)).rejects.toBeTruthy();
+    await signOut();
+
+    // ... while the uploader reads it back.
+    const { error: ownError } = await player.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .download(path);
+    expect(ownError).toBeNull();
+  });
+
+  it("lets a post's author or GM remove its files, but nobody else", { timeout: 180000 }, async () => {
+    const { gm, player, bystander, campaignId, icChannelId } =
+      await setUpMembers();
+    const path = await postImageAs(player, campaignId, icChannelId);
+
+    // A fellow member who posted nothing cannot discard the file ...
+    const { error: strangerError } = await bystander.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .remove([path]);
+    expect(strangerError).not.toBeNull();
+
+    // ... while a GM clearing the post can.
+    const { error: gmError } = await gm.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .remove([path]);
+    expect(gmError).toBeNull();
+  });
 });

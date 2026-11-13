@@ -13,6 +13,7 @@ WORKDIR /app
 ARG GAME_SYSTEM
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
+ARG VITE_CHAT_IMAGE_MAX_MB=10
 
 COPY package.json package-lock.json ./
 # The root postinstall (scripts/cleanup-dicebox-assets.cjs) runs as part of
@@ -28,6 +29,7 @@ COPY supabase/site/game-${GAME_SYSTEM}.env ./.env.production
 
 ENV VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
 ENV VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+ENV VITE_CHAT_IMAGE_MAX_MB=${VITE_CHAT_IMAGE_MAX_MB}
 RUN npm run build
 
 FROM nginx:1.27-alpine

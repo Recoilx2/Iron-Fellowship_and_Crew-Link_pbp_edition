@@ -9,14 +9,22 @@ import { shrinkImageFile } from "api-calls/storage/shrinkImage";
 /**
  * Attachment files in the private `chat-images` bucket, one folder per
  * campaign and post: chat-images/<campaignId>/<postId>/<filename>. The
- * access rules on the bucket let only the campaign's members read and
- * write; outsiders load nothing. Large images are shrunk in the browser
- * before upload, except GIFs, which go up untouched so animations survive.
+ * access rules on the bucket let an image read exactly when its post reads
+ * (channel members through the visibility check, GMs alone for GM-only
+ * roll posts); files waiting for a post read only for their uploader, and
+ * only the uploader overwrites them. Outsiders load nothing. Large images
+ * are shrunk in the browser before upload, except GIFs, which go up
+ * untouched so animations survive.
  */
 
 export const CHAT_IMAGES_BUCKET = "chat-images";
 
-const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7;
+/**
+ * Signed links stay short-lived (minutes): a revoked member's links stop
+ * working quickly. The feed re-signs an image when it shows it again
+ * (see ChatPostImages), so short links never interrupt reading.
+ */
+export const CHAT_IMAGE_SIGNED_URL_TTL_SECONDS = 10 * 60;
 
 export function chatImageFilePath(
   campaignId: string,
@@ -66,7 +74,7 @@ export async function removeChatImage(path: string): Promise<void> {
 export async function getChatImageUrl(path: string): Promise<string> {
   const { data, error } = await getSupabaseClient()
     .storage.from(CHAT_IMAGES_BUCKET)
-    .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
+    .createSignedUrl(path, CHAT_IMAGE_SIGNED_URL_TTL_SECONDS);
   if (error || !data?.signedUrl) {
     throw error ?? new Error("Failed to load chat image.");
   }
