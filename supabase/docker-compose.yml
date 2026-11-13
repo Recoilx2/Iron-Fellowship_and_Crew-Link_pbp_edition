@@ -355,6 +355,10 @@ services:
       SUPABASE_DB_URL: postgresql://postgres:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
       # TODO: Allow configuring VERIFY_JWT per function.
       VERIFY_JWT: "${FUNCTIONS_VERIFY_JWT}"
+      # GM assistant LLM proxy (spec #10): blank until the operator sets them.
+      GM_ASSISTANT_ENDPOINT: ${GM_ASSISTANT_ENDPOINT:-}
+      GM_ASSISTANT_API_KEY: ${GM_ASSISTANT_API_KEY:-}
+      GM_ASSISTANT_ALLOWED_MODELS: ${GM_ASSISTANT_ALLOWED_MODELS:-}
     command:
       [
         "start",
