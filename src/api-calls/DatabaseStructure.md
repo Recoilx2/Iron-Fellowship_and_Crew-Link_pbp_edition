@@ -12,7 +12,11 @@ user_settings                one row per person (accessibility, oracle pins)
 characters                   one row per character (+ assets, tracks, notes,
                              note contents, settings, solo roll log)
 campaigns                    one row per campaign (+ members, assets, tracks,
-                             notes, note contents, settings, roll log)
+                             notes, note contents, settings, roll log,
+                             chat channels)
+chat_channels                one row per channel in a campaign (kind IC/OOC,
+                             starting flag, archived flag; posts arrive
+                             with ticket #26)
 worlds                       one row per world (+ locations, lore, npcs,
                              notes, images metadata; no sectors: Starforged
                              locations replaced them, see ticket #21)
@@ -28,6 +32,7 @@ homebrew_collections         one row per collection (+ stats, moves, oracles,
 | CampaignDocument             | [\_campaign.type](./campaign/_campaign.type.ts)                                                          |
 | AssetDocument                | [\_asset.type](./assets/_asset.type.ts)                                                                  |
 | NoteDocument                 | [\_notes.type](./notes/_notes.type.ts)                                                                   |
+| ChannelDocument              | [\_chat.type](./chat/_chat.type.ts)                                                                     |
 | SettingsDocument             | [\_character-campaign-settings.type](./character-campaign-settings/_character-campaign-settings.type.ts) |
 | **Worlds**                   |                                                                                                          |
 | WorldDocument                | [\_world.type](./world/_world.type.ts)                                                                   |

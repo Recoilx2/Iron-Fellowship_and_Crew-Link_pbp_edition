@@ -8,21 +8,12 @@ import { useCampaignType } from "hooks/useCampaignType";
 import { useUpdateQueryStringValueWithoutNavigation } from "hooks/useUpdateQueryStringValueWithoutNavigation";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { CharacterTab, NotesTab, TracksTab, WorldTab } from "./Tabs";
+import { CharacterTab, ChatTab, NotesTab, TracksTab, WorldTab } from "./Tabs";
 import { useStore } from "stores/store";
 import { NPCSection } from "components/features/worlds/NPCSection";
 import { LoreSection } from "components/features/worlds/Lore";
 import { LocationsSection } from "components/features/worlds/Locations";
-
-enum CampaignTabs {
-  Characters = "characters",
-  Tracks = "tracks",
-  Notes = "notes",
-  World = "world",
-  Locations = "locations",
-  NPCs = "ncps",
-  Lore = "lore",
-}
+import { CampaignTabs, DEFAULT_CAMPAIGN_TAB } from "./CampaignTabs";
 
 export interface CampaignContentProps {
   openInviteDialog: () => void;
@@ -34,7 +25,7 @@ export function CampaignContent(props: CampaignContentProps) {
 
   const [searchParams] = useSearchParams();
   const [selectedTab, setSelectedTab] = useState<CampaignTabs>(
-    (searchParams.get("tab") as CampaignTabs) ?? CampaignTabs.Characters
+    (searchParams.get("tab") as CampaignTabs) ?? DEFAULT_CAMPAIGN_TAB
   );
   useUpdateQueryStringValueWithoutNavigation("tab", selectedTab);
   const handleTabChange = (tab: CampaignTabs) => {
@@ -66,6 +57,7 @@ export function CampaignContent(props: CampaignContentProps) {
           borderTopLeftRadius: theme.shape.borderRadius,
         })}
       >
+        <StyledTab label="Chat" value={CampaignTabs.Chat} />
         <StyledTab label="Characters" value={CampaignTabs.Characters} />
         <StyledTab label="Tracks" value={CampaignTabs.Tracks} />
         {!showGuidedPlayerView && (
@@ -76,6 +68,9 @@ export function CampaignContent(props: CampaignContentProps) {
         <StyledTab label="NPCs" value={CampaignTabs.NPCs} />
         <StyledTab label="Lore" value={CampaignTabs.Lore} />
       </StyledTabs>
+      <ContainedTabPanel isVisible={selectedTab === CampaignTabs.Chat}>
+        <ChatTab openInviteDialog={openInviteDialog} />
+      </ContainedTabPanel>
       <ContainedTabPanel isVisible={selectedTab === CampaignTabs.Characters}>
         <CharacterTab openInviteDialog={openInviteDialog} />
       </ContainedTabPanel>
