@@ -5,6 +5,7 @@ import { createRoot, Root } from "react-dom/client";
 import { ThemeProvider, createTheme } from "@mui/material";
 
 let mockTabSearch = "";
+let mockGuidedPlayerView = false;
 
 const mockStoreState = {
   campaigns: {
@@ -21,7 +22,7 @@ vi.mock("stores/store", () => ({
 }));
 vi.mock("hooks/useCampaignType", () => ({
   useCampaignType: () => ({
-    showGuidedPlayerView: false,
+    showGuidedPlayerView: mockGuidedPlayerView,
     showGuideTips: false,
   }),
 }));
@@ -87,6 +88,7 @@ describe("CampaignContent navigation (ticket #122)", () => {
   beforeEach(() => {
     mockViewport(1400);
     mockTabSearch = "";
+    mockGuidedPlayerView = false;
   });
 
   afterEach(() => {
@@ -121,6 +123,13 @@ describe("CampaignContent navigation (ticket #122)", () => {
     const names = tabNames(view);
     expect(names).toContain("My notes");
     expect(names).not.toContain("Notes");
+  });
+
+  it("shows the My notes tab to a guided player (personal, not the guide's notes)", () => {
+    mockGuidedPlayerView = true;
+    const view = render();
+
+    expect(tabNames(view)).toContain("My notes");
   });
 
   it("renders My notes in the Notes screen", () => {
