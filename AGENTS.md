@@ -12,6 +12,10 @@ To pick a ticket:
 - Never pick up issues labelled `spec` or `wayfinder:*`. Specs are parents, and wayfinder tickets are decisions for the human.
 - Before starting, read the ticket's parent spec, `GLOSSARY.md` and `docs/adr/`.
 
+## Worktrees
+
+Create every worktree or scratch copy of the repo under `.opencode/worktrees/` inside this repo, never in the workspace directory.
+
 ## Testing
 
 The agent sandbox has no Docker. Run the plain tests (`npm test`), lint and the type-check locally. Tests that need the local Supabase stack run in GitHub Actions on every pull request: push your branch, open the PR, and check its CI result before handing off. Don't try to install or start Docker in the sandbox.
@@ -31,3 +35,21 @@ The default five triage labels, plus the `in-progress` / `needs-review` / `spec`
 ### Domain docs
 
 Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### When something fails
+
+One ladder per failure. Run it in order, then stop.
+
+1. **Evidence first.** Commit the logs, artifacts and rejected drafts on the
+   ticket branch before diagnosing. Uncommitted `/tmp` evidence has been lost
+   before.
+2. **Diagnose.** Dispatch a subagent with the `diagnosing-bugs` skill. The
+   diagnosis must check whether the failing rule matches the spec or ADR it
+   comes from. If the rule itself is wrong, stop and report; don't fix code
+   around it.
+3. **Fix** through the normal flow: ticket, PR, review by another harness,
+   merge per **Merging**. Zero-paid probes are the "try".
+4. **Still failing?** Run the `moa` skill (mixture of agents: independent
+   agents propose a fix) once, and take its fix through the same flow.
+5. **Any second failure, of any kind:** stop and post a handoff (`stuck` →
+   `needs-info`).

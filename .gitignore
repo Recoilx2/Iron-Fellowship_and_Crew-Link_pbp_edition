@@ -35,3 +35,5 @@ supabase/.env.live
 
 # AI
 .claude/*
+.opencode/worktrees/
+.opencode/archive/
