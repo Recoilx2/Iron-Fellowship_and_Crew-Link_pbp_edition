@@ -74,6 +74,26 @@ export function postRowToRoll(
 }
 
 /**
+ * Reads a roll post's roll for the campaign roll log: the same dice and
+ * outcome as postRowToRoll, but the roller comes from the post's author
+ * and speaker columns, never from the roll JSON -- the database binds a
+ * posted roll to its post at insert, and the log names the roller from
+ * the post regardless, so a forged roll could never attribute dice to
+ * another character. A post with no roll reads back null.
+ */
+export function postRowToLogRoll(row: PostRow): PostDocument["roll"] {
+  const roll = postRowToRoll(row.roll);
+  if (!roll) {
+    return null;
+  }
+  return {
+    ...roll,
+    uid: row.author_id,
+    characterId: row.speaker_character_id,
+  };
+}
+
+/**
  * Columns for inserting a post: text and image paths alongside the roll in
  * its existing shape with an ISO timestamp inside, plus the GM-only flag.
  * Text-only posts store no roll.

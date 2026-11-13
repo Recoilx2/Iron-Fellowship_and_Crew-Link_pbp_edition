@@ -811,6 +811,134 @@ describe("listenToRows", () => {
     });
   });
 
+  describe("refresh signals from a related table (issue #117)", () => {
+    // Seam under test: listenToRows with a binding whose toChange reports
+    // { kind: "refresh" } instead of a row change. The roster table left
+    // the realtime publication, so the roster listener re-fetches whenever
+    // the parent channel bumps -- the event carries no row data, only the
+    // instruction to re-read.
+    function refreshBinding(table = "chat_channels") {
+      return {
+        type: "postgres_changes" as const,
+        table,
+        toChange: (): { kind: "refresh" } => ({ kind: "refresh" }),
+      };
+    }
+
+    it("re-fetches on a refresh signal and emits only when the rows changed", async () => {
+      const { client, channels } = makeFakeRealtime();
+      const onRows = vi.fn();
+      const onError = vi.fn();
+      let current: Row[] = [
+        { id: "a", value: "one", updated_at: "2026-11-12T00:00:01Z" },
+      ];
+      const fetchRows = vi.fn(() => Promise.resolve(current));
+
+      listenToRows<Row>({
+        client: client as never,
+        channelName: "rows",
+        bindings: [refreshBinding()],
+        fetchRows,
+        getKey: keyOf,
+        getUpdatedAt: stampOf,
+        onRows,
+        onError,
+      });
+      settle(channels);
+      await flush();
+      await flush();
+      expect(fetchRows).toHaveBeenCalledTimes(1);
+      expect(onRows).toHaveBeenCalledTimes(1);
+
+      // A related-table bump re-reads; identical rows stay silent.
+      emitPostgres(channels, { new: {}, old: null });
+      await flush();
+      await flush();
+      expect(fetchRows).toHaveBeenCalledTimes(2);
+      expect(onRows).toHaveBeenCalledTimes(1);
+      expect(onError).not.toHaveBeenCalled();
+
+      // Changed rows re-emit.
+      current = [
+        { id: "a", value: "two", updated_at: "2026-11-12T00:00:02Z" },
+      ];
+      emitPostgres(channels, { new: {}, old: null });
+      await flush();
+      await flush();
+      expect(fetchRows).toHaveBeenCalledTimes(3);
+      expect(onRows).toHaveBeenCalledTimes(2);
+      expect(onRows).toHaveBeenLastCalledWith(current);
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it("follows a pre-snapshot refresh with a second fetch instead of settling stale", async () => {
+      const { client, channels } = makeFakeRealtime();
+      const seen: Row[][] = [];
+      const snapshots: Row[][] = [
+        [{ id: "a", value: "one", updated_at: "2026-11-12T00:00:01Z" }],
+        [{ id: "a", value: "two", updated_at: "2026-11-12T00:00:02Z" }],
+      ];
+      const fetchRows = vi.fn(() => Promise.resolve(snapshots.shift()!));
+
+      listenToRows<Row>({
+        client: client as never,
+        channelName: "rows",
+        bindings: [refreshBinding()],
+        fetchRows,
+        getKey: keyOf,
+        getUpdatedAt: stampOf,
+        onRows: (rows) => seen.push(rows),
+      });
+
+      settle(channels);
+      expect(fetchRows).toHaveBeenCalledTimes(1);
+
+      // The bump lands while the first snapshot is still in flight.
+      emitPostgres(channels, { new: {}, old: null });
+      await flush();
+      await flush();
+
+      expect(fetchRows).toHaveBeenCalledTimes(2);
+      expect(seen.at(-1)).toEqual([
+        { id: "a", value: "two", updated_at: "2026-11-12T00:00:02Z" },
+      ]);
+    });
+
+    it("stays silent when a refresh re-fetch fails transiently", async () => {
+      const { client, channels } = makeFakeRealtime();
+      const seen: Row[][] = [];
+      const onError = vi.fn();
+      let failNext = false;
+
+      listenToRows<Row>({
+        client: client as never,
+        channelName: "rows",
+        bindings: [refreshBinding()],
+        fetchRows: () =>
+          failNext
+            ? Promise.reject(new Error("transient"))
+            : Promise.resolve([]),
+        getKey: keyOf,
+        getUpdatedAt: stampOf,
+        onRows: (rows) => seen.push(rows),
+        onError,
+      });
+      settle(channels);
+      await flush();
+      await flush();
+      expect(seen).toEqual([[]]);
+
+      // A bump whose re-fetch fails stays silent like the reconcile tick;
+      // the next tick heals.
+      failNext = true;
+      emitPostgres(channels, { new: {}, old: null });
+      await flush();
+      await flush();
+      expect(onError).not.toHaveBeenCalled();
+      expect(seen).toEqual([[]]);
+    });
+  });
+
   describe("concurrent subscriptions sharing one channel name (issue #116)", () => {
     // Seam under test: two listenToRows calls with the same channelName,
     // active at the same time (campaign screen Active + Completed tracks on

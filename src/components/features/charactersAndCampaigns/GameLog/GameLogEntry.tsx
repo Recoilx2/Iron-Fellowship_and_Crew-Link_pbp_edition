@@ -13,6 +13,11 @@ export interface GameLogEntryProps {
 export function GameLogEntry(props: GameLogEntryProps) {
   const { logId, log } = props;
 
+  // The campaign roll log names its roller from the roll post's author and
+  // speaker columns, never from the stored roll JSON: the log seam
+  // (postRowToLogRoll) stamps log.uid and log.characterId from the post
+  // before the entry renders, so a forged roll could never attribute dice
+  // to another character (#120). Solo entries keep their own log's values.
   const uid = useStore((store) => store.auth.uid);
 
   const characterId = useStore(

@@ -41,6 +41,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      CHAT_IMAGE_MAX_MB: ${CHAT_IMAGE_MAX_MB:-10}
     command:
       - /bin/sh
       - /migrate/apply.sh
@@ -403,6 +404,7 @@ services:
         GAME_SYSTEM: ${GAME_SYSTEM}
         VITE_SUPABASE_URL: ${SUPABASE_PUBLIC_URL}
         VITE_SUPABASE_ANON_KEY: ${ANON_KEY}
+        VITE_CHAT_IMAGE_MAX_MB: ${CHAT_IMAGE_MAX_MB:-10}
     restart: unless-stopped
     ports:
       - ${SITE_HTTP_PORT:-8080}:80/tcp

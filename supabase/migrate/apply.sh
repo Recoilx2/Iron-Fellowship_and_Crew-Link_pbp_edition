@@ -8,6 +8,9 @@
 # - Name files <UTC timestamp>_<short-name>.sql, e.g. 20261112000000_campaigns.sql.
 # - Every file must be safe to run once against an empty database. Wrap the
 #   body in a transaction when a half-applied file must never persist.
+# - Files may read deployment settings as psql variables passed on the PSQL
+#   line below (e.g. CHAT_IMAGE_MAX_MB, defaulting here); keep the same
+#   defaults as the example env file.
 set -eu
 
 : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}"
@@ -18,7 +21,7 @@ PGUSER=postgres
 export PGHOST PGPORT PGDATABASE PGUSER
 export PGPASSWORD="$POSTGRES_PASSWORD"
 
-PSQL="psql -v ON_ERROR_STOP=1 -qAt"
+PSQL="psql -v ON_ERROR_STOP=1 -qAt -v CHAT_IMAGE_MAX_MB=${CHAT_IMAGE_MAX_MB:-10}"
 MIGRATIONS_DIR="${MIGRATIONS_DIR:-/migrations}"
 
 $PSQL -c "CREATE SCHEMA IF NOT EXISTS supabase_migrations;" \

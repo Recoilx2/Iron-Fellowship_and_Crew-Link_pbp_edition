@@ -24,14 +24,23 @@ export async function getAllLogsForExport(params: {
 
   // A campaign's log exports its chat roll posts, oldest first (ticket
   // #30). The database refuses GM-only rows to non-GMs; the explicit
-  // filter keeps the export's intent obvious either way.
+  // filter keeps the export's intent obvious either way. The roller reads
+  // from each post's author and speaker columns, never from the roll JSON
+  // (#120).
   if (!characterId || campaignId) {
     const { posts } = await fetchCampaignRollPosts(
       getSupabaseClient(),
       (campaignId ?? characterId) as string,
       { ascending: true, isGM }
     );
-    return posts.map((row) => ({ id: row.id, roll: { ...row.roll } }));
+    return posts.map((row) => ({
+      id: row.id,
+      roll: {
+        ...row.roll,
+        uid: row.author_id,
+        characterId: row.speaker_character_id,
+      },
+    }));
   }
 
   let rowsQuery = getSupabaseClient()
