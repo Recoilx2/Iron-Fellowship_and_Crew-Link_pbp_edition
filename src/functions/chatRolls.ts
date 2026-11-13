@@ -1,16 +1,17 @@
-import { Datasworn, IdParser } from "@datasworn-community/core";
-
-import { idMap } from "data/idMap";
+import {
+  lookupRollableOracle,
+  resolveOracleRoll,
+} from "stores/appState/rollers/resolveOracleRoll";
 import {
   CustomDiceRoll,
   OracleTableRoll,
-  ROLL_RESULT,
   ROLL_TYPE,
   Roll,
   StatRoll,
 } from "types/DieRolls.type";
 import { getRollResultLabel } from "components/features/charactersAndCampaigns/RollDisplay/getRollResultLabel";
 import { markdownToPlainText } from "functions/rollText";
+import { scoreStatRoll } from "stores/appState/rollers/scoreStatRoll";
 
 /**
  * The composer's rolls (spec #9): move, stat, ask-the-oracle, oracle table
@@ -141,26 +142,14 @@ export async function rollChatStat(
   ]);
   const [challenge1, challenge2, action] = values;
 
-  let matchedNegativeMomentum = false;
-  if (
-    context.momentum !== undefined &&
-    context.momentum < 0 &&
-    Math.abs(context.momentum) === action
-  ) {
-    matchedNegativeMomentum = true;
-  }
-
-  const total = Math.min(
-    10,
-    (matchedNegativeMomentum ? 0 : action) + modifier + (adds ?? 0)
-  );
-
-  let result: ROLL_RESULT = ROLL_RESULT.WEAK_HIT;
-  if (total > challenge1 && total > challenge2) {
-    result = ROLL_RESULT.HIT;
-  } else if (total <= challenge1 && total <= challenge2) {
-    result = ROLL_RESULT.MISS;
-  }
+  const { result, matchedNegativeMomentum } = scoreStatRoll({
+    action,
+    modifier,
+    adds,
+    challenge1,
+    challenge2,
+    momentum: context.momentum,
+  });
 
   const roll: StatRoll = {
     type: ROLL_TYPE.STAT,
@@ -186,140 +175,33 @@ export async function rollChatStat(
   return roll;
 }
 
-async function rollChatOracleColumn(
-  column: Datasworn.OracleRollable,
-  roller: DiceRoller
-): Promise<{ roll: number; result: Datasworn.OracleRollableRow } | undefined> {
-  const roll = await roller.rollExpression(column.dice);
-  if (roll === undefined) {
-    return undefined;
-  }
-  const result = column.rows.find(
-    (row) => row.roll && row.roll.min <= roll && row.roll.max >= roll
-  );
-  if (!result) {
-    return undefined;
-  }
-  return { roll, result };
-}
-
 /**
  * Rolls an oracle table by id in the app's existing oracle roll shape,
  * resolving legacy ids the way the game log roller does. Unrollable
- * collections and unknown tables roll nothing.
+ * collections and unknown tables roll nothing. The resolution is shared with
+ * the sheet roller; only the link stripping stays here, as before.
  */
 export async function rollChatOracleTable(
   oracleId: string,
   context: ChatRollContext,
   roller: DiceRoller
 ): Promise<OracleTableRoll | undefined> {
-  const resolved = idMap[oracleId] ?? oracleId;
-  let oracle:
-    | Datasworn.OracleCollection
-    | Datasworn.OracleRollable
-    | undefined;
-  try {
-    oracle = IdParser.get(resolved) as
-      | Datasworn.OracleCollection
-      | Datasworn.OracleRollable;
-  } catch {
+  const oracle = lookupRollableOracle(oracleId);
+  const roll = await resolveOracleRoll(oracle, roller, context);
+  if (!roll) {
     return undefined;
   }
-  // Only rollable tables roll; the cast keeps the union type below intact.
-  if (
-    !oracle ||
-    (oracle as Datasworn.OracleRollable).type !== "oracle_rollable"
-  ) {
-    return undefined;
-  }
-  return rollResolvedChatOracle(oracle, context, roller);
-}
-
-async function rollResolvedChatOracle(
-  oracle: Datasworn.OracleCollection | Datasworn.OracleRollable | undefined,
-  context: ChatRollContext,
-  roller: DiceRoller
-): Promise<OracleTableRoll | undefined> {
-  // We cannot roll across multiple tables like this
-  if (!oracle || oracle.oracle_type === "tables") {
-    return undefined;
-  } else if (
-    oracle.oracle_type === "table_shared_text" ||
-    oracle.oracle_type === "table_shared_text2" ||
-    oracle.oracle_type === "table_shared_text3"
-  ) {
-    return undefined;
-  }
-
-  let resultString: string | undefined;
-  let rolls: number | number[] | undefined;
-  let result2: string | undefined;
-  let result3: string | undefined;
-
-  if (oracle.oracle_type === "table_shared_rolls") {
-    const tmpRolls: number[] = [];
-    const lines: string[] = [];
-    const columns = Object.values(oracle.contents ?? {}).sort((left, right) =>
-      left.name.localeCompare(right.name)
-    );
-    for (const column of columns) {
-      const rolled = await rollChatOracleColumn(column, roller);
-      if (rolled) {
-        tmpRolls.push(rolled.roll);
-        lines.push(`* ${column.name}: ${rolled.result.text}`);
-      }
-    }
-    resultString = lines.join("\n");
-    rolls = tmpRolls;
-  } else {
-    const rolled = await rollChatOracleColumn(oracle, roller);
-    if (rolled) {
-      rolls = rolled.roll;
-      resultString = rolled.result.text;
-      if (
-        oracle.oracle_type === "table_text2" ||
-        oracle.oracle_type === "table_text3"
-      ) {
-        const columnLabel2 = oracle.column_labels.text2;
-        const text2 = (
-          rolled.result as Datasworn.OracleRollableRowText2
-        ).text2;
-        const columnLabel3 = (
-          oracle as Datasworn.OracleTableText3
-        ).column_labels.text3;
-        const text3 = (rolled.result as Datasworn.OracleRollableRowText3)
-          .text3;
-        if (text2) {
-          result2 = columnLabel2 ? `${columnLabel2}: ${text2}` : text2;
-        }
-        if (text3) {
-          result3 = columnLabel3 ? `${columnLabel3}: ${text3}` : text3;
-        }
-      }
-    }
-  }
-
-  if (resultString === undefined || rolls === undefined) {
-    return undefined;
-  }
-  const roll: OracleTableRoll = {
-    type: ROLL_TYPE.ORACLE_TABLE,
-    rollLabel: oracle.name,
-    timestamp: new Date(),
-    characterId: context.characterId,
-    uid: context.uid,
-    gmsOnly: context.gmsOnly,
-    roll: rolls,
-    result: stripDataswornLinks(resultString),
-    oracleId: oracle._id,
+  const stripped: OracleTableRoll = {
+    ...roll,
+    result: stripDataswornLinks(roll.result),
   };
-  if (result2) {
-    roll.text2 = stripDataswornLinks(result2);
+  if (roll.text2) {
+    stripped.text2 = stripDataswornLinks(roll.text2);
   }
-  if (result3) {
-    roll.text3 = stripDataswornLinks(result3);
+  if (roll.text3) {
+    stripped.text3 = stripDataswornLinks(roll.text3);
   }
-  return roll;
+  return stripped;
 }
 
 /**
