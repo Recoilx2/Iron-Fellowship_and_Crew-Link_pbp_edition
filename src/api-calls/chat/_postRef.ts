@@ -75,8 +75,8 @@ export function postRowToRoll(
 
 /**
  * Columns for inserting a post: text and image paths alongside the roll in
- * its existing shape with an ISO timestamp inside, exactly as the campaign
- * roll log stores it, plus the GM-only flag. Text-only posts store no roll.
+ * its existing shape with an ISO timestamp inside, plus the GM-only flag.
+ * Text-only posts store no roll.
  */
 export function postDocumentToColumns(params: {
   text: string;

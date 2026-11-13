@@ -17,7 +17,7 @@ const liveFiles = [
   "src/api-calls/campaign/campaignMembers.live.test.ts",
   "src/api-calls/campaign/campaigns.live.test.ts",
   "src/api-calls/campaign/campaignTables.live.test.ts",
-  "src/api-calls/game-log/campaignRolls.live.test.ts",
+  "src/api-calls/game-log/rollLogView.live.test.ts",
   "src/api-calls/user/settings/userSettings.live.test.ts",
   "src/api-calls/character/characters.live.test.ts",
   "src/api-calls/character/characterChildren.live.test.ts",

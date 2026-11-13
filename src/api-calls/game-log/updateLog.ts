@@ -3,9 +3,7 @@ import { getSupabaseClient } from "config/supabase.config";
 import { Roll } from "types/DieRolls.type";
 import {
   CHARACTER_ROLLS_TABLE,
-  CAMPAIGN_ROLLS_TABLE,
   characterRollToColumns,
-  campaignRollToColumns,
 } from "./_getRef";
 
 export const updateLog = createApiFunction<
@@ -18,26 +16,13 @@ export const updateLog = createApiFunction<
     throw new Error("Either campaign or character ID must be defined.");
   }
 
+  // A campaign's rolls live as chat roll posts, whose dice are immutable:
+  // only the post's text may change, so a posted roll is never updated in
+  // place (ticket #30).
   if (campaignId) {
-    const client = getSupabaseClient();
-    const { data: existing, error: fetchError } = await client
-      .from(CAMPAIGN_ROLLS_TABLE)
-      .select("id")
-      .eq("id", logId)
-      .eq("campaign_id", campaignId)
-      .single();
-    if (fetchError || !existing) {
-      throw fetchError ?? new Error("Roll not found");
-    }
-    const { data, error } = await client
-      .from(CAMPAIGN_ROLLS_TABLE)
-      .update(campaignRollToColumns(campaignId, log))
-      .eq("id", logId)
-      .select("id");
-    if (error || !data || data.length === 0) {
-      throw error ?? new Error("Roll not found");
-    }
-    return;
+    throw new Error(
+      "Campaign rolls are chat posts with immutable dice: they cannot be changed."
+    );
   }
   if (!characterId) {
     throw new Error("Either campaign or character ID must be defined.");

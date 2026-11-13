@@ -291,7 +291,6 @@ describe.skipIf(!config)("campaigns end to end", () => {
       "campaign_tracks",
       "campaign_assets",
       "campaign_settings",
-      "campaign_rolls",
     ]) {
       const reread = await player.client.from(table).select("*").limit(1);
       expect(reread.error).toBeNull();
@@ -375,7 +374,6 @@ describe.skipIf(!config)("campaigns end to end", () => {
       "campaign_tracks",
       "campaign_assets",
       "campaign_settings",
-      "campaign_rolls",
     ]) {
       const reread = await gm.client
         .from(table)

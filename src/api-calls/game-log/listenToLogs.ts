@@ -1,18 +1,13 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { Unsubscribe as PlainUnsubscribe } from "api-calls/helpers.type";
 import { listenToRows } from "api-calls/realtime/listenToRows";
+import { listenToCampaignRollPosts } from "api-calls/chat/listenToCampaignRollPosts";
 import {
   CHARACTER_ROLLS_TABLE,
-  CAMPAIGN_ROLLS_TABLE,
   characterRollPayloadToChange,
   characterRollRowToRoll,
-  campaignRollPayloadToChange,
-  campaignRollRowToRoll,
   constructCharacterRollsChannelName,
   constructCharacterRollsFilter,
-  constructCampaignRollsChannelName,
-  constructCampaignRollsFilter,
-  type CampaignRollRow,
   type CharacterRollRow,
 } from "./_getRef";
 import { Roll } from "types/DieRolls.type";
@@ -41,61 +36,19 @@ export function listenToLogs(params: {
     return () => {};
   }
 
-  // Campaign rolls stream from the campaign roll log table, newest first
-  // with a client-side window. GM-only rolls never reach non-GMs: the
-  // database refuses the rows, and the listener skips them as well.
+  // A campaign's log is a view of its chat roll posts (ticket #30): rolls
+  // made anywhere in the campaign land in the starting IC channel, so the
+  // listener below streams them back here. GM-only rolls never reach
+  // non-GMs: the database refuses the rows, and the listener skips them as
+  // well.
   if (campaignId) {
-    const client = getSupabaseClient();
-    let previousIds = new Set<string>();
-    return listenToRows<CampaignRollRow>({
-      client,
-      channelName: constructCampaignRollsChannelName(campaignId),
-      bindings: [
-        {
-          type: "postgres_changes",
-          table: CAMPAIGN_ROLLS_TABLE,
-          filter: constructCampaignRollsFilter(campaignId),
-          toChange: campaignRollPayloadToChange,
-        },
-      ],
-      fetchRows: async () => {
-        let rowsQuery = client
-          .from(CAMPAIGN_ROLLS_TABLE)
-          .select("*")
-          .eq("campaign_id", campaignId)
-          .order("created_at", { ascending: false })
-          .limit(totalLogsToLoad);
-        if (!isGM) {
-          rowsQuery = rowsQuery.eq("gms_only", false);
-        }
-        const { data, error } = await rowsQuery;
-        if (error) {
-          throw error;
-        }
-        return (data ?? []) as unknown as CampaignRollRow[];
-      },
-      getKey: (row) => row.id,
-      getUpdatedAt: (row) => row.updated_at,
-      onRows: (rows) => {
-        const seen = new Set<string>();
-        for (const row of rows) {
-          if (!isGM && row.gms_only) {
-            continue;
-          }
-          seen.add(row.id);
-          updateLog(row.id, campaignRollRowToRoll(row));
-        }
-        for (const id of previousIds) {
-          if (!seen.has(id)) {
-            removeLog(id);
-          }
-        }
-        previousIds = seen;
-      },
-      onError: (error) => {
-        console.error(error);
-        onError("Error getting new logs.");
-      },
+    return listenToCampaignRollPosts({
+      campaignId,
+      totalLogsToLoad,
+      isGM,
+      updateLog,
+      removeLog,
+      onError,
     });
   }
 

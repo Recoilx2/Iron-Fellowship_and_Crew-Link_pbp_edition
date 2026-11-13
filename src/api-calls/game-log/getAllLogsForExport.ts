@@ -1,10 +1,8 @@
 import { getSupabaseClient } from "config/supabase.config";
+import { fetchCampaignRollPosts } from "api-calls/chat/listenToCampaignRollPosts";
 import {
   CHARACTER_ROLLS_TABLE,
-  CAMPAIGN_ROLLS_TABLE,
   characterRollRowToExportRecord,
-  campaignRollRowToExportRecord,
-  type CampaignRollRow,
   type CharacterRollRow,
 } from "./_getRef";
 
@@ -24,25 +22,16 @@ export async function getAllLogsForExport(params: {
     throw new Error("Either campaignId or characterId must be defined.");
   }
 
-  // Campaign rolls export from the campaign roll log table, oldest first.
-  // The database refuses GM-only rows to non-GMs; the explicit filter keeps
-  // the export's intent obvious either way.
+  // A campaign's log exports its chat roll posts, oldest first (ticket
+  // #30). The database refuses GM-only rows to non-GMs; the explicit
+  // filter keeps the export's intent obvious either way.
   if (!characterId || campaignId) {
-    let rowsQuery = getSupabaseClient()
-      .from(CAMPAIGN_ROLLS_TABLE)
-      .select("*")
-      .eq("campaign_id", (campaignId ?? characterId) as string)
-      .order("created_at", { ascending: true });
-    if (!isGM) {
-      rowsQuery = rowsQuery.eq("gms_only", false);
-    }
-    const { data, error } = await rowsQuery;
-    if (error) {
-      throw error;
-    }
-    return ((data ?? []) as unknown as CampaignRollRow[]).map(
-      campaignRollRowToExportRecord
+    const { posts } = await fetchCampaignRollPosts(
+      getSupabaseClient(),
+      (campaignId ?? characterId) as string,
+      { ascending: true, isGM }
     );
+    return posts.map((row) => ({ id: row.id, roll: { ...row.roll } }));
   }
 
   let rowsQuery = getSupabaseClient()
