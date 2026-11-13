@@ -51,6 +51,19 @@ vi.mock("stores/store", () => ({
 vi.mock("stores/chat/useListenToChatChannels", () => ({
   useListenToChatChannels: () => {},
 }));
+vi.mock("stores/chat/useListenToChannelPosts", () => ({
+  useListenToChannelPosts: () => {},
+}));
+vi.mock("../ChatFeed", () => ({
+  ChatFeed: ({ channel }: { channel: { id: string } }) => (
+    <div>{`Feed for ${channel.id}`}</div>
+  ),
+}));
+vi.mock("../ChatComposer", () => ({
+  ChatComposer: ({ channel }: { channel: { name: string } }) => (
+    <div>{`Composer for ${channel.name}`}</div>
+  ),
+}));
 vi.mock("api-calls/chat/createChannel", () => ({
   createChannel: vi.fn(),
 }));
@@ -154,11 +167,11 @@ describe("ChatTab channels", () => {
     expect(setOpenChannelId).toHaveBeenCalledWith("ooc");
   });
 
-  it("names the open channel above the feed placeholder", () => {
+  it("names the open channel above its live feed and composer", () => {
     const view = render();
 
     expect(view.textContent).toContain("# In character");
-    // Posts land in the next ticket; the tab holds their place.
-    expect(view.textContent).toContain("Posts in this channel appear here");
+    expect(view.textContent).toContain("Feed for ic");
+    expect(view.textContent).toContain("Composer for In character");
   });
 });

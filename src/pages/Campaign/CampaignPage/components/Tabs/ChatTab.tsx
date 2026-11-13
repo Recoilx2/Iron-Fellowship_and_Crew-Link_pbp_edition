@@ -26,11 +26,14 @@ import AddIcon from "@mui/icons-material/AddCircleOutline";
 import { StyledTab, StyledTabs } from "components/shared/StyledTabs";
 import { useStore } from "stores/store";
 import { useListenToChatChannels } from "stores/chat/useListenToChatChannels";
+import { useListenToChannelPosts } from "stores/chat/useListenToChannelPosts";
 import { createChannel } from "api-calls/chat/createChannel";
 import { renameChannel } from "api-calls/chat/renameChannel";
 import { archiveChannel } from "api-calls/chat/archiveChannel";
 import type { ChannelKind } from "api-calls/chat/_chat.type";
 import type { ChannelWithId } from "api-calls/chat/listenToCampaignChannels";
+import { ChatFeed } from "./ChatFeed";
+import { ChatComposer } from "./ChatComposer";
 import { CharacterTab } from "./CharacterTab";
 import { TracksTab } from "./TracksTab";
 import { NotesTab } from "./NotesTab";
@@ -49,14 +52,14 @@ function sortChannels(channels: ChannelWithId[]): ChannelWithId[] {
 
 /**
  * Chat-first campaign screen (spec #9, prototype variant D): the channel
- * list lives beside the feed, with the other campaign tabs one step away.
- * Posts arrive in the next ticket (#26); this tab owns the channels: the
- * starting IC and OOC rows, switching between them, and the GM controls to
- * create, rename and archive more.
+ * list beside the feed, with the other campaign tabs one step away. Posts
+ * arrive in the feed below: the latest page first, older pages on scroll,
+ * new posts live, and the composer keeps an unsent draft per channel.
  */
 export function ChatTab(props: { openInviteDialog: () => void }) {
   const { openInviteDialog } = props;
   useListenToChatChannels();
+  useListenToChannelPosts();
   const theme = useTheme();
   const wide = useMediaQuery(theme.breakpoints.up("lg"));
 
@@ -151,11 +154,35 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
             )
           }
         />
-        <Box sx={{ flexGrow: 1, overflowY: "auto", py: 1 }}>
-          <Typography color={"text.secondary"} sx={{ p: 3, textAlign: "center" }}>
-            Posts in this channel appear here.
-          </Typography>
-        </Box>
+        {openChannel ? (
+          <>
+            <ChatFeed channel={openChannel} />
+            {openChannel.archived ? (
+              <Typography
+                color={"text.secondary"}
+                sx={{
+                  p: 1.5,
+                  textAlign: "center",
+                  borderTop: 1,
+                  borderColor: "divider",
+                }}
+              >
+                This channel is archived. New posts are closed.
+              </Typography>
+            ) : (
+              <ChatComposer channel={openChannel} />
+            )}
+          </>
+        ) : (
+          <Box sx={{ flexGrow: 1, overflowY: "auto", py: 1 }}>
+            <Typography
+              color={"text.secondary"}
+              sx={{ p: 3, textAlign: "center" }}
+            >
+              Posts in this channel appear here.
+            </Typography>
+          </Box>
+        )}
       </Box>
       {wide && (
         <Box
