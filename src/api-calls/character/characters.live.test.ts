@@ -260,4 +260,70 @@ describe.skipIf(!config)("characters end to end", () => {
     expect(seenLists).toEqual([]);
     expect(seenSingle).toEqual([]);
   });
+
+  it("rejects a second character from the same player in one campaign", { timeout: 90000 }, async () => {
+    const owner = await createPerson(cfg, "owner");
+    const other = await createPerson(cfg, "other");
+    people.push(owner, other);
+    const campaignId = randomCampaignId();
+    await ensureCampaign(cfg, campaignId);
+    await grantMembership(cfg, campaignId, owner.userId, "player");
+    await grantMembership(cfg, campaignId, other.userId, "player");
+
+    const link = (person: LivePerson, characterId: string, campaign: string | null) =>
+      person.client
+        .from("characters")
+        .update({ campaign_id: campaign })
+        .eq("id", characterId)
+        .select("id");
+
+    await signInAs(owner);
+    const firstId = await createCharacter({
+      uid: owner.userId,
+      name: "First",
+      stats: {},
+      assets: [],
+    });
+    const secondId = await createCharacter({
+      uid: owner.userId,
+      name: "Second",
+      stats: {},
+      assets: [],
+    });
+    await signOut();
+    await signInAs(other);
+    const otherId = await createCharacter({
+      uid: other.userId,
+      name: "Other",
+      stats: {},
+      assets: [],
+    });
+    await signOut();
+
+    // The owner's first character links fine.
+    const linked = await link(owner, firstId, campaignId);
+    expect(linked.error).toBeNull();
+
+    // A second character from the same player in the same campaign fails.
+    const duplicate = await link(owner, secondId, campaignId);
+    expect(duplicate.error).not.toBeNull();
+
+    // A different player's character in the same campaign succeeds.
+    const otherLinked = await link(other, otherId, campaignId);
+    expect(otherLinked.error).toBeNull();
+
+    // Swapping — unlinking the old character first — succeeds.
+    const unlinked = await link(owner, firstId, null);
+    expect(unlinked.error).toBeNull();
+    const swapped = await link(owner, secondId, campaignId);
+    expect(swapped.error).toBeNull();
+    const rows = await owner.client
+      .from("characters")
+      .select("id, campaign_id")
+      .in("id", [firstId, secondId]);
+    expect(rows.error).toBeNull();
+    const byId = new Map((rows.data ?? []).map((row) => [row.id, row]));
+    expect(byId.get(firstId)?.campaign_id).toBeNull();
+    expect(byId.get(secondId)?.campaign_id).toBe(campaignId);
+  });
 });

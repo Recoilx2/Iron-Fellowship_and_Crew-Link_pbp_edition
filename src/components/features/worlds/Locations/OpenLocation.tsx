@@ -29,6 +29,7 @@ import {
 } from "api-calls/storage/imageLimits";
 import { useSnackbar } from "providers/SnackbarProvider";
 import { GuideAndPlayerHeader, GuideOnlyHeader } from "../common";
+import { VisibilityToggleButton } from "../common/VisibilityToggleButton";
 import { useGameSystemValue } from "hooks/useGameSystemValue";
 import { GAME_SYSTEMS } from "types/GameSystems.type";
 import {
@@ -200,6 +201,16 @@ export function OpenLocation(props: OpenLocationProps) {
       icon={icon}
       actions={
         <>
+          {isGuidedGame && showGMFields && (
+            <VisibilityToggleButton
+              sharedWithPlayers={location.sharedWithPlayers}
+              onToggle={() =>
+                updateLocation(locationId, {
+                  sharedWithPlayers: !location.sharedWithPlayers,
+                }).catch(() => {})
+              }
+            />
+          )}
           {showGMFields && (
             <>
               <Tooltip title={"Move Location"}>

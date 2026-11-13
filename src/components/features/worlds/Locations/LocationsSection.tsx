@@ -19,9 +19,14 @@ export interface LocationsSectionProps {
 export function LocationsSection(props: LocationsSectionProps) {
   const { openNPCTab, showHiddenTag, hideSidebar } = props;
 
-  const { showGMTips } = useWorldPermissions();
+  const { showGMTips, showGMFields, isGuidedGame } = useWorldPermissions();
 
   const shouldShowHiddenTag = showGMTips && showHiddenTag;
+  const canToggleVisibility = showGMFields && isGuidedGame;
+
+  const updateLocation = useStore(
+    (store) => store.worlds.currentWorld.currentWorldLocations.updateLocation
+  );
 
   const worldId = useStore((store) => store.worlds.currentWorld.currentWorldId);
   const locations = useStore(
@@ -135,6 +140,13 @@ export function LocationsSection(props: LocationsSectionProps) {
                 location={locations[locationId]}
                 onClick={() => setOpenLocationId(locationId)}
                 showHiddenTag={shouldShowHiddenTag}
+                showVisibilityToggle={canToggleVisibility}
+                onVisibilityToggle={() =>
+                  updateLocation(locationId, {
+                    sharedWithPlayers:
+                      !locations[locationId].sharedWithPlayers,
+                  }).catch(() => {})
+                }
               />
             </Grid>
           ) : null
