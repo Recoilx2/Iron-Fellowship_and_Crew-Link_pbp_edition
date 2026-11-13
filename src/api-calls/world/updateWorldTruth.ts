@@ -25,11 +25,12 @@ export const updateWorldTruth = createApiFunction<
     ...((data as { new_truths: Record<string, Truth> }).new_truths ?? {}),
     [truthKey]: truth,
   };
-  const { error } = await client
+  const { data: updated, error } = await client
     .from(WORLDS_TABLE)
     .update({ new_truths: merged })
-    .eq("id", worldId);
-  if (error) {
-    throw error;
+    .eq("id", worldId)
+    .select("id");
+  if (error || !updated || updated.length === 0) {
+    throw error ?? new Error("Failed to update world truth.");
   }
 }, "Failed to update world truth.");
