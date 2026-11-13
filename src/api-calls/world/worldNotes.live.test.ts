@@ -143,16 +143,17 @@ describe.skipIf(!config)("world notes on the note server", () => {
     connected.push(note);
     note.doc.getText("body").insert(0, "A GM describes the vault.");
 
-    const stored = await waitFor(async () => {
+    const stored = await waitFor<string>(async () => {
       const read = await owner.client
         .from("world_note_contents")
         .select("content")
         .eq("note_id", publicNoteId)
         .maybeSingle();
-      return read.data?.content ? (read.data.content as string) : null;
+      const content: unknown = read.data?.content;
+      return typeof content === "string" && content ? content : null;
     }, 60000);
     const fresh = new Y.Doc();
-    Y.applyUpdate(fresh, decodeNoteContent(stored as string));
+    Y.applyUpdate(fresh, decodeNoteContent(stored));
     expect(fresh.getText("body").toString()).toBe(
       "A GM describes the vault."
     );
@@ -168,18 +169,17 @@ describe.skipIf(!config)("world notes on the note server", () => {
     connected.push(note);
     note.doc.getText("body").insert(0, "A world of iron and snow.");
 
-    const stored = await waitFor(async () => {
+    const stored = await waitFor<string>(async () => {
       const read = await owner.client
         .from("worlds")
         .select("description")
         .eq("id", worldId)
         .maybeSingle();
-      return read.data?.description
-        ? (read.data.description as string)
-        : null;
+      const description: unknown = read.data?.description;
+      return typeof description === "string" && description ? description : null;
     }, 60000);
     const fresh = new Y.Doc();
-    Y.applyUpdate(fresh, decodeNoteContent(stored as string));
+    Y.applyUpdate(fresh, decodeNoteContent(stored));
     expect(fresh.getText("body").toString()).toBe("A world of iron and snow.");
   });
 
