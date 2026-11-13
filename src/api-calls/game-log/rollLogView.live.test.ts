@@ -90,13 +90,11 @@ describe.skipIf(!config)("campaign roll log as a view of roll posts", () => {
     await signOut();
     await signInAs(player);
     await joinCampaign({ campaignId });
-    const { data: character, error: characterError } = await player.client
+    const kiraId = crypto.randomUUID();
+    const { error: characterError } = await player.client
       .from("characters")
-      .insert({ owner_id: player.userId, name: "Kira Vey", campaign_id: campaignId })
-      .select("id")
-      .single();
+      .insert({ id: kiraId, owner_id: player.userId, name: "Kira Vey", campaign_id: campaignId });
     expect(characterError).toBeNull();
-    const kiraId = (character as { id: string }).id;
     await signOut();
     const { data, error } = await gm.client
       .from(CHAT_CHANNELS_TABLE)

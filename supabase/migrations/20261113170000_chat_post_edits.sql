@@ -86,6 +86,7 @@ GRANT UPDATE ON public.chat_posts TO authenticated;
 CREATE OR REPLACE FUNCTION private.enforce_chat_post_edits()
 RETURNS trigger
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE

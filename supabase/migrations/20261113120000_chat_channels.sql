@@ -73,21 +73,17 @@ CREATE TRIGGER chat_channels_updated_at
   BEFORE UPDATE ON public.chat_channels
   FOR EACH ROW EXECUTE FUNCTION public.handle_campaign_updated_at();
 
--- The starting channels stay: no archive may retire them, no delete may
--- remove them, and the starting flag itself never flips either way.
--- Renaming stays allowed so a GM can title the opening scene. Inserts
--- already reject starting rows above; this trigger backstops the rest.
+-- The starting channels stay: no archive may retire them, and the starting
+-- flag itself never flips either way. Renaming stays allowed so a GM can
+-- title the opening scene. Direct deletes already fail closed -- there is
+-- no DELETE policy above -- so this trigger guards updates only, letting a
+-- campaign's channels follow it on cascade delete. Inserts already reject
+-- starting rows above; this trigger backstops the rest.
 CREATE OR REPLACE FUNCTION public.keep_starting_channels()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  IF TG_OP = 'DELETE' THEN
-    IF OLD.is_starting THEN
-      RAISE EXCEPTION 'starting channels cannot be deleted';
-    END IF;
-    RETURN OLD;
-  END IF;
   IF OLD.is_starting IS DISTINCT FROM NEW.is_starting THEN
     RAISE EXCEPTION 'starting channels stay starting channels';
   END IF;
@@ -100,7 +96,7 @@ $$;
 
 DROP TRIGGER IF EXISTS chat_channels_keep_starting ON public.chat_channels;
 CREATE TRIGGER chat_channels_keep_starting
-  BEFORE UPDATE OR DELETE ON public.chat_channels
+  BEFORE UPDATE ON public.chat_channels
   FOR EACH ROW EXECUTE FUNCTION public.keep_starting_channels();
 
 -- Creating a campaign creates its starting channels in the same operation:
