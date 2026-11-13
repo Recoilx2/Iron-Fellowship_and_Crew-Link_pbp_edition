@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot, Root } from "react-dom/client";
 import { ThemeProvider, createTheme } from "@mui/material";
@@ -118,7 +118,9 @@ vi.mock("api-calls/chat/archiveChannel", () => ({
 }));
 vi.mock("../CharacterTab", () => ({ CharacterTab: () => null }));
 vi.mock("../TracksTab", () => ({ TracksTab: () => null }));
-vi.mock("../NotesTab", () => ({ NotesTab: () => null }));
+vi.mock("../MyNotesTab", () => ({
+  MyNotesTab: () => <div>My notes pane</div>,
+}));
 vi.mock("../WorldTab", () => ({ WorldTab: () => null }));
 vi.mock("components/shared/UserAvatar", () => ({
   UserAvatar: ({ uid }: { uid: string }) => <span>{`Avatar ${uid}`}</span>,
@@ -138,6 +140,24 @@ const theme = createTheme();
 describe("ChatTab channels", () => {
   let root: Root | undefined;
   let container: HTMLDivElement | undefined;
+
+  beforeEach(() => {
+    // Wide viewport: the desktop right pane with the campaign screens is
+    // part of the DOM, like the phone bottom navigation below it.
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        matches: true,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    });
+  });
 
   afterEach(() => {
     act(() => root?.unmount());
@@ -368,5 +388,36 @@ describe("ChatTab channels", () => {
     expect(view.textContent).toContain("# In character");
     expect(view.textContent).toContain("Feed for ic");
     expect(view.textContent).toContain("Composer for In character");
+  });
+
+  it("opens My notes from the chat right pane in one step (desktop)", () => {
+    const view = render();
+
+    const myNotesTab = view.querySelectorAll('[role="tab"]');
+    const names = Array.from(myNotesTab).map(
+      (tab) => tab.textContent ?? ""
+    );
+    expect(names).toContain("My notes");
+
+    act(() => {
+      Array.from(myNotesTab)
+        .find((tab) => tab.textContent === "My notes")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(view.textContent).toContain("My notes pane");
+  });
+
+  it("opens My notes from the bottom navigation in one step (phone)", () => {
+    const view = render();
+
+    const myNotesAction = Array.from(view.querySelectorAll("button")).find(
+      (button) => button.textContent === "My notes"
+    );
+    expect(myNotesAction).toBeTruthy();
+    act(() => {
+      myNotesAction?.click();
+    });
+    expect(view.textContent).toContain("My notes pane");
+    expect(view.textContent).not.toContain("Posts in this channel appear here");
   });
 });

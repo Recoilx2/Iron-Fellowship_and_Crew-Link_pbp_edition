@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import {
   AvatarGroup,
+  BottomNavigation,
+  BottomNavigationAction,
   Box,
   Button,
   Card,
@@ -20,6 +23,7 @@ import {
   ListItemText,
   ListSubheader,
   MenuItem,
+  Paper,
   Stack,
   TextField,
   Typography,
@@ -28,6 +32,11 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/AddCircleOutline";
 import LockIcon from "@mui/icons-material/Lock";
+import ChatIcon from "@mui/icons-material/Forum";
+import PersonIcon from "@mui/icons-material/Person";
+import TracksIcon from "@mui/icons-material/LinearScale";
+import WorldIcon from "@mui/icons-material/Public";
+import NotesIcon from "@mui/icons-material/StickyNote2";
 import { StyledTab, StyledTabs } from "components/shared/StyledTabs";
 import { useStore } from "stores/store";
 import { useListenToChatChannels } from "stores/chat/useListenToChatChannels";
@@ -45,7 +54,7 @@ import { ChatFeed } from "./ChatFeed";
 import { ChatComposer } from "./ChatComposer";
 import { CharacterTab } from "./CharacterTab";
 import { TracksTab } from "./TracksTab";
-import { NotesTab } from "./NotesTab";
+import { MyNotesTab } from "./MyNotesTab";
 import { WorldTab } from "./WorldTab";
 
 export interface RosterEntry {
@@ -83,6 +92,8 @@ function sortChannels(channels: ChannelWithId[]): ChannelWithId[] {
  * list beside the feed, with the other campaign tabs one step away. Posts
  * arrive in the feed below: the latest page first, older pages on scroll,
  * new posts live, and the composer keeps an unsent draft per channel.
+ * My notes (ticket #31) sits in the right pane on desktop and on the bottom
+ * navigation on phones.
  *
  * Private channels sit under their own section with a lock: GMs create them
  * for chosen people and move people in and out at any time, and only their
@@ -118,6 +129,7 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
 
   const [showArchived, setShowArchived] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
+  const [phoneScreen, setPhoneScreen] = useState<PhoneScreen>("Chat");
   const [createKind, setCreateKind] = useState<ChannelKind | undefined>(
     undefined
   );
@@ -207,76 +219,90 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
       <Box
         sx={{ flexGrow: 1, display: "flex", flexDirection: "column", minWidth: 0 }}
       >
-        <Stack
-          direction={"row"}
-          spacing={1}
-          sx={{
-            p: 1,
-            overflowX: "auto",
-            borderBottom: 1,
-            borderColor: "divider",
-            flexShrink: 0,
-            display: { xs: "flex", md: "none" },
-          }}
-        >
-          <Chip
-            label={"All"}
-            variant={"outlined"}
-            onClick={() => setPeopleOpen(true)}
-          />
-          {open.map((channel) => (
-            <Chip
-              key={channel.id}
-              label={channelLabel(channel, dmName(channel.id))}
-              color={channel.id === openChannelId ? "primary" : "default"}
-              onClick={() => pick(channel.id)}
-            />
-          ))}
-        </Stack>
-        <ChannelHeader
-          channel={openChannel}
-          members={openChannel ? membersByChannel[openChannel.id] ?? [] : []}
-          dmName={openChannel ? dmName(openChannel.id) : undefined}
-          userMap={userMap}
-          isGM={isGM}
-          onRename={() => setRenaming(true)}
-          onMembers={() => setManagingMembers(true)}
-          onArchive={(archived) =>
-            openChannel &&
-            archiveChannel({ channelId: openChannel.id, archived }).catch(
-              () => {}
-            )
-          }
-        />
-        {openChannel ? (
+        {phoneScreen === "Chat" ? (
           <>
-            <ChatFeed channel={openChannel} />
-            {openChannel.archived ? (
-              <Typography
-                color={"text.secondary"}
-                sx={{
-                  p: 1.5,
-                  textAlign: "center",
-                  borderTop: 1,
-                  borderColor: "divider",
-                }}
-              >
-                This channel is archived. New posts are closed.
-              </Typography>
+            <Stack
+              direction={"row"}
+              spacing={1}
+              sx={{
+                p: 1,
+                overflowX: "auto",
+                borderBottom: 1,
+                borderColor: "divider",
+                flexShrink: 0,
+                display: { xs: "flex", md: "none" },
+              }}
+            >
+              <Chip
+                label={"All"}
+                variant={"outlined"}
+                onClick={() => setPeopleOpen(true)}
+              />
+              {open.map((channel) => (
+                <Chip
+                  key={channel.id}
+                  label={channelLabel(channel, dmName(channel.id))}
+                  color={channel.id === openChannelId ? "primary" : "default"}
+                  onClick={() => pick(channel.id)}
+                />
+              ))}
+            </Stack>
+            <ChannelHeader
+              channel={openChannel}
+              members={openChannel ? membersByChannel[openChannel.id] ?? [] : []}
+              dmName={openChannel ? dmName(openChannel.id) : undefined}
+              userMap={userMap}
+              isGM={isGM}
+              onRename={() => setRenaming(true)}
+              onMembers={() => setManagingMembers(true)}
+              onArchive={(archived) =>
+                openChannel &&
+                archiveChannel({ channelId: openChannel.id, archived }).catch(
+                  () => {}
+                )
+              }
+            />
+            {openChannel ? (
+              <>
+                <ChatFeed channel={openChannel} />
+                {openChannel.archived ? (
+                  <Typography
+                    color={"text.secondary"}
+                    sx={{
+                      p: 1.5,
+                      textAlign: "center",
+                      borderTop: 1,
+                      borderColor: "divider",
+                    }}
+                  >
+                    This channel is archived. New posts are closed.
+                  </Typography>
+                ) : (
+                  <ChatComposer channel={openChannel} />
+                )}
+              </>
             ) : (
-              <ChatComposer channel={openChannel} />
+              <Box sx={{ flexGrow: 1, overflowY: "auto", py: 1 }}>
+                <Typography
+                  color={"text.secondary"}
+                  sx={{ p: 3, textAlign: "center" }}
+                >
+                  Posts in this channel appear here.
+                </Typography>
+              </Box>
             )}
           </>
         ) : (
-          <Box sx={{ flexGrow: 1, overflowY: "auto", py: 1 }}>
-            <Typography
-              color={"text.secondary"}
-              sx={{ p: 3, textAlign: "center" }}
-            >
-              Posts in this channel appear here.
-            </Typography>
+          <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
+            {phoneScreen === "Character" && (
+              <CharacterTab openInviteDialog={openInviteDialog} />
+            )}
+            {phoneScreen === "Tracks" && <TracksTab />}
+            {phoneScreen === "World" && <WorldTab />}
+            {phoneScreen === "My notes" && <MyNotesTab />}
           </Box>
         )}
+        <PhoneBottomNavigation screen={phoneScreen} onPick={setPhoneScreen} />
       </Box>
       {wide && (
         <Box
@@ -835,7 +861,7 @@ function CampaignScreens(props: { openInviteDialog: () => void }) {
   return (
     <>
       <StyledTabs value={tab} onChange={(_, v) => setTab(v)} variant={"scrollable"}>
-        {["Character", "Tracks", "World", "Notes"].map((name) => (
+        {["Character", "Tracks", "World", "My notes"].map((name) => (
           <StyledTab key={name} label={name} value={name} />
         ))}
       </StyledTabs>
@@ -844,7 +870,49 @@ function CampaignScreens(props: { openInviteDialog: () => void }) {
       )}
       {tab === "Tracks" && <TracksTab />}
       {tab === "World" && <WorldTab />}
-      {tab === "Notes" && <NotesTab />}
+      {tab === "My notes" && <MyNotesTab />}
     </>
+  );
+}
+
+type PhoneScreen = "Chat" | "Character" | "Tracks" | "World" | "My notes";
+
+const phoneScreens: Array<{
+  key: PhoneScreen;
+  icon: ReactNode;
+}> = [
+  { key: "Chat", icon: <ChatIcon /> },
+  { key: "Character", icon: <PersonIcon /> },
+  { key: "Tracks", icon: <TracksIcon /> },
+  { key: "World", icon: <WorldIcon /> },
+  { key: "My notes", icon: <NotesIcon /> },
+];
+
+function PhoneBottomNavigation(props: {
+  screen: PhoneScreen;
+  onPick: (screen: PhoneScreen) => void;
+}) {
+  const { screen, onPick } = props;
+  return (
+    <Paper
+      square
+      elevation={3}
+      sx={{ display: { xs: "block", md: "none" }, flexShrink: 0 }}
+    >
+      <BottomNavigation
+        showLabels
+        value={screen}
+        onChange={(_, next) => onPick(next)}
+      >
+        {phoneScreens.map((item) => (
+          <BottomNavigationAction
+            key={item.key}
+            value={item.key}
+            label={item.key}
+            icon={item.icon}
+          />
+        ))}
+      </BottomNavigation>
+    </Paper>
   );
 }

@@ -67,6 +67,7 @@ export function listenToNotes(
                 title: row.title,
                 order: row.sort_order,
                 shared: row.shared,
+                authorId: row.created_by,
               }))
               .sort((n1, n2) => n1.order - n2.order)
           );
