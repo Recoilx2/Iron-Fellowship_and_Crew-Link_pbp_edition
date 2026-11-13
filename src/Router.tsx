@@ -49,6 +49,11 @@ const router = createBrowserRouter(
         shouldRevalidate={() => false}
       >
         <Route index lazy={() => import("pages/Home")} />
+        {/* PROTOTYPE (#6): throwaway chat screen variants, sample data only. */}
+        <Route
+          path={"/prototype/chat"}
+          lazy={() => import("pages/Campaign/ChatPrototype")}
+        />
         {/* Authenticated Pages */}
         <Route>
           <Route path={basePaths[BASE_ROUTES.CHARACTER]}>

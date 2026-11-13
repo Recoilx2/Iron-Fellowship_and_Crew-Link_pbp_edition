@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prototype:chat": "VITE_GAME_SYSTEM=ironsworn VITE_FAVICON_PATH=/theme/sunset.svg VITE_SUPABASE_URL=http://127.0.0.1:54399 VITE_SUPABASE_ANON_KEY=prototype-no-backend vite --host --open /prototype/chat",
     "lint": "eslint ./src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "format": "eslint ./src --ext ts,tsx --fix",
     "build": "tsc && vite build",

@@ -29,6 +29,7 @@ export const openPaths = [
   basePaths[BASE_ROUTES.LOGIN],
   basePaths[BASE_ROUTES.SIGNUP],
   basePaths[BASE_ROUTES.HOME],
+  "/prototype/chat", // PROTOTYPE (#6)
   basePaths[BASE_ROUTES.HOMEBREW] + "/" + homebrewPaths[HOMEBREW_ROUTES.EDITOR],
 ];
 
