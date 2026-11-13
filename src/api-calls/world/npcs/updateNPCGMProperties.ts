@@ -35,7 +35,7 @@ export const updateNPCGMProperties = createApiFunction<Params, void>(
       first_look?: string | null;
       revealed_aspect?: string | null;
     };
-    const { error } = await client
+    const { data: upserted, error } = await client
       .from(WORLD_NPC_GM_DETAILS_TABLE)
       .upsert({
         npc_id: npcId,
@@ -49,9 +49,10 @@ export const updateNPCGMProperties = createApiFunction<Params, void>(
           npcGMProperties.firstLook ?? current.first_look ?? null,
         revealed_aspect:
           npcGMProperties.revealedAspect ?? current.revealed_aspect ?? null,
-      });
-    if (error) {
-      throw error;
+      })
+      .select("npc_id");
+    if (error || !upserted || upserted.length === 0) {
+      throw error ?? new Error("Failed to update npc.");
     }
   },
   "Failed to update npc."
