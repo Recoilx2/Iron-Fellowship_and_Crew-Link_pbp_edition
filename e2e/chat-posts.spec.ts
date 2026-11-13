@@ -154,12 +154,12 @@ test.describe("chat text posts", () => {
 
       // Both browsers show the NPC as speaker with a GM tag beside it.
       await expect(gmPage.getByText("E2E Elder").first()).toBeVisible();
-      await expect(gmPage.getByText(text)).toBeVisible();
+      await expect(gmPage.getByText(text, { exact: true })).toBeVisible();
       await expect(
         gmPage.getByText("GM", { exact: true }).first()
       ).toBeVisible();
       await expect(playerPage.getByText("E2E Elder").first()).toBeVisible();
-      await expect(playerPage.getByText(text)).toBeVisible();
+      await expect(playerPage.getByText(text, { exact: true })).toBeVisible();
       await expect(
         playerPage.getByText("GM", { exact: true }).first()
       ).toBeVisible();

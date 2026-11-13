@@ -60,7 +60,10 @@ describe.skipIf(!config)("listenToRows against the local stack", () => {
     });
     try {
       expect(channelSpy).toHaveBeenCalledWith(
-        `user-settings:${owner.userId}`,
+        // One topic per subscription (issue #116): the topic keeps the
+        // requested channel name as a prefix plus a per-subscription
+        // suffix, so it is never byte-identical.
+        expect.stringContaining(`user-settings:${owner.userId}`),
         // The installed SDK merges its broadcast/presence defaults into the
         // params object in place, so exact equality can never match. Match
         // the private flag as a subset: the channel must still be private.
