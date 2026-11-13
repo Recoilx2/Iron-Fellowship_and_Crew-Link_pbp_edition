@@ -44,9 +44,17 @@ export interface WorldNoteContentRow {
 
 export function constructWorldNoteRowChannelName(
   kind: WorldNoteItemKind,
-  itemId: string
+  itemId: string,
+  gmOnly = false
 ): string {
-  return `world-note-ids:${kind}:${itemId}`;
+  // GM-only and public listeners for one item must never share a realtime
+  // topic (#83): supabase-js channel() creates-OR-REUSES by topic, so a
+  // shared topic hands the second listenToRows an already-subscribed
+  // channel and realtime-js throws on the second .on(). The :gm suffix
+  // keeps the 'world%' realtime allowlist prefix, so no policy change.
+  return gmOnly
+    ? `world-note-ids:${kind}:${itemId}:gm`
+    : `world-note-ids:${kind}:${itemId}`;
 }
 
 export function constructWorldNoteRowFilter(
@@ -271,7 +279,7 @@ export function listenToWorldItemNotes(
 
   const rowsUnsubscribe = listenToRows<WorldNoteRow>({
     client,
-    channelName: constructWorldNoteRowChannelName(kind, itemId),
+    channelName: constructWorldNoteRowChannelName(kind, itemId, gmOnly),
     bindings: [
       {
         type: "postgres_changes",
