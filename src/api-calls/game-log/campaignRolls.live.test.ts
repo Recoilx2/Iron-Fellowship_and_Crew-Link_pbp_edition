@@ -7,8 +7,8 @@ import { CampaignType } from "api-calls/campaign/_campaign.type";
 import { addRoll } from "api-calls/game-log/addRoll";
 import { updateLog } from "api-calls/game-log/updateLog";
 import { removeLog } from "api-calls/game-log/removeLog";
-import { deleteAllLogs } from "api-calls/game-log/deleteAllLogs";
 import { listenToLogs } from "api-calls/game-log/listenToLogs";
+import { campaignRollToColumns } from "api-calls/game-log/_getRef";
 import { getAllLogsForExport } from "api-calls/game-log/getAllLogsForExport";
 import { ROLL_RESULT, ROLL_TYPE, type Roll } from "types/DieRolls.type";
 import {
@@ -93,6 +93,9 @@ describe.skipIf(!config)("campaign roll log end to end", () => {
   it("shares rolls live with members, and nobody else", { timeout: 120000 }, async () => {
     const { gm, player, outsider, campaignId } = await setUpLog();
 
+    // The singleton keeps the player's session for the whole test; the GM
+    // and the outsider act through their own clients, so the subscription
+    // never rides a mid-stream identity switch (which stalls the channel).
     const updated: Array<[string, Roll]> = [];
     const removed: string[] = [];
     unsubscribes.push(
@@ -117,27 +120,33 @@ describe.skipIf(!config)("campaign roll log end to end", () => {
     );
     expect(updated.at(-1)?.[1].rollLabel).toBe("wits");
 
-    // An outsider reads nothing and writes nothing.
+    // An outsider reads nothing and writes nothing. The outsider writes
+    // through their own client, so the singleton never leaves the player.
     const outsiderRows = await outsider.client
       .from("campaign_rolls")
       .select("id")
       .eq("campaign_id", campaignId);
     expect(outsiderRows.error).toBeNull();
     expect(outsiderRows.data ?? []).toEqual([]);
-    await signOut();
-    await signInAs(outsider);
-    await expect(
-      addRoll({ campaignId, roll: statRoll(null, outsider.userId) })
-    ).rejects.toBeTruthy();
+    const deniedRoll = await outsider.client
+      .from("campaign_rolls")
+      .insert(campaignRollToColumns(campaignId, statRoll(null, outsider.userId)));
+    expect(deniedRoll.error).not.toBeNull();
 
-    // Only the author or a GM changes a roll.
-    await signOut();
-    await signInAs(gm);
-    await updateLog({
-      campaignId,
-      logId,
-      log: { ...statRoll(null, player.userId), rollLabel: "GM edited" },
-    });
+    // Only the author or a GM changes a roll: the GM edits through their
+    // own client — byte-identical to updateLog — and the player follows.
+    const edited = await gm.client
+      .from("campaign_rolls")
+      .update(
+        campaignRollToColumns(campaignId, {
+          ...statRoll(null, player.userId),
+          rollLabel: "GM edited",
+        })
+      )
+      .eq("id", logId)
+      .select("id");
+    expect(edited.error).toBeNull();
+    expect(edited.data ?? []).not.toEqual([]);
     await waitFor(() =>
       updated.some(
         ([id, roll]) => id === logId && roll.rollLabel === "GM edited"
@@ -145,6 +154,7 @@ describe.skipIf(!config)("campaign roll log end to end", () => {
         ? updated
         : null
     );
+    // The player authored this roll, so they can remove it themselves.
     await removeLog({ campaignId, logId });
     await waitFor(() => (removed.includes(logId) ? removed : null));
 
@@ -152,8 +162,8 @@ describe.skipIf(!config)("campaign roll log end to end", () => {
       campaignId,
       roll: statRoll(null, gm.userId),
     });
-    await signOut();
-    await signInAs(player);
+    // The singleton is still the player, so no switch is needed to prove a
+    // non-author cannot touch the GM's roll.
     await expect(
       updateLog({
         campaignId,
@@ -162,9 +172,12 @@ describe.skipIf(!config)("campaign roll log end to end", () => {
       })
     ).rejects.toBeTruthy();
     await expect(removeLog({ campaignId, logId: secondId })).rejects.toBeTruthy();
-    await signOut();
-    await signInAs(gm);
-    await deleteAllLogs({ campaignId });
+    // Cleanup runs as the GM through their own client.
+    const cleaned = await gm.client
+      .from("campaign_rolls")
+      .delete()
+      .eq("campaign_id", campaignId);
+    expect(cleaned.error).toBeNull();
     const remaining = await gm.client
       .from("campaign_rolls")
       .select("id")
@@ -176,20 +189,22 @@ describe.skipIf(!config)("campaign roll log end to end", () => {
   it("hides GM-only rolls from players, including over live updates", { timeout: 120000 }, async () => {
     const { gm, player, campaignId } = await setUpLog();
 
-    // The player follows the log live.
+    // The player follows the log live. The singleton keeps the player's
+    // session until the live assertions are done; the GM acts through
+    // their own client throughout, so the subscription never rides a
+    // mid-stream identity switch.
     const updated: Array<[string, Roll]> = [];
-    unsubscribes.push(
-      listenToLogs({
-        isGM: false,
-        campaignId,
-        totalLogsToLoad: 25,
-        updateLog: (rollId, roll) => updated.push([rollId, roll]),
-        removeLog: () => {},
-        onError: (error) => {
-          throw new Error(error);
-        },
-      })
-    );
+    const stopListening = listenToLogs({
+      isGM: false,
+      campaignId,
+      totalLogsToLoad: 25,
+      updateLog: (rollId, roll) => updated.push([rollId, roll]),
+      removeLog: () => {},
+      onError: (error) => {
+        throw new Error(error);
+      },
+    });
+    unsubscribes.push(stopListening);
     const openId = await addRoll({
       campaignId,
       roll: statRoll(null, player.userId),
@@ -225,7 +240,35 @@ describe.skipIf(!config)("campaign roll log end to end", () => {
     expect(playerRows.error).toBeNull();
     expect(playerRows.data?.map((row) => row.id)).toEqual([openId]);
 
-    // Export matches: GMs see everything, players only the open rolls.
+    // Revealing the roll opens it to the player live: the GM writes through
+    // their own client — byte-identical to updateLog — while the player
+    // still listens.
+    const revealed = await gm.client
+      .from("campaign_rolls")
+      .update(
+        campaignRollToColumns(
+          campaignId,
+          statRoll(null, gm.userId, { gmsOnly: false })
+        )
+      )
+      .eq("id", secretId)
+      .select("id");
+    expect(revealed.error).toBeNull();
+    expect(revealed.data ?? []).not.toEqual([]);
+    await waitFor(() =>
+      updated.some(([id]) => id === secretId) ? updated : null
+    );
+
+    // The live assertions are done: pause the subscription before the
+    // export identity switches below. (Unsubscribing is idempotent, so the
+    // afterEach cleanup stays safe.)
+    stopListening();
+
+    // Export matches: GMs see everything, players only the open rolls. The
+    // singleton takes each session in turn now that nothing listens — the
+    // GM export must run as the GM, or row-level security hides the secret.
+    await signOut();
+    await signInAs(gm);
     const gmExport = await getAllLogsForExport({ campaignId, isGM: true });
     expect(gmExport.map((entry) => entry.id).sort()).toEqual(
       [openId, secretId].sort()
@@ -246,18 +289,6 @@ describe.skipIf(!config)("campaign roll log end to end", () => {
         log: statRoll(null, player.userId, { gmsOnly: true }),
       })
     ).rejects.toBeTruthy();
-
-    // Revealing the roll opens it to the player live.
-    await signOut();
-    await signInAs(gm);
-    await updateLog({
-      campaignId,
-      logId: secretId,
-      log: statRoll(null, gm.userId, { gmsOnly: false }),
-    });
-    await waitFor(() =>
-      updated.some(([id]) => id === secretId) ? updated : null
-    );
   });
 
   it("cuts a removed member off the roll log at once", { timeout: 120000 }, async () => {
