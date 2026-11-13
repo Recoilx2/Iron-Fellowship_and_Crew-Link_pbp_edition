@@ -9,10 +9,20 @@ export interface NPCListProps {
   locations: { [key: string]: LocationWithGMProperties };
   openNPC: (npcId: string) => void;
   showHiddenTag?: boolean;
+  showVisibilityToggle?: boolean;
+  onVisibilityToggle?: (npcId: string) => void;
 }
 
 export function NPCList(props: NPCListProps) {
-  const { filteredNPCIds, npcs, locations, openNPC, showHiddenTag } = props;
+  const {
+    filteredNPCIds,
+    npcs,
+    locations,
+    openNPC,
+    showHiddenTag,
+    showVisibilityToggle,
+    onVisibilityToggle,
+  } = props;
 
   return (
     <Grid container sx={{ p: 2 }} spacing={2}>
@@ -23,6 +33,10 @@ export function NPCList(props: NPCListProps) {
             locations={locations}
             openNPC={() => openNPC(npcId)}
             showHiddenTag={showHiddenTag}
+            showVisibilityToggle={showVisibilityToggle}
+            onVisibilityToggle={
+              onVisibilityToggle ? () => onVisibilityToggle(npcId) : undefined
+            }
           />
         </Grid>
       ))}
