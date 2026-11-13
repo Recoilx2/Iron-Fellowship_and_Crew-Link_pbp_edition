@@ -100,8 +100,10 @@ describe.skipIf(!config)("world notes on the note server", () => {
 
   async function setUpLinkedLocation(): Promise<{
     owner: LivePerson;
+    gm: LivePerson;
     player: LivePerson;
     outsider: LivePerson;
+    campaignId: string;
     worldId: string;
     locationId: string;
     publicNoteId: string;
@@ -134,7 +136,7 @@ describe.skipIf(!config)("world notes on the note server", () => {
     if (!publicNoteId || !gmNoteId) {
       throw new Error("world item notes were not created with the location");
     }
-    return { owner, player, outsider, worldId, locationId, publicNoteId, gmNoteId };
+    return { owner, gm, player, outsider, campaignId, worldId, locationId, publicNoteId, gmNoteId };
   }
 
   it("persists a GM's edit to the world note row within seconds", { timeout: 120000 }, async () => {
@@ -281,5 +283,37 @@ describe.skipIf(!config)("world notes on the note server", () => {
     expect(playerNote.doc.getText("body").toString()).not.toContain(
       "GM only now"
     );
+  });
+
+  it("cuts off a campaign GM from world notes when the world is unlinked (#106)", { timeout: 120000 }, async () => {
+    const { gm, campaignId, gmNoteId } = await setUpLinkedLocation();
+
+    // The campaign GM reads the GM-only world note through the campaign link.
+    const gmNote = await connectNote(cfg, gm, `world-notes/${gmNoteId}`);
+    connected.push(gmNote);
+    gmNote.provider.on("close", () => gmNote.events.push("close"));
+
+    // Unlink the world from the campaign: the GM loses world access, so
+    // their connection closes within seconds.
+    await signInAs(gm);
+    const unlinked = await gm.client
+      .from("campaigns")
+      .update({ world_id: null })
+      .eq("id", campaignId)
+      .select("id");
+    expect(unlinked.error).toBeNull();
+    expect((unlinked.data ?? []).map((row) => row.id)).toEqual([campaignId]);
+    await signOut();
+
+    await waitFor(
+      () => (gmNote.events.includes("close") ? true : null),
+      60000
+    );
+
+    // Reconnecting is refused: the world is no longer reachable through
+    // any of the GM's campaigns.
+    await expect(
+      connectNote(cfg, gm, `world-notes/${gmNoteId}`)
+    ).rejects.toThrow(/access refused/);
   });
 });

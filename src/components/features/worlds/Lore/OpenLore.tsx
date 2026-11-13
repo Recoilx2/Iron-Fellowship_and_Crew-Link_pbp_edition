@@ -25,6 +25,7 @@ import { mergeIcons } from "components/shared/GameIcons/mergeIcons";
 import { IconColors } from "types/Icon.type";
 import { PageWithImage } from "../common/PageWithImage";
 import { DebouncedOracleInput } from "components/shared/DebouncedOracleInput";
+import { VisibilityToggleButton } from "../common/VisibilityToggleButton";
 import { getWorldNoteDocumentName } from "config/hocuspocus.config";
 
 export interface OpenLoreProps {
@@ -113,6 +114,16 @@ export function OpenLore(props: OpenLoreProps) {
       icon={icon}
       actions={
         <>
+          {isGuidedGame && showGMFields && (
+            <VisibilityToggleButton
+              sharedWithPlayers={lore.sharedWithPlayers}
+              onToggle={() =>
+                updateLore(loreId, {
+                  sharedWithPlayers: !lore.sharedWithPlayers,
+                }).catch(() => {})
+              }
+            />
+          )}
           {showGMFields && (
             <Tooltip title={"Delete"}>
               <IconButton onClick={() => handleLoreDelete()}>
