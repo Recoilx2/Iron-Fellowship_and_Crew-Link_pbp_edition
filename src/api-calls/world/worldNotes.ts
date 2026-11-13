@@ -188,11 +188,16 @@ export async function writeWorldNoteContent(
 ): Promise<void> {
   const ids = await ensureWorldItemNotes(worldId, kind, itemId);
   const noteId = gmOnly ? ids.gmNoteId : ids.publicNoteId;
-  const { error } = await getSupabaseClient()
+  // The RETURNING check reads the row back through the SELECT policy, so
+  // an RLS-filtered write returns no rows: rejecting on empty tells a
+  // stranger their write matched nothing instead of resolving silently
+  // (the #69 pattern).
+  const { data: upserted, error } = await getSupabaseClient()
     .from(WORLD_NOTE_CONTENTS_TABLE)
-    .upsert({ note_id: noteId, content: encodeNoteContent(notes) });
-  if (error) {
-    throw error;
+    .upsert({ note_id: noteId, content: encodeNoteContent(notes) })
+    .select("note_id");
+  if (error || !upserted || upserted.length === 0) {
+    throw error ?? new Error("Failed to save note content.");
   }
 }
 
