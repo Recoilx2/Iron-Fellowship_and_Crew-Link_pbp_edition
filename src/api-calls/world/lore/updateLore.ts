@@ -35,12 +35,13 @@ export const updateLore = createApiFunction<LoreParams, void>(
     if (Object.keys(columns).length === 0) {
       return;
     }
-    const { error } = await client
+    const { data: updated, error } = await client
       .from(WORLD_LORE_TABLE)
       .update(columns)
-      .eq("id", loreId);
-    if (error) {
-      throw error;
+      .eq("id", loreId)
+      .select("id");
+    if (error || !updated || updated.length === 0) {
+      throw error ?? new Error("Failed to update lore document.");
     }
   },
   "Failed to update lore document."

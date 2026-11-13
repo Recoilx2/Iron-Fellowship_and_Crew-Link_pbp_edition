@@ -48,11 +48,12 @@ export const updateWorldDescription = createApiFunction<
     return;
   }
 
-  const { error } = await client
+  const { data: updated, error } = await client
     .from(WORLDS_TABLE)
     .update({ description: encoded })
-    .eq("id", worldId);
-  if (error) {
-    throw error;
+    .eq("id", worldId)
+    .select("id");
+  if (error || !updated || updated.length === 0) {
+    throw error ?? new Error("Failed to update world description.");
   }
 }, "Failed to update world description.");

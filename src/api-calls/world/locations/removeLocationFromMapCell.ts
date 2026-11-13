@@ -47,11 +47,12 @@ export const removeLocationFromMapCell = createApiFunction<
     locationIds,
   } as MapEntry;
   map[row] = rowEntry;
-  const { error } = await client
+  const { data: updated, error } = await client
     .from(WORLD_LOCATIONS_TABLE)
     .update({ map: map as unknown as Record<string, Record<string, unknown>> })
-    .eq("id", mapLocationId);
-  if (error) {
-    throw error;
+    .eq("id", mapLocationId)
+    .select("id");
+  if (error || !updated || updated.length === 0) {
+    throw error ?? new Error("Failed to update location.");
   }
 }, "Failed to update location.");
