@@ -271,10 +271,10 @@ test.describe("outline revisions", () => {
           description: "Restore the previous outline version",
         })
         .click();
-      expect(await outlineContents()).toBe(ORIGINAL);
       await expect(
         gmPage.getByRole("textbox", { name: "Note text" })
       ).toContainText(ORIGINAL);
+      expect(await outlineContents()).toBe(ORIGINAL);
       const { data: kept, error: keptError } = await gm.client
         .from("assistant_outline_versions")
         .select("id")
