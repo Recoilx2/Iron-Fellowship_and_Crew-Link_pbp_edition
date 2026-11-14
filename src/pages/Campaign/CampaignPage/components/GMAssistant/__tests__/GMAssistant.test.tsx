@@ -354,7 +354,7 @@ describe("GMAssistant gating", () => {
     expect(close).toBeDefined();
   });
 
-  it("shows Chat, Context and Outline tabs with later tickets disabled", () => {
+  it("shows Chat and Outline tabs with Context disabled until its ticket", () => {
     const view = render();
     act(() => {
       view
@@ -371,9 +371,7 @@ describe("GMAssistant gating", () => {
     const disabled = Array.from(view.querySelectorAll('[role="tab"]')).filter(
       (tab) => tab.hasAttribute("disabled")
     );
-    expect(disabled.map((tab) => tab.textContent)).toEqual(
-      expect.arrayContaining(["Context", "Outline"])
-    );
+    expect(disabled.map((tab) => tab.textContent)).toEqual(["Context"]);
   });
 });
 
