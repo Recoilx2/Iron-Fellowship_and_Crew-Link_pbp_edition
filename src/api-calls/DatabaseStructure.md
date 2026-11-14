@@ -34,6 +34,15 @@ chat_posts                   one row per post in a channel (text, image
 chat_channel_members         one roster row per person in a private channel
                              or direct message (public channels need none:
                              every campaign member is already in them)
+assistant_conversations        one row per GM-started assistant thread
+                             (campaign, owning GM, title); only the owning
+                             GM reads or writes it while still a GM
+assistant_messages             one row per turn in a conversation (user or
+                             assistant, text, stopped-partway flag);
+                             deleting the conversation removes its messages
+assistant_settings             one row per (campaign, GM) holding the GM's
+                             model choice and saved context choice
+                             (references only, never text)
 worlds                       one row per world (+ locations, lore, npcs,
                              notes, images metadata; no sectors: Starforged
                              locations replaced them, see ticket #21)
@@ -69,6 +78,9 @@ Signed links stay short-lived on the client (minutes, re-signed when shown, see
 | NoteDocument                 | [\_notes.type](./notes/_notes.type.ts)                                                                   |
 | ChannelDocument              | [\_chat.type](./chat/_chat.type.ts)                                                                     |
 | PostDocument                 | [\_chat.type](./chat/_chat.type.ts)                                                                     |
+| AssistantConversationDocument | [\_assistant.type](./assistant/_assistant.type.ts)                                                      |
+| AssistantMessageDocument      | [\_assistant.type](./assistant/_assistant.type.ts)                                                      |
+| AssistantSettingsDocument     | [\_assistant.type](./assistant/_assistant.type.ts)                                                      |
 | SettingsDocument             | [\_character-campaign-settings.type](./character-campaign-settings/_character-campaign-settings.type.ts) |
 | **Worlds**                   |                                                                                                          |
 | WorldDocument                | [\_world.type](./world/_world.type.ts)                                                                   |
