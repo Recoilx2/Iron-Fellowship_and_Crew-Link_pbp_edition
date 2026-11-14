@@ -219,7 +219,7 @@ describe.skipIf(!config)("gm assistant data layer end to end", () => {
     ).toEqual([]);
   });
 
-  it("gives a co-GM, a player and an outsider nothing, over REST and live", { timeout: 120000 }, async () => {
+  it("gives a co-GM only their own rows, and a player and an outsider nothing", { timeout: 120000 }, async () => {
     const { gm, coGm, player, outsider, campaignId } = await setUpCampaign();
     await signInAs(gm);
     const conversationId = await createConversation({
@@ -245,7 +245,89 @@ describe.skipIf(!config)("gm assistant data layer end to end", () => {
     });
     await signOut();
 
-    for (const person of [coGm, player, outsider]) {
+    // The co-GM starts with none of the owner's rows, but may keep their
+    // own beside them: each GM instance is all in itself (human decision
+    // on #7). Their own conversation, messages and settings read back,
+    // while the owner's stay invisible and untouchable.
+    expect(
+      await readRowsAs(coGm, ASSISTANT_CONVERSATIONS_TABLE, "campaign_id", campaignId)
+    ).toEqual([]);
+    const ownConversation = await coGm.client
+      .from(ASSISTANT_CONVERSATIONS_TABLE)
+      .insert({
+        id: crypto.randomUUID(),
+        campaign_id: campaignId,
+        owner_id: coGm.userId,
+        title: "Co-GM thinking",
+      });
+    expect(ownConversation.error).toBeNull();
+    const ownConversations = (await readRowsAs(
+      coGm,
+      ASSISTANT_CONVERSATIONS_TABLE,
+      "campaign_id",
+      campaignId
+    )) as Array<{ id: string }>;
+    expect(
+      ownConversations.some((row) => row.id === conversationId)
+    ).toBe(false);
+    expect(
+      await readRowsAs(coGm, ASSISTANT_MESSAGES_TABLE, "conversation_id", conversationId)
+    ).toEqual([]);
+    const ownMessage = await coGm.client
+      .from(ASSISTANT_MESSAGES_TABLE)
+      .insert({
+        id: crypto.randomUUID(),
+        conversation_id: ownConversations[0]?.id,
+        role: "user",
+        content: "My own plans",
+      });
+    expect(ownMessage.error).toBeNull();
+    expect(
+      await readRowsAs(coGm, ASSISTANT_SETTINGS_TABLE, "campaign_id", campaignId)
+    ).toEqual([]);
+    const ownSettings = await coGm.client.from(ASSISTANT_SETTINGS_TABLE).upsert({
+      campaign_id: campaignId,
+      gm_id: coGm.userId,
+      model: "co-gm-model",
+      context: {},
+    });
+    expect(ownSettings.error).toBeNull();
+    const coSettings = await readRowsAs(
+      coGm,
+      ASSISTANT_SETTINGS_TABLE,
+      "campaign_id",
+      campaignId
+    );
+    expect(coSettings).toHaveLength(1);
+    expect(coSettings[0]).toMatchObject({ model: "co-gm-model" });
+
+    // Nothing of the owner's yields: messaging into their conversation is
+    // refused, and renaming or deleting it matches no row.
+    const messaged = await coGm.client
+      .from(ASSISTANT_MESSAGES_TABLE)
+      .insert({
+        id: crypto.randomUUID(),
+        conversation_id: conversationId,
+        role: "user",
+        content: "Sneaky",
+      });
+    expect(messaged.error).not.toBeNull();
+    const renamed = await coGm.client
+      .from(ASSISTANT_CONVERSATIONS_TABLE)
+      .update({ title: "Sneaky" })
+      .eq("id", conversationId)
+      .select("id");
+    expect(renamed.error).toBeNull();
+    expect(renamed.data ?? []).toEqual([]);
+    const deleted = await coGm.client
+      .from(ASSISTANT_CONVERSATIONS_TABLE)
+      .delete()
+      .eq("id", conversationId)
+      .select("id");
+    expect(deleted.error).toBeNull();
+    expect(deleted.data ?? []).toEqual([]);
+
+    for (const person of [player, outsider]) {
       // Reads: no conversations, messages or settings leak.
       expect(
         await readRowsAs(person, ASSISTANT_CONVERSATIONS_TABLE, "campaign_id", campaignId)
@@ -268,7 +350,7 @@ describe.skipIf(!config)("gm assistant data layer end to end", () => {
           title: "Sneaky",
         });
       expect(created.error).not.toBeNull();
-      const messaged = await person.client
+      const playerMessaged = await person.client
         .from(ASSISTANT_MESSAGES_TABLE)
         .insert({
           id: crypto.randomUUID(),
@@ -276,7 +358,7 @@ describe.skipIf(!config)("gm assistant data layer end to end", () => {
           role: "user",
           content: "Sneaky",
         });
-      expect(messaged.error).not.toBeNull();
+      expect(playerMessaged.error).not.toBeNull();
       const saved = await person.client.from(ASSISTANT_SETTINGS_TABLE).upsert({
         campaign_id: campaignId,
         gm_id: person.userId,
@@ -284,24 +366,24 @@ describe.skipIf(!config)("gm assistant data layer end to end", () => {
         context: {},
       });
       expect(saved.error).not.toBeNull();
-      const renamed = await person.client
+      const playerRenamed = await person.client
         .from(ASSISTANT_CONVERSATIONS_TABLE)
         .update({ title: "Sneaky" })
         .eq("id", conversationId)
         .select("id");
-      expect(renamed.error).toBeNull();
-      expect(renamed.data ?? []).toEqual([]);
-      const deleted = await person.client
+      expect(playerRenamed.error).toBeNull();
+      expect(playerRenamed.data ?? []).toEqual([]);
+      const playerDeleted = await person.client
         .from(ASSISTANT_CONVERSATIONS_TABLE)
         .delete()
         .eq("id", conversationId)
         .select("id");
-      expect(deleted.error).toBeNull();
-      expect(deleted.data ?? []).toEqual([]);
+      expect(playerDeleted.error).toBeNull();
+      expect(playerDeleted.data ?? []).toEqual([]);
     }
 
-    // Live updates: the co-GM's subscription loads but stays empty, even
-    // though the owner's conversation exists.
+    // Live updates: the co-GM's subscription carries only their own
+    // conversation, never the owner's.
     await signInAs(coGm);
     const seen: AssistantConversationWithId[][] = [];
     let loaded = false;
@@ -319,8 +401,10 @@ describe.skipIf(!config)("gm assistant data layer end to end", () => {
         }
       )
     );
-    await waitFor(() => (loaded && seen.length >= 1 ? seen : null));
-    expect(seen.at(-1)).toEqual([]);
+    await waitFor(() =>
+      loaded && seen.length >= 1 && seen.at(-1)?.length === 1 ? seen : null
+    );
+    expect(seen.at(-1)?.some((c) => c.id === conversationId)).toBe(false);
 
     const heard: AssistantMessageWithId[][] = [];
     let messagesLoaded = false;
@@ -342,6 +426,29 @@ describe.skipIf(!config)("gm assistant data layer end to end", () => {
       messagesLoaded && heard.length >= 1 ? heard : null
     );
     expect(heard.at(-1)).toEqual([]);
+
+    // And the player's conversation subscription loads empty too.
+    await signInAs(player);
+    const playerSeen: AssistantConversationWithId[][] = [];
+    let playerLoaded = false;
+    unsubscribes.push(
+      listenToConversations(
+        campaignId,
+        {
+          onConversations: (conversations) => playerSeen.push(conversations),
+          onLoaded: () => {
+            playerLoaded = true;
+          },
+        },
+        (error) => {
+          throw error;
+        }
+      )
+    );
+    await waitFor(() =>
+      playerLoaded && playerSeen.length >= 1 ? playerSeen : null
+    );
+    expect(playerSeen.at(-1)).toEqual([]);
   });
 
   it("cuts off a GM who is demoted or removed", { timeout: 120000 }, async () => {
