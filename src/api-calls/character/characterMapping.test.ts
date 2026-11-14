@@ -13,6 +13,7 @@ function makeRow(overrides: Partial<CharacterRow> = {}): CharacterRow {
     owner_id: "user-1",
     campaign_id: null,
     world_id: null,
+    is_active: true,
     name: "Del Nar",
     stats: { edge: 2 },
     condition_meters: { health: 3 },
@@ -49,6 +50,7 @@ describe("character row mapping", () => {
     expect(document).toEqual({
       uid: "user-1",
       campaignId: "camp-1",
+      isActive: true,
       name: "Del Nar",
       stats: { edge: 2 },
       conditionMeters: { health: 3 },
@@ -60,6 +62,14 @@ describe("character row mapping", () => {
         scale: 1,
       },
     });
+  });
+
+  it("reads a retired character as inactive", () => {
+    const document = characterRowToDocument(
+      makeRow({ campaign_id: "camp-1", is_active: false })
+    );
+
+    expect(document.isActive).toBe(false);
   });
 
   it("omits empty maps and links the app never set", () => {
@@ -102,5 +112,11 @@ describe("character row mapping", () => {
     );
 
     expect(columns).toEqual({ profile_image: null });
+  });
+
+  it("writes the active flag back to its column", () => {
+    const columns = characterUpdateToColumns(makeRow(), { isActive: false });
+
+    expect(columns).toEqual({ is_active: false });
   });
 });

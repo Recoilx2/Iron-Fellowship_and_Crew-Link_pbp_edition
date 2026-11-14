@@ -227,6 +227,69 @@ describe.skipIf(!config)("chat text posts end to end", () => {
     expect(await readPostsAs(player, icChannelId)).toHaveLength(1);
   });
 
+  it("refuses in-character posts as an inactive character but keeps their history", { timeout: 120000 }, async () => {
+    const { player, campaignId, icChannelId } = await setUpCampaign();
+    const kira = await createCharacterAs(player, campaignId, "Kira Vey");
+
+    // The player posts in character while Kira is active.
+    await signInAs(player);
+    const postId = await createPost({
+      channelId: icChannelId,
+      text: "Kira reporting in.",
+      speakerCharacterId: kira,
+    });
+
+    // Retiring Kira closes the in-character voice: posting as her is
+    // refused through the call and direct, while posting as self stays
+    // open for out-of-character play.
+    const { error: retireError } = await player.client.rpc(
+      "set_campaign_character_active",
+      { char_id: kira, make_active: false }
+    );
+    expect(retireError).toBeNull();
+    await expect(
+      createPost({
+        channelId: icChannelId,
+        text: "Kira from the sidelines",
+        speakerCharacterId: kira,
+      })
+    ).rejects.toBeTruthy();
+    const forged = await player.client.from(CHAT_POSTS_TABLE).insert({
+      id: crypto.randomUUID(),
+      channel_id: icChannelId,
+      author_id: player.userId,
+      speaker_character_id: kira,
+      text: "Kira from the sidelines",
+    });
+    expect(forged.error).not.toBeNull();
+    const oocId = await createPost({
+      channelId: icChannelId,
+      text: "Kira is benched, brb",
+    });
+    expect(oocId).toBeTruthy();
+
+    // The earlier post keeps Kira as its speaker with her name and
+    // portrait beside it: retiring changes no history.
+    const posts = await readPostsAs(player, icChannelId);
+    expect(posts.find((row) => row.id === postId)).toMatchObject({
+      speaker_character_id: kira,
+      text: "Kira reporting in.",
+    });
+
+    // Reactivating Kira reopens the voice.
+    const { error: reactivateError } = await player.client.rpc(
+      "set_campaign_character_active",
+      { char_id: kira, make_active: true }
+    );
+    expect(reactivateError).toBeNull();
+    await createPost({
+      channelId: icChannelId,
+      text: "Kira is back.",
+      speakerCharacterId: kira,
+    });
+    expect(await readPostsAs(player, icChannelId)).toHaveLength(3);
+  });
+
   it("keeps outsiders from reading or posting", { timeout: 90000 }, async () => {
     const { player, outsider, campaignId, icChannelId } =
       await setUpCampaign();

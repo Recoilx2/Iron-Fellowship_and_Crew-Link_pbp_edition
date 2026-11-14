@@ -48,7 +48,7 @@ function setUpClient(options: {
       : options.post;
   const character =
     options.character === undefined
-      ? { id: "kira", owner_id: "player-1", momentum: 5, debilities: {} }
+      ? { id: "kira", owner_id: "player-1", momentum: 5, debilities: {}, is_active: true }
       : options.character;
   const updates: Array<{ table: string; payload: Record<string, unknown> }> =
     [];
@@ -184,5 +184,20 @@ describe("burnPostMomentum", () => {
     await expect(burnPostMomentum({ postId: "post-1" })).rejects.toThrow(
       /deleted/i
     );
+  });
+
+  it("refuses a burn on a retired character's roll", async () => {
+    const { updates } = setUpClient({
+      character: {
+        id: "kira",
+        owner_id: "player-1",
+        momentum: 5,
+        is_active: false,
+      },
+    });
+    await expect(burnPostMomentum({ postId: "post-1" })).rejects.toThrow(
+      /active/i
+    );
+    expect(updates).toEqual([]);
   });
 });

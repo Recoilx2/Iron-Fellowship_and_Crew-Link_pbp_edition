@@ -34,6 +34,7 @@ describe("chat momentum burn GM-only pin (#125 follow-up)", () => {
     // here.
     const landedLater = new Set([
       "20261120000000_chat_storage_privileges.sql",
+      "20261121000000_campaign_active_character.sql",
     ]);
     const others = readdirSync(dir).filter(
       (f) =>

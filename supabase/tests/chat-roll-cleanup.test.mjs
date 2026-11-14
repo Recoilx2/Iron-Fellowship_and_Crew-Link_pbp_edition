@@ -39,6 +39,7 @@ describe("deleted-post cleanup and roll forgery migration (#120)", () => {
       "20261118000000_chat_momentum_burn_hardening.sql",
       "20261119000000_chat_momentum_burn_gms_pin.sql",
       "20261120000000_chat_storage_privileges.sql",
+      "20261121000000_campaign_active_character.sql",
     ]);
     const others = readdirSync(dir).filter(
       (f) => /^\d{14}_/.test(f) && f !== cleanupFile() && !landedLater.has(f)
