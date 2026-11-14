@@ -364,6 +364,15 @@ services:
       GM_ASSISTANT_ENDPOINT: ${GM_ASSISTANT_ENDPOINT:-}
       GM_ASSISTANT_API_KEY: ${GM_ASSISTANT_API_KEY:-}
       GM_ASSISTANT_ALLOWED_MODELS: ${GM_ASSISTANT_ALLOWED_MODELS:-}
+      GM_ASSISTANT_CONTEXT_TOKENS: ${GM_ASSISTANT_CONTEXT_TOKENS:-}
+      # The function echoes only this origin for CORS, and names this game
+      # system in its system prompt. Both come from the shared env file.
+      SITE_URL: ${SITE_URL:-}
+      GAME_SYSTEM: ${GAME_SYSTEM:-}
+    # Lets the function reach host-bound test doubles (the fake model server
+    # the live tests run on the host) via host.docker.internal on Linux.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command:
       [
         "start",
