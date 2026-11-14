@@ -14,6 +14,7 @@ export interface CardWithImageProps {
   icon?: RequiredIconDefinition;
 
   showHiddenTag?: boolean;
+  action?: ReactNode;
   handleClick: () => void;
 }
 
@@ -25,6 +26,7 @@ export function CardWithImage(props: CardWithImageProps) {
     imageUrl,
     icon,
     showHiddenTag,
+    action,
     handleClick,
   } = props;
 
@@ -123,6 +125,7 @@ export function CardWithImage(props: CardWithImageProps) {
               )}
             </Box>
             {showHiddenTag && <HiddenIcon color={"action"} />}
+            {action}
           </Box>
         </Box>
       </CardActionArea>

@@ -42,8 +42,15 @@ module.exports = {
   overrides: [
     {
       // The data layer may use Supabase, but Firebase stays banned
-      // everywhere (spec #11 removed it completely).
-      files: ["src/api-calls/**/*", "src/config/supabase.config.ts"],
+      // everywhere (spec #11 removed it completely). The browser tests
+      // (spec #9, ticket #107) sign people in through the Auth Admin API
+      // like the data-layer test harness does, so they need Supabase too.
+      files: [
+        "src/api-calls/**/*",
+        "src/config/supabase.config.ts",
+        "e2e/**/*",
+        "playwright.config.ts",
+      ],
       rules: {
         "no-restricted-imports": [
           "error",

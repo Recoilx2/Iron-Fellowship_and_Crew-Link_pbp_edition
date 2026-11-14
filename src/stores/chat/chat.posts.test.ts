@@ -1,0 +1,454 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { listenToChannelPosts } from "api-calls/chat/listenToChannelPosts";
+import { CHAT_POST_PAGE_SIZE } from "api-calls/chat/listenToChannelPosts";
+import { fetchOlderChannelPosts } from "api-calls/chat/fetchOlderChannelPosts";
+import { defaultChatSlice } from "stores/chat/chat.slice.default";
+import { createChatSlice } from "stores/chat/chat.slice";
+import type { ChatSlice, ChatSliceData } from "stores/chat/chat.slice.type";
+import type { IStore } from "stores/store.type";
+import type { PostWithId } from "api-calls/chat/listenToChannelPosts";
+import { ROLL_TYPE } from "types/DieRolls.type";
+
+vi.mock("api-calls/chat/listenToChannelPosts");
+vi.mock("api-calls/chat/fetchOlderChannelPosts");
+vi.mock("api-calls/chat/listenToCampaignChannels");
+
+const mockedListen = vi.mocked(listenToChannelPosts);
+const mockedFetchOlder = vi.mocked(fetchOlderChannelPosts);
+
+// Seam under test: the chat slice turns the post listener's latest page
+// into the feed's oldest-first window, pages older windows in front of it
+// with a one-off query on scroll, and keeps an unsent draft per channel.
+// The listener and the page query are covered by their own tests; here both
+// are stubs.
+type CapturedHandler = {
+  onPosts: (posts: PostWithId[]) => void;
+  onHasOlder: (hasOlder: boolean) => void;
+  onLoaded: () => void;
+};
+
+function posts(count: number, start = 0): PostWithId[] {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `post-${start + i}`,
+    channelId: "channel-1",
+    authorId: "player-1",
+    speakerCharacterId: null,
+    speakerNpcId: null,
+    text: `post ${start + i}`,
+    imagePaths: [],
+    roll: null,
+    gmsOnly: false,
+    editedAt: null,
+    deletedAt: null,
+    createdAt: new Date(Date.now() + (start + i) * 1000).toISOString(),
+  }));
+}
+
+function oracleRoll(): PostWithId["roll"] {
+  return {
+    type: ROLL_TYPE.ORACLE_TABLE,
+    rollLabel: "Action",
+    oracleCategoryName: "Ask the Oracle",
+    roll: 47,
+    result: "Reveal",
+    timestamp: new Date(),
+    characterId: null,
+    uid: "player-1",
+    gmsOnly: false,
+  };
+}
+
+function setUpSlice() {
+  const chat: ChatSliceData = {
+    ...defaultChatSlice,
+    channels: [],
+    postsByChannel: {},
+    hasOlderByChannel: {},
+    drafts: {},
+    pendingRolls: {},
+  };
+  const set = (fn: (store: { chat: ChatSliceData }) => void) => {
+    fn({ chat });
+  };
+  const announce = vi.fn();
+  const get = () =>
+    ({ chat, appState: { announce } }) as unknown as IStore;
+  const slice = createChatSlice(
+    set as never,
+    get as never,
+    undefined as never
+  ) as ChatSlice;
+  return { slice, draft: () => chat, announce };
+}
+
+describe("chat slice posts", () => {
+  let captured: CapturedHandler | undefined;
+  const seenLimits: number[] = [];
+
+  beforeEach(() => {
+    captured = undefined;
+    seenLimits.length = 0;
+    mockedListen.mockClear();
+    mockedListen.mockImplementation((_channelId, limit, handler) => {
+      captured = handler as unknown as CapturedHandler;
+      seenLimits.push(limit);
+      return () => {};
+    });
+    mockedFetchOlder.mockClear();
+    mockedFetchOlder.mockResolvedValue({ posts: [], hasOlder: false });
+  });
+
+  it("loads the latest page oldest-first with its has-older flag", () => {
+    const { slice, draft } = setUpSlice();
+    slice.subscribeToPosts("channel-1");
+    expect(mockedListen).toHaveBeenCalledWith(
+      "channel-1",
+      CHAT_POST_PAGE_SIZE,
+      expect.anything(),
+      expect.anything()
+    );
+
+    captured?.onHasOlder(true);
+    captured?.onPosts(posts(3));
+    captured?.onLoaded();
+
+    expect(draft().postsLoading).toBe(false);
+    expect(draft().postsByChannel["channel-1"]?.map((post) => post.id)).toEqual([
+      "post-0",
+      "post-1",
+      "post-2",
+    ]);
+    expect(draft().hasOlderByChannel["channel-1"]).toBe(true);
+  });
+
+  it("pages older posts back without growing the live window", async () => {
+    const { slice, draft } = setUpSlice();
+    slice.subscribeToPosts("channel-page");
+    captured?.onPosts(posts(CHAT_POST_PAGE_SIZE, CHAT_POST_PAGE_SIZE));
+    captured?.onHasOlder(true);
+    captured?.onLoaded();
+
+    // One page back: the fetched window joins the front, the live
+    // subscription stays on its latest page.
+    mockedFetchOlder.mockResolvedValue({
+      posts: posts(CHAT_POST_PAGE_SIZE, 0),
+      hasOlder: true,
+    });
+    await slice.loadOlderPosts("channel-page");
+
+    expect(mockedFetchOlder).toHaveBeenCalledWith(
+      "channel-page",
+      expect.objectContaining({ id: `post-${CHAT_POST_PAGE_SIZE}` }),
+      CHAT_POST_PAGE_SIZE
+    );
+    expect(draft().postsByChannel["channel-page"]?.map((post) => post.id)).toEqual(
+      posts(CHAT_POST_PAGE_SIZE * 2, 0).map((post) => post.id)
+    );
+    expect(draft().hasOlderByChannel["channel-page"]).toBe(true);
+    expect(seenLimits.every((limit) => limit === CHAT_POST_PAGE_SIZE)).toBe(
+      true
+    );
+  });
+
+  it("keeps paging past old caps to the channel's first post", async () => {
+    const { slice, draft } = setUpSlice();
+    slice.subscribeToPosts("channel-deep");
+    captured?.onPosts(posts(CHAT_POST_PAGE_SIZE, CHAT_POST_PAGE_SIZE * 9));
+    captured?.onLoaded();
+
+    // Ten older pages: far past the old 300-post cap, still paging.
+    for (let page = 8; page >= 1; page -= 1) {
+      mockedFetchOlder.mockResolvedValueOnce({
+        posts: posts(CHAT_POST_PAGE_SIZE, CHAT_POST_PAGE_SIZE * page),
+        hasOlder: true,
+      });
+      await slice.loadOlderPosts("channel-deep");
+    }
+    mockedFetchOlder.mockResolvedValueOnce({
+      posts: posts(CHAT_POST_PAGE_SIZE, 0),
+      hasOlder: false,
+    });
+    await slice.loadOlderPosts("channel-deep");
+
+    expect(draft().postsByChannel["channel-deep"]).toHaveLength(
+      CHAT_POST_PAGE_SIZE * 10
+    );
+    expect(draft().hasOlderByChannel["channel-deep"]).toBe(false);
+    expect(mockedListen).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps paged-in older posts when the live window re-emits", async () => {
+    const { slice, draft, announce } = setUpSlice();
+    draft().channels = [
+      {
+        id: "channel-live",
+        name: "In character",
+        kind: "IC",
+        visibility: "public",
+        isStarting: true,
+        archived: false,
+      },
+    ];
+    slice.subscribeToPosts("channel-live");
+    captured?.onPosts(posts(2, 28));
+    captured?.onLoaded();
+    mockedFetchOlder.mockResolvedValue({
+      posts: posts(2, 26),
+      hasOlder: true,
+    });
+    await slice.loadOlderPosts("channel-live");
+    expect(draft().postsByChannel["channel-live"]?.map((p) => p.id)).toEqual([
+      "post-26",
+      "post-27",
+      "post-28",
+      "post-29",
+    ]);
+
+    // A live arrival replaces the live window but keeps the older pages.
+    announce.mockClear();
+    captured?.onPosts([
+      ...posts(1, 29),
+      {
+        ...posts(1, 30)[0],
+        id: "post-30",
+        text: "A new post arrives.",
+      },
+    ]);
+    expect(draft().postsByChannel["channel-live"]?.map((p) => p.id)).toEqual([
+      "post-26",
+      "post-27",
+      "post-28",
+      "post-29",
+      "post-30",
+    ]);
+    expect(announce).toHaveBeenCalledWith(
+      "New post in # In character: A new post arrives."
+    );
+  });
+
+  it("leaves the has-older flag to the pages once paged back", async () => {
+    const { slice, draft } = setUpSlice();
+    slice.subscribeToPosts("channel-flag");
+    captured?.onHasOlder(true);
+    captured?.onPosts(posts(CHAT_POST_PAGE_SIZE, CHAT_POST_PAGE_SIZE));
+    captured?.onLoaded();
+
+    // The first post arrives with no older page above it.
+    mockedFetchOlder.mockResolvedValue({
+      posts: posts(CHAT_POST_PAGE_SIZE, 0),
+      hasOlder: false,
+    });
+    await slice.loadOlderPosts("channel-flag");
+    expect(draft().hasOlderByChannel["channel-flag"]).toBe(false);
+
+    // A later live lookahead must not resurrect the flag: there is nothing
+    // older than the first post however live the latest page is.
+    captured?.onHasOlder(true);
+    captured?.onPosts(posts(CHAT_POST_PAGE_SIZE, CHAT_POST_PAGE_SIZE));
+    expect(draft().hasOlderByChannel["channel-flag"]).toBe(false);
+  });
+
+  it("keeps one window per channel and stops the old subscription", () => {
+    const { slice, draft } = setUpSlice();
+    const firstStop = vi.fn();
+    mockedListen.mockImplementationOnce((_channelId, _limit, handler) => {
+      captured = handler as unknown as CapturedHandler;
+      return firstStop;
+    });
+
+    slice.subscribeToPosts("channel-1");
+    captured?.onPosts(posts(2));
+    captured?.onLoaded();
+
+    slice.subscribeToPosts("channel-2");
+    expect(firstStop).toHaveBeenCalled();
+    captured?.onPosts(posts(1));
+    captured?.onLoaded();
+
+    // Each channel keeps its own window: switching back needs no reload.
+    expect(draft().postsByChannel["channel-1"]).toHaveLength(2);
+    expect(draft().postsByChannel["channel-2"]).toHaveLength(1);
+  });
+
+  it("keeps an unsent draft per channel", () => {
+    const { slice, draft } = setUpSlice();
+    slice.setDraft("channel-1", "half a post");
+    slice.setDraft("channel-2", "other channel draft");
+    expect(draft().drafts["channel-1"]).toBe("half a post");
+    expect(draft().drafts["channel-2"]).toBe("other channel draft");
+
+    slice.setDraft("channel-1", "");
+    expect(draft().drafts["channel-2"]).toBe("other channel draft");
+  });
+
+  it("keeps a pending roll per channel until it posts", () => {
+    const { slice, draft } = setUpSlice();
+    const roll = oracleRoll();
+    slice.setPendingRoll("channel-1", roll);
+    slice.setPendingRoll("channel-2", oracleRoll());
+    expect(draft().pendingRolls["channel-1"]).toBe(roll);
+
+    slice.setPendingRoll("channel-1", null);
+    expect(draft().pendingRolls["channel-1"]).toBeUndefined();
+    expect(draft().pendingRolls["channel-2"]).not.toBeUndefined();
+  });
+
+  it("reports post load errors", () => {
+    const { slice, draft } = setUpSlice();
+    const fail = vi.mocked(listenToChannelPosts).mock.calls;
+    void fail;
+    slice.subscribeToPosts("channel-1");
+    const onError = mockedListen.mock.calls[0][3] as (e: unknown) => void;
+    onError(new Error("boom"));
+    expect(draft().postsLoading).toBe(false);
+    expect(draft().postsError).toBe("Failed to load posts.");
+  });
+
+  it("does nothing without a channel", () => {
+    const { slice, draft } = setUpSlice();
+    const unsubscribe = slice.subscribeToPosts(undefined);
+    expect(mockedListen).not.toHaveBeenCalled();
+    expect(draft().postsLoading).toBe(false);
+    unsubscribe();
+  });
+
+  it("announces new arrivals but not the first page or older pages", () => {
+    const { slice, draft, announce } = setUpSlice();
+    draft().channels = [
+      {
+        id: "channel-1",
+        name: "In character",
+        kind: "IC",
+        visibility: "public",
+        isStarting: true,
+        archived: false,
+      },
+    ];
+    slice.subscribeToPosts("channel-1");
+
+    // The first snapshot only fills the feed: nothing to announce.
+    captured?.onHasOlder(false);
+    captured?.onPosts(posts(2));
+    captured?.onLoaded();
+    expect(announce).not.toHaveBeenCalled();
+
+    // A live arrival is announced with its channel and text.
+    captured?.onPosts([
+      ...posts(2),
+      {
+        id: "post-2",
+        channelId: "channel-1",
+        authorId: "player-1",
+        speakerCharacterId: null,
+    speakerNpcId: null,
+        text: "A new post arrives.",
+        imagePaths: [],
+        roll: null,
+        gmsOnly: false,
+        createdAt: new Date(Date.now() + 60_000).toISOString(),
+        editedAt: null,
+        deletedAt: null,
+      },
+    ]);
+    expect(announce).toHaveBeenCalledWith(
+      "New post in # In character: A new post arrives."
+    );
+
+    // A roll-only post arrives with no text, so the roll speaks for it.
+    announce.mockClear();
+    captured?.onPosts([
+      ...posts(2),
+      {
+        id: "post-3",
+        channelId: "channel-1",
+        authorId: "player-1",
+        speakerCharacterId: null,
+        speakerNpcId: null,
+        text: "",
+        imagePaths: [],
+        roll: oracleRoll(),
+        gmsOnly: false,
+        createdAt: new Date(Date.now() + 120_000).toISOString(),
+        editedAt: null,
+        deletedAt: null,
+      },
+    ]);
+    expect(announce).toHaveBeenCalledWith(
+      expect.stringContaining("New post in # In character: ")
+    );
+    expect(announce).toHaveBeenCalledWith(expect.stringContaining("Reveal"));
+
+    // An image-only post arrives with no words at all: the count speaks.
+    announce.mockClear();
+    captured?.onPosts([
+      ...posts(2),
+      {
+        id: "post-2",
+        channelId: "channel-1",
+        authorId: "player-1",
+        speakerCharacterId: null,
+    speakerNpcId: null,
+        text: "A new post arrives.",
+        imagePaths: [],
+        roll: null,
+        gmsOnly: false,
+        createdAt: new Date(Date.now() + 60_000).toISOString(),
+        editedAt: null,
+        deletedAt: null,
+      },
+      {
+        id: "post-4",
+        channelId: "channel-1",
+        authorId: "player-1",
+        speakerCharacterId: null,
+    speakerNpcId: null,
+        text: "",
+        imagePaths: ["campaign-1/post-4/lantern.png"],
+        roll: null,
+        gmsOnly: false,
+        createdAt: new Date(Date.now() + 180_000).toISOString(),
+        editedAt: null,
+        deletedAt: null,
+      },
+    ]);
+    expect(announce).toHaveBeenCalledWith(
+      "New post in # In character: 1 image"
+    );
+
+    // Paging back re-emits the window with older posts only: silence.
+    announce.mockClear();
+    captured?.onPosts([
+      {
+        id: "post-older",
+        channelId: "channel-1",
+        authorId: "player-1",
+        speakerCharacterId: null,
+    speakerNpcId: null,
+        text: "An older post pages in.",
+        imagePaths: [],
+        roll: null,
+        gmsOnly: false,
+        editedAt: null,
+        deletedAt: null,
+        createdAt: new Date(Date.now() - 60_000).toISOString(),
+      },
+      ...posts(2),
+      {
+        id: "post-2",
+        channelId: "channel-1",
+        authorId: "player-1",
+        speakerCharacterId: null,
+    speakerNpcId: null,
+        text: "A new post arrives.",
+        imagePaths: [],
+        roll: null,
+        gmsOnly: false,
+        createdAt: new Date(Date.now() + 60_000).toISOString(),
+        editedAt: null,
+        deletedAt: null,
+      },
+    ]);
+    expect(announce).not.toHaveBeenCalled();
+  });
+});

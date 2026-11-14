@@ -26,7 +26,8 @@ import type { Unsubscribe } from "api-calls/helpers.type";
 
 export type RowChange<T> =
   | { kind: "upsert"; row: T }
-  | { kind: "remove"; key: string };
+  | { kind: "remove"; key: string }
+  | { kind: "refresh" };
 
 export interface PostgresChangePayload<T> {
   eventType: "INSERT" | "UPDATE" | "DELETE" | "*";
@@ -61,6 +62,19 @@ export type RowBinding<T> = PostgresChangesBinding<T> | BroadcastBinding<T>;
  * windows while keeping each active listener to six small SELECTs a minute.
  */
 export const RECONCILE_INTERVAL_MS = 10_000;
+
+// Every subscription joins its own realtime topic (issue #116):
+// supabase-js channel() creates-OR-REUSES by topic, so two listenToRows
+// calls with the same channelName (campaign screen Active + Completed
+// tracks on character-tracks:<id>; character sheet + campaign screen on
+// one character) would otherwise share one channel, and realtime-js throws
+// on the second postgres_changes .on() after subscribe(). The suffix keeps
+// the requested channel name as a prefix, so the realtime-auth LIKE
+// allowlist (character%, campaign:%, world%, ...) still matches and no
+// auth change is needed. The counter is module-scoped, so topics are
+// unique per runtime; the salt keeps them unique across module reloads.
+let nextSubscriptionId = 0;
+const subscriptionSalt = Math.random().toString(36).slice(2, 10);
 
 export interface ListenToRowsParams<T> {
   client: SupabaseClient;
@@ -110,8 +124,11 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
   } = params;
 
   // Channels are always private: database broadcasts only reach private
-  // topics, so a public channel would silently receive nothing.
-  const channel = client.channel(channelName, { config: { private: true } });
+  // topics, so a public channel would silently receive nothing. The topic
+  // is unique per subscription (see nextSubscriptionId above): sharing one
+  // topic across subscriptions throws once the channel is subscribed.
+  const topic = `${channelName}:sub-${subscriptionSalt}-${++nextSubscriptionId}`;
+  const channel = client.channel(topic, { config: { private: true } });
 
   let rows = new Map<string, T>();
   let pending: Array<RowChange<T>> = [];
@@ -146,7 +163,9 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
     return JSON.stringify(entries);
   };
 
-  const applyChange = (change: RowChange<T>): boolean => {
+  const applyChange = (
+    change: Exclude<RowChange<T>, { kind: "refresh" }>
+  ): boolean => {
     if (change.kind === "remove") {
       return rows.delete(change.key);
     }
@@ -184,6 +203,7 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
     // would only re-emit the same snapshot.
     if (refreshing) return;
     refreshing = true;
+    let refreshAgain = false;
     try {
       const my = ++epoch;
       settled = false;
@@ -193,7 +213,14 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
         rows = new Map(snapshot.map((row) => [getKey(row), row]));
         const queued = pending;
         pending = [];
-        for (const change of queued) applyChange(change);
+        for (const change of queued) {
+          // A refresh queued before the snapshot landed (a related table
+          // bumped while the first fetch was in flight): the snapshot may
+          // predate the bump, so follow it with a fresh fetch instead of
+          // settling on possibly stale rows.
+          if (change.kind === "refresh") refreshAgain = true;
+          else applyChange(change);
+        }
         settled = true;
         emit();
       } catch (error) {
@@ -205,10 +232,22 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
     } finally {
       refreshing = false;
     }
+    if (refreshAgain && !removed) void refresh({ silent: true });
   };
 
   const handleChange = (change: RowChange<T> | null) => {
     if (!change || removed) return;
+    if (change.kind === "refresh") {
+      // A related table changed (a channel bump for the roster listener,
+      // whose own table carries no live stream): re-read what this
+      // listener shows. Silent like the reconcile tick: a blip here heals
+      // on the next tick, and the reader never asked for this refresh.
+      if (settled) void refresh({ silent: true });
+      // Before the first snapshot there is nothing to re-read yet: queue
+      // the signal so the landing fetch is followed by a fresh one.
+      else pending.push(change);
+      return;
+    }
     if (settled) {
       if (applyChange(change)) emit();
     } else {

@@ -6,6 +6,7 @@ import {
   ListItemText,
 } from "@mui/material";
 import { NoteSource, ROLL_LOG_ID } from "stores/notes/notes.slice.type";
+import type { Note } from "types/Notes.type";
 import DieIcon from "@mui/icons-material/Casino";
 import { useStore } from "stores/store";
 import { NoteSidebarSection } from "./NoteSidebarSection";
@@ -13,12 +14,18 @@ import { NoteSidebarSection } from "./NoteSidebarSection";
 export interface NoteSidebarProps {
   selectedNote?: typeof ROLL_LOG_ID | { source: NoteSource; id: string };
   isMobile: boolean;
+  hideRollLog?: boolean;
+  filterNotes?: (source: NoteSource, note: Note) => boolean;
 }
 
 export function NoteSidebar(props: NoteSidebarProps) {
-  const { selectedNote, isMobile } = props;
+  const { selectedNote, isMobile, hideRollLog, filterNotes } = props;
 
   const notes = useStore((store) => store.notes.notes);
+  const visibleNotes = (source: NoteSource): Note[] =>
+    filterNotes
+      ? notes[source].filter((note) => filterNotes(source, note))
+      : notes[source];
 
   const hasCharacter = useStore(
     (store) => !!store.characters.currentCharacter.currentCharacterId
@@ -40,26 +47,28 @@ export function NoteSidebar(props: NoteSidebarProps) {
       flexDirection={"column"}
     >
       <List sx={{ overflowY: "auto" }}>
-        <ListItemButton
-          selected={ROLL_LOG_ID === selectedNote}
-          onClick={() => setOpenNote(ROLL_LOG_ID)}
-        >
-          <ListItemIcon>
-            <DieIcon />
-          </ListItemIcon>
-          <ListItemText>Roll Log</ListItemText>
-        </ListItemButton>
+        {!hideRollLog && (
+          <ListItemButton
+            selected={ROLL_LOG_ID === selectedNote}
+            onClick={() => setOpenNote(ROLL_LOG_ID)}
+          >
+            <ListItemIcon>
+              <DieIcon />
+            </ListItemIcon>
+            <ListItemText>Roll Log</ListItemText>
+          </ListItemButton>
+        )}
 
         {hasCampaign && (
           <NoteSidebarSection
-            notes={notes[NoteSource.Campaign]}
+            notes={visibleNotes(NoteSource.Campaign)}
             openNote={selectedNote}
             noteSource={NoteSource.Campaign}
           />
         )}
         {hasCharacter && (
           <NoteSidebarSection
-            notes={notes[NoteSource.Character]}
+            notes={visibleNotes(NoteSource.Character)}
             openNote={selectedNote}
             noteSource={NoteSource.Character}
           />

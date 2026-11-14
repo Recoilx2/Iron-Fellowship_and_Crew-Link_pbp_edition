@@ -19,9 +19,10 @@ import {
 import { TrackTypes } from "types/Track.type";
 import { LEGACY_TrackTypes } from "types/LegacyTrack.type";
 import { rollOracle } from "./rollers/rollOracle";
-import { idMap } from "data/idMap";
+import { lookupRollableOracle } from "./rollers/resolveOracleRoll";
 import { Datasworn, IdParser } from "@datasworn-community/core";
 import { rollDice } from "./rollers/rollDice";
+import { scoreStatRoll } from "./rollers/scoreStatRoll";
 import { useHide3dDice } from "hooks/useHide3dDice";
 import { Theme, useTheme } from "@mui/material";
 
@@ -79,23 +80,14 @@ export function useRoller() {
       const challenge2 = results[1].value;
       const action = results[2].value;
 
-      let matchedNegativeMomentum = false;
-      if (momentum < 0 && Math.abs(momentum) === action) {
-        matchedNegativeMomentum = true;
-      }
-
-      const actionTotal = Math.min(
-        10,
-        (matchedNegativeMomentum ? 0 : action) + (modifier ?? 0) + (adds ?? 0)
-      );
-
-      let result: ROLL_RESULT = ROLL_RESULT.WEAK_HIT;
-      if (actionTotal > challenge1 && actionTotal > challenge2) {
-        result = ROLL_RESULT.HIT;
-        // Strong Hit
-      } else if (actionTotal <= challenge1 && actionTotal <= challenge2) {
-        result = ROLL_RESULT.MISS;
-      }
+      const { result, matchedNegativeMomentum } = scoreStatRoll({
+        action,
+        modifier,
+        adds,
+        challenge1,
+        challenge2,
+        momentum,
+      });
       const statRoll: StatRoll = {
         type: ROLL_TYPE.STAT,
         action,
@@ -151,17 +143,9 @@ export function useRoller() {
 
   const rollOracleTable = useCallback(
     async (potentialOldOracleId: string, showSnackbar = true, gmsOnly = false) => {
-      const oracleId = idMap[potentialOldOracleId] ?? potentialOldOracleId;
-      // const oracle = newOracles[oracleId];
+      const oracle = lookupRollableOracle(potentialOldOracleId);
 
-      let oracle: Datasworn.OracleRollable | undefined;
-      try {
-        oracle = IdParser.get(oracleId) as Datasworn.OracleRollable;
-      } catch {
-        // Empty on purpose - the following if statement will handle the undefined case
-      }
-
-      if (!oracle || oracle.type !== "oracle_rollable") {
+      if (!oracle) {
         return undefined;
       }
 

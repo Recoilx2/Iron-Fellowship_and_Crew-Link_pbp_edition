@@ -8,6 +8,7 @@ import {
 } from "@mui/material";
 import { NoteSidebar } from "./NoteSidebar";
 import { NoteSource, ROLL_LOG_ID } from "stores/notes/notes.slice.type";
+import type { Note } from "types/Notes.type";
 import { GameLog } from "components/features/charactersAndCampaigns/GameLog";
 import { RtcRichTextEditor } from "components/shared/RichTextEditor/RtcRichTextEditor";
 import { constructNoteId, parseNoteId } from "./noteIds";
@@ -23,16 +24,23 @@ import { CampaignType } from "api-calls/campaign/_campaign.type";
 export interface NotesProps {
   hideSidebar?: boolean;
   condensedView?: boolean;
+  /**
+   * My notes (ticket #31) hides the shared roll log and only lists the
+   * notes the filter keeps, reusing the same editor for everything shown.
+   */
+  hideRollLog?: boolean;
+  notesFilter?: (source: NoteSource, note: Note) => boolean;
 }
 
 export function Notes(props: NotesProps) {
-  const { condensedView, hideSidebar } = props;
+  const { condensedView, hideSidebar, hideRollLog, notesFilter } = props;
 
-  const selectedNote = useStore(
-    (store) =>
-      store.notes.openNote ??
-      (condensedView || hideSidebar ? undefined : ROLL_LOG_ID)
-  );
+  const openNote = useStore((store) => store.notes.openNote);
+  const selectedNote =
+    hideRollLog && openNote === ROLL_LOG_ID
+      ? undefined
+      : (openNote ??
+        (hideRollLog || condensedView || hideSidebar ? undefined : ROLL_LOG_ID));
   const selectedNoteItem = useStore((store) => {
     const openNote = store.notes.openNote;
     if (openNote && typeof openNote !== "string") {
@@ -110,6 +118,8 @@ export function Notes(props: NotesProps) {
         <NoteSidebar
           selectedNote={selectedNote}
           isMobile={condensedView ?? false}
+          hideRollLog={hideRollLog}
+          filterNotes={notesFilter}
         />
       )}
       {(!condensedView || selectedNote) && (

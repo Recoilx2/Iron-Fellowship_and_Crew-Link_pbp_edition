@@ -1,4 +1,4 @@
-import { Card } from "@mui/material";
+import { Card, useMediaQuery, useTheme } from "@mui/material";
 import {
   ContainedTabPanel,
   StyledTab,
@@ -8,21 +8,12 @@ import { useCampaignType } from "hooks/useCampaignType";
 import { useUpdateQueryStringValueWithoutNavigation } from "hooks/useUpdateQueryStringValueWithoutNavigation";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { CharacterTab, NotesTab, TracksTab, WorldTab } from "./Tabs";
+import { CharacterTab, ChatTab, MyNotesTab, TracksTab, WorldTab } from "./Tabs";
 import { useStore } from "stores/store";
 import { NPCSection } from "components/features/worlds/NPCSection";
 import { LoreSection } from "components/features/worlds/Lore";
 import { LocationsSection } from "components/features/worlds/Locations";
-
-enum CampaignTabs {
-  Characters = "characters",
-  Tracks = "tracks",
-  Notes = "notes",
-  World = "world",
-  Locations = "locations",
-  NPCs = "ncps",
-  Lore = "lore",
-}
+import { CampaignTabs, DEFAULT_CAMPAIGN_TAB } from "./CampaignTabs";
 
 export interface CampaignContentProps {
   openInviteDialog: () => void;
@@ -30,11 +21,11 @@ export interface CampaignContentProps {
 
 export function CampaignContent(props: CampaignContentProps) {
   const { openInviteDialog } = props;
-  const { showGuidedPlayerView, showGuideTips } = useCampaignType();
+  const { showGuideTips } = useCampaignType();
 
   const [searchParams] = useSearchParams();
   const [selectedTab, setSelectedTab] = useState<CampaignTabs>(
-    (searchParams.get("tab") as CampaignTabs) ?? CampaignTabs.Characters
+    (searchParams.get("tab") as CampaignTabs) ?? DEFAULT_CAMPAIGN_TAB
   );
   useUpdateQueryStringValueWithoutNavigation("tab", selectedTab);
   const handleTabChange = (tab: CampaignTabs) => {
@@ -44,6 +35,14 @@ export function CampaignContent(props: CampaignContentProps) {
   const hasWorld = useStore(
     (store) => !!store.campaigns.currentCampaign.currentCampaign?.worldId
   );
+
+  // Phones navigate from the bottom bar inside the Chat panel (ticket
+  // #122): the top strip stays out of the way below md, and the Chat tab
+  // -- which carries that bottom bar -- is the screen, so a phone deep
+  // link into another tab never strands the player without navigation.
+  const theme = useTheme();
+  const isPhone = useMediaQuery(theme.breakpoints.down("md"));
+  const visibleTab = isPhone ? CampaignTabs.Chat : selectedTab;
 
   return (
     <Card
@@ -61,38 +60,45 @@ export function CampaignContent(props: CampaignContentProps) {
       <StyledTabs
         value={selectedTab}
         onChange={(evt, value) => handleTabChange(value)}
+        aria-label={"Campaign sections"}
         sx={(theme) => ({
           borderTopRightRadius: theme.shape.borderRadius,
           borderTopLeftRadius: theme.shape.borderRadius,
+          // The bottom bar inside Chat is the whole phone navigation.
+          display: { xs: "none", md: "flex" },
         })}
       >
+        <StyledTab label="Chat" value={CampaignTabs.Chat} />
         <StyledTab label="Characters" value={CampaignTabs.Characters} />
         <StyledTab label="Tracks" value={CampaignTabs.Tracks} />
-        {!showGuidedPlayerView && (
-          <StyledTab label="Notes" value={CampaignTabs.Notes} />
-        )}
+        {/* My notes is personal (spec #9, ticket #31): every campaign
+            member gets the tab, including guided players. */}
+        <StyledTab label="My notes" value={CampaignTabs.Notes} />
         <StyledTab label="World" value={CampaignTabs.World} />
         <StyledTab label="Locations" value={CampaignTabs.Locations} />
         <StyledTab label="NPCs" value={CampaignTabs.NPCs} />
         <StyledTab label="Lore" value={CampaignTabs.Lore} />
       </StyledTabs>
-      <ContainedTabPanel isVisible={selectedTab === CampaignTabs.Characters}>
+      <ContainedTabPanel isVisible={visibleTab === CampaignTabs.Chat}>
+        <ChatTab openInviteDialog={openInviteDialog} />
+      </ContainedTabPanel>
+      <ContainedTabPanel isVisible={visibleTab === CampaignTabs.Characters}>
         <CharacterTab openInviteDialog={openInviteDialog} />
       </ContainedTabPanel>
-      <ContainedTabPanel isVisible={selectedTab === CampaignTabs.Tracks}>
+      <ContainedTabPanel isVisible={visibleTab === CampaignTabs.Tracks}>
         <TracksTab />
       </ContainedTabPanel>
       <ContainedTabPanel
         excludePadding
-        isVisible={selectedTab === CampaignTabs.Notes}
+        isVisible={visibleTab === CampaignTabs.Notes}
       >
-        <NotesTab />
+        <MyNotesTab />
       </ContainedTabPanel>
-      <ContainedTabPanel isVisible={selectedTab === CampaignTabs.World}>
+      <ContainedTabPanel isVisible={visibleTab === CampaignTabs.World}>
         <WorldTab />
       </ContainedTabPanel>
       <ContainedTabPanel
-        isVisible={selectedTab === CampaignTabs.Locations}
+        isVisible={visibleTab === CampaignTabs.Locations}
         greyBackground={hasWorld}
       >
         <LocationsSection
@@ -101,13 +107,13 @@ export function CampaignContent(props: CampaignContentProps) {
         />
       </ContainedTabPanel>
       <ContainedTabPanel
-        isVisible={selectedTab === CampaignTabs.NPCs}
+        isVisible={visibleTab === CampaignTabs.NPCs}
         greyBackground={hasWorld}
       >
         <NPCSection showHiddenTag={showGuideTips} />
       </ContainedTabPanel>
       <ContainedTabPanel
-        isVisible={selectedTab === CampaignTabs.Lore}
+        isVisible={visibleTab === CampaignTabs.Lore}
         greyBackground={hasWorld}
       >
         <LoreSection showHiddenTag={showGuideTips} />

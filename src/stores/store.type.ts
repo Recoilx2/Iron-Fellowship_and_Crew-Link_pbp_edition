@@ -6,6 +6,7 @@ import { UserSlice } from "./user/users.slice.type";
 import { WorldSlice } from "./world/world.slice.type";
 import { SettingsSlice } from "./settings/settings.slice.type";
 import { NotesSlice } from "./notes/notes.slice.type";
+import { ChatSlice } from "./chat/chat.slice.type";
 import { GameLogSlice } from "./gameLog/gameLog.slice.type";
 import { AccessibilitySettingsSlice } from "./accessibilitySettings/accessibilitySettings.slice.type";
 import { AppStateSlice } from "./appState/appState.slice.type";
@@ -21,6 +22,7 @@ export type IStore = {
   worlds: WorldSlice;
   settings: SettingsSlice;
   notes: NotesSlice;
+  chat: ChatSlice;
   gameLog: GameLogSlice;
   accessibilitySettings: AccessibilitySettingsSlice;
   homebrew: HomebrewSlice;

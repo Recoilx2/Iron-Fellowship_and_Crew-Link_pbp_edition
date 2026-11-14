@@ -4,16 +4,25 @@ import { useGameSystemValue } from "hooks/useGameSystemValue";
 import { GAME_SYSTEMS } from "types/GameSystems.type";
 import { IconColors } from "types/Icon.type";
 import { CardWithImage } from "../common/CardWithImage";
+import { VisibilityToggleButton } from "../common/VisibilityToggleButton";
 import { mergeIcons } from "components/shared/GameIcons/mergeIcons";
 
 export interface LocationCardProps {
   location: LocationWithGMProperties;
   onClick: () => void;
   showHiddenTag?: boolean;
+  showVisibilityToggle?: boolean;
+  onVisibilityToggle?: () => void;
 }
 
 export function LocationCard(props: LocationCardProps) {
-  const { location, onClick: openLocation, showHiddenTag } = props;
+  const {
+    location,
+    onClick: openLocation,
+    showHiddenTag,
+    showVisibilityToggle,
+    onVisibilityToggle,
+  } = props;
 
   // Todo - replace with world type from datasworn once released
   const settingId = useGameSystemValue({
@@ -41,6 +50,14 @@ export function LocationCard(props: LocationCardProps) {
       imageUrl={location.imageUrl}
       icon={icon}
       showHiddenTag={showHiddenTag && !location.sharedWithPlayers}
+      action={
+        showVisibilityToggle && onVisibilityToggle ? (
+          <VisibilityToggleButton
+            sharedWithPlayers={location.sharedWithPlayers}
+            onToggle={onVisibilityToggle}
+          />
+        ) : undefined
+      }
       handleClick={openLocation}
     />
   );

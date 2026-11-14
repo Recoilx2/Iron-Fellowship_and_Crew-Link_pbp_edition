@@ -6,19 +6,58 @@ migration per area); each data area's `api-calls/<area>/_getRef.ts` names its
 tables, live-update channels and row mappings. Stores, pages and components
 never name tables directly.
 
+Chat splits that convention across two ref files: `chat/_getRef.ts` names
+the channels and roster tables (`chat_channels`, `chat_channel_members`)
+with their live-update channels, while `chat/_postRef.ts` names the posts
+table (`chat_posts`) with its own channel and row mapping. The campaign
+roll-log listener (`chat/listenToCampaignRollPosts.ts`) builds its own
+live-update channel (`campaign:<campaignId>:rolls`), because one binding
+cannot name every channel of a campaign.
+
 ```
 profiles                     one row per person (display name)
 user_settings                one row per person (accessibility, oracle pins)
 characters                   one row per character (+ assets, tracks, notes,
                              note contents, settings, solo roll log)
 campaigns                    one row per campaign (+ members, assets, tracks,
-                             notes, note contents, settings, roll log)
+                             notes, note contents, settings,
+                             chat channels)
+chat_channels                one row per channel in a campaign (kind IC/OOC;
+                             visibility public, private or dm; starting
+                             flag, archived flag)
+chat_posts                   one row per post in a channel (text, image
+                             paths, roll in its existing shape, speaker,
+                             GM-only flag, edited/deleted markers; the
+                             campaign roll log is a client-side query over roll posts,
+                             ticket #30, so the old campaign_rolls table
+                             is gone)
+chat_channel_members         one roster row per person in a private channel
+                             or direct message (public channels need none:
+                             every campaign member is already in them)
 worlds                       one row per world (+ locations, lore, npcs,
                              notes, images metadata; no sectors: Starforged
                              locations replaced them, see ticket #21)
 homebrew_collections         one row per collection (+ stats, moves, oracles,
                              assets, editors, viewers, invite keys)
 ```
+
+Images live in the private `chat-images` storage bucket, one folder per
+campaign and post (`chat-images/<campaignId>/<postId>/<filename>`); posts
+carry their attachments as `image_paths` beside the text (ticket #28). Reads
+go through the same checks as the posts they belong to (ticket #118,
+`private.can_read_chat_image` in `20261114000000_chat_image_access.sql`):
+channel members through the `private.can_read_channel` visibility check,
+GMs alone for GM-only roll posts. A file uploaded before its post exists
+(the composer attaches at once so sending is instant) reads only for its
+uploader. Uploads land only in a not-yet-posted folder or the uploader's
+own post, and nobody overwrites a sent file's bytes -- a post
+edit changes the text, never the images (#118); the author of a
+post or a GM of its campaign may still remove the post's files when clearing
+the post. The bucket backstops what the composer accepts (PNG, JPEG, GIF
+and WebP through `allowed_mime_types`, and the `CHAT_IMAGE_MAX_MB`
+deployment setting through `file_size_limit`, re-applied on every start).
+Signed links stay short-lived on the client (minutes, re-signed when shown, see
+`src/api-calls/chat/chatImages.ts`).
 
 ## Type Links
 
@@ -28,6 +67,8 @@ homebrew_collections         one row per collection (+ stats, moves, oracles,
 | CampaignDocument             | [\_campaign.type](./campaign/_campaign.type.ts)                                                          |
 | AssetDocument                | [\_asset.type](./assets/_asset.type.ts)                                                                  |
 | NoteDocument                 | [\_notes.type](./notes/_notes.type.ts)                                                                   |
+| ChannelDocument              | [\_chat.type](./chat/_chat.type.ts)                                                                     |
+| PostDocument                 | [\_chat.type](./chat/_chat.type.ts)                                                                     |
 | SettingsDocument             | [\_character-campaign-settings.type](./character-campaign-settings/_character-campaign-settings.type.ts) |
 | **Worlds**                   |                                                                                                          |
 | WorldDocument                | [\_world.type](./world/_world.type.ts)                                                                   |
