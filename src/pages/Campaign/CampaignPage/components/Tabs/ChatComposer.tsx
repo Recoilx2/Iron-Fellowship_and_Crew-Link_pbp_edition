@@ -36,7 +36,7 @@ import { useSnackbar } from "providers/SnackbarProvider";
 import type { ChatRollContext, DiceRoller } from "functions/chatRolls";
 import { ChatRollPicker, type ChatRollKind } from "./ChatRollPickers";
 import { defaultChatSpeaker } from "functions/chatSpeaker";
-
+import { findActiveCampaignCharacter } from "functions/isActiveCampaignCharacter";
 interface PendingAttachment {
   key: string;
   name: string;
@@ -74,7 +74,10 @@ function revokePreviewUrl(url: string): void {
  * The channel composer (spec #9, prototype variant D): a "Posting as ..."
  * line, image previews, the text box with send, the image button, and the
  * roll buttons below it. Players have no speaker picker: the channel kind
- * picks the speaker, so switching channels switches voices. GMs alone get a
+ * picks the speaker, so switching channels switches voices. In character
+ * they post as their active character (#127); a player with no active
+ * character posts as themselves and sees how to get back in character.
+ * GMs alone get a
  * simple picker over the campaign world's NPC list, and the voice resets
  * whenever the channel switches. The text box keeps its unsent draft per
  * channel for the session.
@@ -86,8 +89,9 @@ function revokePreviewUrl(url: string): void {
  *
  * Rolling a move, stat, oracle or custom dice attaches the result to the
  * draft, so the player adds text and sends both to the current channel as
- * the current speaker. Players roll from their campaign character; GMs roll
- * Ask the Oracle, Oracles and Dice, and their eye toggle posts GM-only.
+ * the current speaker. Players roll from their active campaign character;
+ * GMs roll Ask the Oracle, Oracles and Dice, and their eye toggle posts
+ * GM-only.
  */
 export function ChatComposer(props: {
   channel: ChannelWithId;
@@ -162,10 +166,8 @@ export function ChatComposer(props: {
   const theme = useTheme();
   const hide3dDice = useHide3dDice();
 
-  const myEntry = Object.entries(characterMap).find(
-    ([, character]) => character.uid === uid
-  );
-  const myCharacter = myEntry?.[1];
+  const activeEntry = findActiveCampaignCharacter(characterMap, uid);
+  const activeCharacter = activeEntry?.[1];
   const isGM = gmIds.includes(uid);
   const npcs = Object.entries(npcMap).sort(([, a], [, b]) =>
     a.name.localeCompare(b.name)
@@ -178,7 +180,7 @@ export function ChatComposer(props: {
   const speaker =
     pickedNpc && npcSpeakerId
       ? { characterId: null, npcId: npcSpeakerId }
-      : defaultChatSpeaker(channelKind, myEntry?.[0]);
+      : defaultChatSpeaker(channelKind, activeEntry?.[0]);
   const speakerCharacter = speaker.characterId
     ? characterMap[speaker.characterId]
     : undefined;
@@ -262,7 +264,7 @@ export function ChatComposer(props: {
   };
   // Moves and stats need the speaker's character; in guided play the GM
   // has none, so they roll Ask the Oracle, Oracles and Dice.
-  const canRollFromCharacter = !!myCharacter;
+  const canRollFromCharacter = !!activeCharacter;
 
   const roller = useMemo<DiceRoller>(
     () => ({
@@ -284,7 +286,7 @@ export function ChatComposer(props: {
     characterId: speaker.characterId,
     uid,
     gmsOnly: isGM && !shareRolls,
-    momentum: myCharacter?.momentum,
+    momentum: activeCharacter?.momentum,
   };
 
   const attachRoll = (roll: Roll) => {
@@ -309,14 +311,14 @@ export function ChatComposer(props: {
     pendingRoll?.type === ROLL_TYPE.STAT &&
     pendingRoll.momentumBurned === undefined &&
     speaker.characterId != null &&
-    myCharacter != null &&
-    isMomentumBurnUseful(pendingRoll, myCharacter.momentum);
+    activeCharacter != null &&
+    isMomentumBurnUseful(pendingRoll, activeCharacter.momentum);
 
   const burnComposerRoll = () => {
     if (!canBurnComposer || !pendingRoll || pendingRoll.type !== ROLL_TYPE.STAT) {
       return;
     }
-    const momentum = myCharacter?.momentum ?? 0;
+    const momentum = activeCharacter?.momentum ?? 0;
     const newResult = burnMomentumResult(pendingRoll, momentum);
     // Stamped, not spent: the momentum leaves only when the post sends,
     // in the same transaction as the burned roll.
@@ -409,11 +411,18 @@ export function ChatComposer(props: {
         <Typography variant={"body2"} color={"text.secondary"}>
           Posting as <b>{speakerName}</b>
           {isGM ? " (GM)" : ""}
-          {channelKind === "OOC" && myCharacter
-            ? ` · ${myCharacter.name} (out of character)`
+          {channelKind === "OOC" && activeCharacter
+            ? ` · ${activeCharacter.name} (out of character)`
             : ""}
         </Typography>
       </Stack>
+      {channelKind === "IC" && !isGM && !activeCharacter && (
+        <Alert severity={"info"} sx={{ mx: 0.5, mb: 1 }}>
+          You have no active character in this campaign. Make a character
+          active or add one to post in character; until then you can only
+          post out of character.
+        </Alert>
+      )}
       {npcPicker && (
         <Box sx={{ px: 0.5, pb: 0.5, maxWidth: 280 }}>
           <TextField
@@ -653,9 +662,9 @@ export function ChatComposer(props: {
       </Stack>
       <ChatRollPicker
         kind={picker}
-        stats={myCharacter?.stats ?? {}}
-        conditionMeters={myCharacter?.conditionMeters ?? {}}
-        characterName={myCharacter?.name ?? null}
+        stats={activeCharacter?.stats ?? {}}
+        conditionMeters={activeCharacter?.conditionMeters ?? {}}
+        characterName={activeCharacter?.name ?? null}
         context={context}
         roller={roller}
         onClose={() => setPicker(null)}

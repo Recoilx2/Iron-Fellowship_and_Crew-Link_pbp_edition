@@ -14,6 +14,7 @@ import {
   ensureCampaign,
   grantMembership,
   liveStackConfig,
+  personClient,
   randomCampaignId,
   waitFor,
   type LivePerson,
@@ -261,7 +262,7 @@ describe.skipIf(!config)("characters end to end", () => {
     expect(seenSingle).toEqual([]);
   });
 
-  it("rejects a second character from the same player in one campaign", { timeout: 90000 }, async () => {
+  it("lets a player hold several characters but never two active at once", { timeout: 120000 }, async () => {
     const owner = await createPerson(cfg, "owner");
     const other = await createPerson(cfg, "other");
     people.push(owner, other);
@@ -270,12 +271,25 @@ describe.skipIf(!config)("characters end to end", () => {
     await grantMembership(cfg, campaignId, owner.userId, "player");
     await grantMembership(cfg, campaignId, other.userId, "player");
 
-    const link = (person: LivePerson, characterId: string, campaign: string | null) =>
+    const link = (person: LivePerson, characterId: string, campaign: string | null, active = true) =>
       person.client
         .from("characters")
-        .update({ campaign_id: campaign })
+        .update({ campaign_id: campaign, is_active: active })
         .eq("id", characterId)
         .select("id");
+    const setActive = (person: LivePerson, characterId: string, makeActive: boolean) =>
+      person.client.rpc("set_campaign_character_active", {
+        char_id: characterId,
+        make_active: makeActive,
+      });
+    const readFlags = async (ids: string[]) => {
+      const { data, error } = await owner.client
+        .from("characters")
+        .select("id, campaign_id, is_active")
+        .in("id", ids);
+      expect(error).toBeNull();
+      return new Map((data ?? []).map((row) => [row.id, row]));
+    };
 
     await signInAs(owner);
     const firstId = await createCharacter({
@@ -300,30 +314,104 @@ describe.skipIf(!config)("characters end to end", () => {
     });
     await signOut();
 
-    // The owner's first character links fine.
-    const linked = await link(owner, firstId, campaignId);
-    expect(linked.error).toBeNull();
+    // The owner's first character links fine, active.
+    expect((await link(owner, firstId, campaignId)).error).toBeNull();
 
-    // A second character from the same player in the same campaign fails.
+    // A second active character from the same player is refused by the
+    // partial unique index.
     const duplicate = await link(owner, secondId, campaignId);
-    expect(duplicate.error).not.toBeNull();
+    expect(duplicate.error?.code, "second active character").toBe("23505");
+
+    // The same character linked inactive is allowed.
+    expect((await link(owner, secondId, campaignId, false)).error).toBeNull();
+    const both = await readFlags([firstId, secondId]);
+    expect(both.get(firstId)).toMatchObject({
+      campaign_id: campaignId,
+      is_active: true,
+    });
+    expect(both.get(secondId)).toMatchObject({
+      campaign_id: campaignId,
+      is_active: false,
+    });
 
     // A different player's character in the same campaign succeeds.
-    const otherLinked = await link(other, otherId, campaignId);
-    expect(otherLinked.error).toBeNull();
+    expect((await link(other, otherId, campaignId)).error).toBeNull();
 
-    // Swapping — unlinking the old character first — succeeds.
-    const unlinked = await link(owner, firstId, null);
-    expect(unlinked.error).toBeNull();
-    const swapped = await link(owner, secondId, campaignId);
-    expect(swapped.error).toBeNull();
-    const rows = await owner.client
+    // Retiring the active character, then reactivating it.
+    expect((await setActive(owner, firstId, false)).error).toBeNull();
+    expect((await readFlags([firstId])).get(firstId)).toMatchObject({
+      is_active: false,
+    });
+    expect((await setActive(owner, firstId, true)).error).toBeNull();
+    expect((await readFlags([firstId])).get(firstId)).toMatchObject({
+      is_active: true,
+    });
+
+    // Swapping in one step: making the second active retires the first.
+    expect((await setActive(owner, secondId, true)).error).toBeNull();
+    const swapped = await readFlags([firstId, secondId]);
+    expect(swapped.get(firstId)).toMatchObject({ is_active: false });
+    expect(swapped.get(secondId)).toMatchObject({
+      campaign_id: campaignId,
+      is_active: true,
+    });
+
+    // Only the owner retires or reactivates: another player is refused
+    // with a privilege error and the flags stand.
+    const refused = await setActive(other, secondId, false);
+    expect(refused.error?.code, "non-owner swap").toBe("42501");
+    expect((await readFlags([secondId])).get(secondId)).toMatchObject({
+      is_active: true,
+    });
+
+    // A GM who does not own the character is refused the same way: the
+    // swap is owner-only with no GM exception.
+    const gm = await createPerson(cfg, "gm");
+    people.push(gm);
+    await grantMembership(cfg, campaignId, gm.userId, "gm");
+    const gmRefused = await setActive(gm, secondId, false);
+    expect(gmRefused.error?.code, "gm non-owner swap").toBe("42501");
+    expect((await readFlags([secondId])).get(secondId)).toMatchObject({
+      is_active: true,
+    });
+
+    // A signed-out caller never reaches the owner check: with no JWT,
+    // auth.uid() is NULL, so the guard refuses outright -- and anon holds
+    // no EXECUTE on the swap at all. The flags stand either way.
+    const anon = personClient(cfg);
+    const anonRefused = await anon.rpc("set_campaign_character_active", {
+      char_id: secondId,
+      make_active: false,
+    });
+    expect(anonRefused.error?.code, "signed-out swap").toBe("42501");
+    expect((await readFlags([secondId])).get(secondId)).toMatchObject({
+      is_active: true,
+    });
+
+    // A direct write of the flag is owner-only too: row-level security
+    // leaves a non-owner's update (a GM is no exception -- the only UPDATE
+    // policy on the table is owner-only) touching zero rows, so the flags
+    // stand without a privilege error from the swap function.
+    const directRetire = await other.client
       .from("characters")
-      .select("id, campaign_id")
-      .in("id", [firstId, secondId]);
-    expect(rows.error).toBeNull();
-    const byId = new Map((rows.data ?? []).map((row) => [row.id, row]));
-    expect(byId.get(firstId)?.campaign_id).toBeNull();
-    expect(byId.get(secondId)?.campaign_id).toBe(campaignId);
+      .update({ is_active: false })
+      .eq("id", secondId)
+      .select("id");
+    expect(directRetire.error).toBeNull();
+    expect(directRetire.data ?? []).toEqual([]);
+    expect((await readFlags([secondId])).get(secondId)).toMatchObject({
+      is_active: true,
+    });
+
+    // Swapping by unlinking the old character first still succeeds: the
+    // unlinked row leaves the campaign, and the other links active.
+    expect((await link(owner, secondId, null)).error).toBeNull();
+    expect((await link(owner, firstId, campaignId)).error).toBeNull();
+    const rows = await readFlags([firstId, secondId]);
+    expect(rows.get(secondId)?.campaign_id).toBeNull();
+    expect(rows.get(firstId)).toMatchObject({
+      campaign_id: campaignId,
+      is_active: true,
+    });
   });
 });

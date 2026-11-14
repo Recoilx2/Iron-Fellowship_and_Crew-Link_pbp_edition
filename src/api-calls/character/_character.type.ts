@@ -21,6 +21,14 @@ export interface CharacterDocument {
 
   campaignId?: Nullable<string>;
 
+  /**
+   * Whether the character is the player's active character in its
+   * campaign (#127): at most one per player per campaign. Retired
+   * characters stay in the campaign as inactive. Always set: the column
+   * is NOT NULL DEFAULT true and the mapper copies it.
+   */
+  isActive: boolean;
+
   // If the character is in a campaign, this ID will be ignored
   worldId?: Nullable<string>;
 

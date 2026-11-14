@@ -183,8 +183,7 @@ describe("ChatFeed posted-roll burn", () => {
     expect(burnButton(view)).toBeNull();
   });
 
-  it("offers no burn on an already-burned roll", () => {
-    const burned = missPost();
+  it("offers no burn on an already-burned roll", () => {    const burned = missPost();
     if (burned.roll && burned.roll.type === ROLL_TYPE.STAT) {
       burned.roll = {
         ...burned.roll,
@@ -193,6 +192,15 @@ describe("ChatFeed posted-roll burn", () => {
       };
     }
     state.chat.postsByChannel = { ic: [burned] };
+    const view = render();
+    expandRoll(view);
+    expect(burnButton(view)).toBeNull();
+  });
+
+  it("offers no burn on a retired character's roll", () => {
+    state.campaigns.currentCampaign.characters.characterMap = {
+      kira: { uid: "player-1", name: "Kira Vey", momentum: 5, isActive: false },
+    } as never;
     const view = render();
     expandRoll(view);
     expect(burnButton(view)).toBeNull();
