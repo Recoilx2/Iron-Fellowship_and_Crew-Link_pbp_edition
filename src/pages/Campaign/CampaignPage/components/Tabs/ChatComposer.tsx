@@ -29,7 +29,11 @@ import {
 import { rollDice } from "stores/appState/rollers/rollDice";
 import { rollDie } from "stores/appState/rollers/rollDie";
 import type { Roll } from "types/DieRolls.type";
+import { ROLL_TYPE } from "types/DieRolls.type";
 import { RollDisplay } from "components/features/charactersAndCampaigns/RollDisplay";
+import { burnMomentumResult, isMomentumBurnUseful } from "functions/momentumBurn";
+import { updateCharacter } from "api-calls/character/updateCharacter";
+import { useSnackbar } from "providers/SnackbarProvider";
 import type { ChatRollContext, DiceRoller } from "functions/chatRolls";
 import { ChatRollPicker, type ChatRollKind } from "./ChatRollPickers";
 import { defaultChatSpeaker } from "functions/chatSpeaker";
@@ -293,6 +297,41 @@ export function ChatComposer(props: {
     setPicker(null);
   };
 
+  const { success } = useSnackbar();
+  // Burning before sending: the player burns momentum on the waiting action
+  // roll, then sends the burned result. Only for their own character, at
+  // most once, when the burn would change the outcome. GMs voicing an NPC
+  // or themselves have no momentum to burn.
+  const canBurnComposer =
+    pendingRoll?.type === ROLL_TYPE.STAT &&
+    pendingRoll.momentumBurned === undefined &&
+    speaker.characterId != null &&
+    myCharacter != null &&
+    isMomentumBurnUseful(pendingRoll, myCharacter.momentum);
+
+  const burnComposerRoll = () => {
+    if (!canBurnComposer || !pendingRoll || pendingRoll.type !== ROLL_TYPE.STAT) {
+      return;
+    }
+    const momentum = myCharacter?.momentum ?? 0;
+    const newResult = burnMomentumResult(pendingRoll, momentum);
+    const debilities = myCharacter?.debilities ?? {};
+    const active = Object.values(debilities).filter(Boolean).length;
+    const resetValue = active >= 2 ? 0 : active === 1 ? 1 : 2;
+    if (speaker.characterId) {
+      updateCharacter({
+        characterId: speaker.characterId,
+        character: { momentum: resetValue },
+      }).catch(() => {});
+    }
+    setPendingRoll(channelId, {
+      ...pendingRoll,
+      momentumBurned: momentum,
+      result: newResult,
+    });
+    success("Burned momentum on the draft roll.");
+  };
+
   const send = () => {
     if (!canSend) {
       return;
@@ -451,6 +490,17 @@ export function ChatComposer(props: {
           <Typography variant={"caption"} color={"text.secondary"}>
             Rolled. Add text, then send.
           </Typography>
+          {canBurnComposer && (
+            <Button
+              size={"small"}
+              variant={"outlined"}
+              color={"inherit"}
+              onClick={burnComposerRoll}
+              sx={{ mt: 0.5 }}
+            >
+              Burn momentum
+            </Button>
+          )}
         </Box>
       )}
       <Stack direction={"row"} spacing={1} alignItems={"flex-end"}>

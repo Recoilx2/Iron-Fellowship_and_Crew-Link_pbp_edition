@@ -1,5 +1,4 @@
-import type { ChannelKind } from "api-calls/chat/_chat.type";
-import type { ChannelVisibility } from "api-calls/chat/_chat.type";
+import type { ChannelKind, ChannelVisibility } from "api-calls/chat/_chat.type";
 
 export interface ChatNameLine {
   /** The bold lead of the name line: the speaker, or the author. */

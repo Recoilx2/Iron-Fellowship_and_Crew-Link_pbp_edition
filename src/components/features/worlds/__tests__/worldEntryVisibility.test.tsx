@@ -3,26 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot, Root } from "react-dom/client";
 
-// LocationCard pulls locationConfigs, which transitively imports the zustand
-// store and config/firebase.config (which calls getAuth at module load and
-// needs real API keys). Mock it out like exportNotes.test.ts does.
-vi.mock("config/firebase.config", () => ({
-  firebaseApp: {},
-  firebaseAuth: {},
-  firestore: {},
-  storage: {},
-  functions: {},
-  projectId: "test-project",
-}));
-vi.mock("firebase/firestore", () => ({
-  collection: vi.fn(),
-  doc: vi.fn(),
-  getDocs: vi.fn(),
-  getDoc: vi.fn(),
-  query: vi.fn(),
-  where: vi.fn(),
-}));
-
 import { LocationCard } from "components/features/worlds/Locations/LocationCard";
 import { NPCCard } from "components/features/worlds/NPCSection/NPCCard";
 import { LoreCard } from "components/features/worlds/Lore/LoreCard";

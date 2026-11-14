@@ -496,8 +496,8 @@ function ChannelList(props: {
               person.uid === uid
                 ? "you"
                 : person.isGM
-                  ? "GM · message"
-                  : "message"
+                  ? "GM · direct message"
+                  : "direct message"
             }
           />
         </ListItemButton>
