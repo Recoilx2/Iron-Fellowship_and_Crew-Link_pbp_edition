@@ -9,10 +9,11 @@ export interface ChatSpeaker {
 
 /**
  * Who the composer posts as before anyone picks a voice. Players have no
- * picker (one character per campaign): in an IC channel they post as their
- * campaign character, in an OOC channel as themselves. GMs start as
- * themselves, labelled GM, and pick an NPC voice from the campaign world's
- * NPC list in the composer.
+ * picker (one active character per campaign, #127): in an IC channel they
+ * post as their active campaign character, in an OOC channel as
+ * themselves. A player with no active character posts as themselves
+ * everywhere. GMs start as themselves, labelled GM, and pick an NPC voice
+ * from the campaign world's NPC list in the composer.
  */
 export function defaultChatSpeaker(
   channelKind: ChannelKind,

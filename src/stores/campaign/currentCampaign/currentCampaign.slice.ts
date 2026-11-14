@@ -6,6 +6,7 @@ import { deleteCampaign } from "api-calls/campaign/deleteCampaign";
 import { leaveCampaign } from "api-calls/campaign/leaveCampaign";
 import { removeCharacterFromCampaign } from "api-calls/campaign/removeCharacterFromCampaign";
 import { addCharacterToCampaign } from "api-calls/campaign/addCharacterToCampaign";
+import { setCampaignCharacterActive } from "api-calls/campaign/setCampaignCharacterActive";
 import { updateCampaign } from "api-calls/campaign/updateCampaign";
 import { createCampaignTracksSlice } from "./tracks/campaignTracks.slice";
 import { createCampaignCharactersSlice } from "./characters/campaignCharacters.slice";
@@ -144,6 +145,16 @@ export const createCurrentCampaignSlice: CreateSliceType<
         return new Promise((res, reject) => reject("No campaign found."));
       }
       return removeCharacterFromCampaign({ uid, campaignId, characterId });
+    },
+    setCharacterActive: (characterId, active) => {
+      const state = getState();
+      const uid = state.auth.uid;
+      const campaignId = state.campaigns.currentCampaign.currentCampaignId;
+
+      if (!campaignId) {
+        return new Promise((res, reject) => reject("No campaign found."));
+      }
+      return setCampaignCharacterActive({ uid, characterId, active });
     },
     updateCampaignConditionMeter: (conditionMeterKey, value) => {
       const campaignId = getState().campaigns.currentCampaign.currentCampaignId;

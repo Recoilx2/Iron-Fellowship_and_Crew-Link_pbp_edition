@@ -71,6 +71,68 @@ describe("chat storage privileges migration (#125 burn, #118 uploads)", () => {
     );
   });
 
+  it("keeps every later redefinition of the roll lock a definer", () => {
+    // 20261121000000 restated keep_chat_roll_immutable with its active-
+    // character checks but without SECURITY DEFINER, so this file's test
+    // above stayed green while live burns failed with `permission denied
+    // for schema private` (run 43595627045). Every definition at or after
+    // the definer fix (20261120000000, f6675771) must carry SECURITY
+    // DEFINER with a pinned empty search path; earlier definitions predate
+    // the rule and are exempt by name, as is 20261121000000 itself, the
+    // regressed file this repair supersedes: migrations are never edited,
+    // so the bad definition stays in history and filename order (this
+    // repair sorts later) decides the live outcome. Any future file that
+    // restates the lock without DEFINER fails here. Follows the
+    // landedLater allowlist convention.
+    const exemptBeforeDefiner = new Set([
+      "20261113170000_chat_rolls.sql",
+      "20261115000000_chat_roll_cleanup.sql",
+      "20261116000000_chat_momentum_burn.sql",
+      "20261118000000_chat_momentum_burn_hardening.sql",
+      "20261119000000_chat_momentum_burn_gms_pin.sql",
+      "20261121000000_campaign_active_character.sql",
+    ]);
+    const headsIn = (sql) => {
+      const re =
+        /CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.keep_chat_roll_immutable\(\)([\s\S]*?)AS\s*\$\$/gi;
+      return [...codeOf(sql).matchAll(re)].map((m) => m[1]);
+    };
+    const bad = readdirSync(dir)
+      .filter((f) => f.endsWith(".sql"))
+      .filter((f) => headsIn(readFileSync(join(dir, f), "utf8")).length > 0)
+      .filter((f) => !exemptBeforeDefiner.has(f))
+      .filter((f) =>
+        headsIn(readFileSync(join(dir, f), "utf8")).some(
+          (head) =>
+            !/SECURITY\s+DEFINER/i.test(head) ||
+            !/SET\s+search_path\s*=\s*(''|"")/i.test(head)
+        )
+      );
+    assert.deepEqual(
+      bad,
+      [],
+      `roll lock redefined without SECURITY DEFINER (burns lose private-schema access): ${bad.join(", ")}`
+    );
+    // The repair sorts after the regressed file, so filename order alone
+    // decides the live outcome.
+    const defining = readdirSync(dir)
+      .filter((f) => f.endsWith(".sql"))
+      .filter(
+        (f) =>
+          headsIn(readFileSync(join(dir, f), "utf8")).length > 0 &&
+          !exemptBeforeDefiner.has(f)
+      )
+      .sort();
+    assert.ok(
+      defining.length > 0,
+      "no non-exempt keep_chat_roll_immutable definition remains"
+    );
+    assert.ok(
+      defining.at(-1) > "20261121000000_campaign_active_character.sql",
+      `latest definer restatement ${defining.at(-1)} does not sort after the regressed file`
+    );
+  });
+
   it("never grants the private schema to app roles", () => {
     const code = allMigrationCode();
     assert.ok(

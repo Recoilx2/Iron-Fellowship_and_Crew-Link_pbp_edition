@@ -3,6 +3,7 @@ import { GameLogSlice } from "./gameLog.slice.type";
 import { addRoll } from "api-calls/game-log/addRoll";
 import { postCampaignRoll } from "api-calls/chat/postCampaignRoll";
 import { defaultChatSpeaker } from "functions/chatSpeaker";
+import { findActiveCampaignCharacter } from "functions/isActiveCampaignCharacter";
 import { defaultGameLogSlice } from "./gameLog.slice.default";
 import { removeLog } from "api-calls/game-log/removeLog";
 import { updateLog } from "api-calls/game-log/updateLog";
@@ -16,20 +17,26 @@ export const createGameLogSlice: CreateSliceType<GameLogSlice> = (
 
   addRoll: ({ characterId, campaignId, roll }) => {
     // A roll made in a campaign posts to the campaign's starting IC
-    // channel as the channel-kind speaker (ticket #30): the author's
+    // channel as the channel-kind speaker (ticket #30): the player's active
     // campaign character in character, nobody otherwise. Solo rolls keep
-    // the character roll log.
+    // the character roll log. A roll from a sheet that is not the player's
+    // active character -- a retired character's sheet -- stays off the
+    // campaign chat and lands in that sheet's own log instead.
     if (campaignId) {
       const state = getState();
       const uid = state.auth.uid;
       const characterMap =
         state.campaigns.currentCampaign.characters.characterMap ?? {};
-      const myCharacterId = Object.entries(characterMap).find(
-        ([, character]) => character.uid === uid
+      const activeCharacterId = findActiveCampaignCharacter(
+        characterMap,
+        uid
       )?.[0];
+      if (characterId && characterId !== activeCharacterId) {
+        return addRoll({ characterId, roll });
+      }
       const { characterId: speakerCharacterId } = defaultChatSpeaker(
         "IC",
-        myCharacterId
+        activeCharacterId
       );
       return postCampaignRoll({ campaignId, speakerCharacterId, roll });
     }

@@ -36,7 +36,7 @@ function statRoll(overrides: Partial<Roll> = {}): Roll {
 // access-rule tests; here both writers are stubs.
 function setUpSlice(options: {
   uid?: string;
-  characterMap?: Record<string, { uid: string }>;
+  characterMap?: Record<string, { uid: string; isActive?: boolean }>;
 } = {}) {
   const { uid = "player-1", characterMap = {} } = options;
   const draft = { gameLog: { ...defaultGameLogSlice } };
@@ -109,6 +109,26 @@ describe("gameLog.addRoll routing", () => {
     expect(id).toBe("log-1");
     expect(mockedAddRoll).toHaveBeenCalledWith({
       characterId: "solo-1",
+      roll,
+    });
+    expect(mockedPostCampaignRoll).not.toHaveBeenCalled();
+  });
+
+  it("keeps a roll from an inactive sheet out of the campaign chat", async () => {
+    const slice = setUpSlice({
+      characterMap: { kira: { uid: "player-1", isActive: false } },
+    });
+    const roll = statRoll();
+
+    const id = await slice.addRoll({
+      campaignId: "campaign-1",
+      characterId: "kira",
+      roll,
+    });
+
+    expect(id).toBe("log-1");
+    expect(mockedAddRoll).toHaveBeenCalledWith({
+      characterId: "kira",
       roll,
     });
     expect(mockedPostCampaignRoll).not.toHaveBeenCalled();

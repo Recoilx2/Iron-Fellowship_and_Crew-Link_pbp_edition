@@ -23,6 +23,7 @@ import {
   InitiativeStatus,
 } from "api-calls/character/_character.type";
 import { LinkComponent } from "components/shared/LinkComponent";
+import { isActiveCampaignCharacter } from "functions/isActiveCampaignCharacter";
 import { constructCharacterSheetPath } from "pages/Character/routes";
 import { useCampaignType } from "hooks/useCampaignType";
 
@@ -70,6 +71,11 @@ export function CharacterCard(props: CharacterCardProps) {
   const removeCharacterFromCampaign = useStore(
     (store) => store.campaigns.currentCampaign.removeCharacter
   );
+  const setCharacterActive = useStore(
+    (store) => store.campaigns.currentCampaign.setCharacterActive
+  );
+
+  const isActive = isActiveCampaignCharacter(character);
 
   return (
     <Card variant={"outlined"}>
@@ -106,6 +112,14 @@ export function CharacterCard(props: CharacterCardProps) {
                 color={"textSecondary"}
               >
                 {user ? user.displayName : "Loading..."}
+              </Typography>
+              <Typography
+                variant={"caption"}
+                component={"p"}
+                color={"textSecondary"}
+                aria-label={isActive ? "Active character" : "Retired character"}
+              >
+                {isActive ? "Active" : "Retired"}
               </Typography>
             </Box>
           </Box>
@@ -184,6 +198,24 @@ export function CharacterCard(props: CharacterCardProps) {
         </Accordion>
         <Box display={"flex"} justifyContent={"flex-end"} p={1}>
           <Stack direction={"row"} spacing={1} flexWrap={"wrap"}>
+            {uid === currentUserUid &&
+              (isActive ? (
+                <Button
+                  color={"inherit"}
+                  onClick={() => setCharacterActive(characterId, false)}
+                  aria-label={`Retire: ${character.name}`}
+                >
+                  Retire
+                </Button>
+              ) : (
+                <Button
+                  color={"inherit"}
+                  onClick={() => setCharacterActive(characterId, true)}
+                  aria-label={`Make active: ${character.name}`}
+                >
+                  Make active
+                </Button>
+              ))}
             {(uid === currentUserUid || !showGuidedPlayerView) && (
               <Button
                 color={"error"}

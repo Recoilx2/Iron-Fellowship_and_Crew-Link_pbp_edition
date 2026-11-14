@@ -12,6 +12,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import { CharacterList } from "components/features/characters/CharacterList";
 import { Link } from "react-router-dom";
 import { constructCharacterCreateInCampaignUrl } from "pages/Character/routes";
+import { findActiveCampaignCharacter } from "functions/isActiveCampaignCharacter";
 import { useStore } from "stores/store";
 import { useId, useState } from "react";
 
@@ -25,6 +26,7 @@ export function AddCharacterDialog(props: AddCharacterDialogProps) {
   const { open, handleClose, campaignId } = props;
 
   const characters = useStore((store) => store.characters.characterMap);
+  const currentUserUid = useStore((store) => store.auth.uid);
   const isLoading = useStore((store) => store.characters.loading);
 
   const addCharacterToCampaign = useStore(
@@ -43,14 +45,16 @@ export function AddCharacterDialog(props: AddCharacterDialogProps) {
     });
   };
 
-  // One character per player per campaign (#109): the player's character
-  // already in this campaign is the current one, and picking another swaps
-  // it out instead of adding a second.
-  const currentCharacterId = Object.keys(characters).find(
-    (characterId) => characters[characterId].campaignId === campaignId
-  );
-  const currentCharacter = currentCharacterId
-    ? characters[currentCharacterId]
+  // At most one active character per player per campaign (#127): the
+  // player's active character in this campaign is the active one, and
+  // choosing another retires it and makes the new one active.
+  const activeCharacterId = findActiveCampaignCharacter(
+    characters,
+    currentUserUid,
+    campaignId
+  )?.[0];
+  const activeCharacter = activeCharacterId
+    ? characters[activeCharacterId]
     : undefined;
 
   return (
@@ -80,8 +84,8 @@ export function AddCharacterDialog(props: AddCharacterDialogProps) {
             sx={{ mb: 1 }}
             color={(theme) => theme.palette.text.secondary}
           >
-            {currentCharacter
-              ? `${currentCharacter.name} is your character in this campaign. Choosing another swaps them out.`
+            {activeCharacter
+              ? `${activeCharacter.name} is your active character in this campaign. Choosing another retires ${activeCharacter.name} and makes the new character active.`
               : "Add an existing character"}
           </Typography>
         )}
@@ -90,18 +94,24 @@ export function AddCharacterDialog(props: AddCharacterDialogProps) {
             characters={characters}
             maxColumns={1}
             actions={(characterId) => {
-              if (characterId === currentCharacterId) {
-                return <Button disabled>Current</Button>;
+              if (characterId === activeCharacterId) {
+                return <Button disabled>Active</Button>;
               }
-              const inAnotherCampaign = !!characters[characterId].campaignId;
+              const inThisCampaign =
+                characters[characterId].campaignId === campaignId;
+              const inOtherCampaign =
+                !!characters[characterId].campaignId && !inThisCampaign;
+              if (inThisCampaign) {
+                return <Button disabled>In campaign</Button>;
+              }
               return (
                 <Button
-                  disabled={inAnotherCampaign || addCharacterLoading}
+                  disabled={inOtherCampaign || addCharacterLoading}
                   onClick={() => addCharacter(characterId)}
                 >
-                  {inAnotherCampaign
+                  {inOtherCampaign
                     ? "Selected"
-                    : currentCharacter
+                    : activeCharacter
                       ? "Swap"
                       : "Select"}
                 </Button>

@@ -21,6 +21,7 @@ export interface CharacterRow {
   id: string;
   owner_id: string;
   campaign_id: string | null;
+  is_active: boolean;
   world_id: string | null;
   name: string;
   stats: Record<string, number>;
@@ -83,6 +84,7 @@ export function characterRowToDocument(row: CharacterRow): CharacterDocument {
   return {
     uid: row.owner_id,
     ...(row.campaign_id ? { campaignId: row.campaign_id } : {}),
+    isActive: row.is_active,
     ...(row.world_id ? { worldId: row.world_id } : {}),
     name: row.name,
     stats: row.stats ?? {},
@@ -126,6 +128,7 @@ export function characterRowToDocument(row: CharacterRow): CharacterDocument {
 const documentFieldToColumn: Record<string, string> = {
   uid: "owner_id",
   campaignId: "campaign_id",
+  isActive: "is_active",
   worldId: "world_id",
   name: "name",
   stats: "stats",
@@ -153,6 +156,7 @@ export function characterUpdateToColumns(
   const rowByDocumentField: Record<string, unknown> = {
     uid: row.owner_id,
     campaignId: row.campaign_id,
+    isActive: row.is_active,
     worldId: row.world_id,
     name: row.name,
     stats: row.stats,
