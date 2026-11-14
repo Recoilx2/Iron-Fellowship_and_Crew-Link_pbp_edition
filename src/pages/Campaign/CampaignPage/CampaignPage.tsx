@@ -15,6 +15,7 @@ import { CampaignType } from "api-calls/campaign/_campaign.type";
 import { CampaignSettingsMenu } from "./components/CampaignSettingsMenu";
 import { CampaignMoveOracleButtons } from "./components/CampaignMoveOracleButtons";
 import { InviteUsersDialog } from "./components/InviteUsersDialog";
+import { GMAssistant } from "./components/GMAssistant";
 
 export function CampaignPage() {
   useSyncStore();
@@ -113,6 +114,10 @@ export function CampaignPage() {
               </Button>
             )}
             <CampaignSettingsMenu />
+            {/* GM-only: renders nothing for players. The header stays
+                above every campaign tab, so the button is one step away
+                from chat and the campaign's world screens alike. */}
+            <GMAssistant />
           </Stack>
         }
       />
