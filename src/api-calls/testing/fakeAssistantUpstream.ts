@@ -99,13 +99,17 @@ export function startFakeAssistantUpstream(port: number): Promise<FakeAssistantU
       });
       if (state.mode === "stall") {
         // Send one chunk so the caller has something to stop, then hold the
-        // connection open until the caller hangs up.
+        // connection open until the caller hangs up. Detect the hangup on
+        // the response: when the client aborts mid-response the request
+        // object is already fully consumed (readBody drained it), so its
+        // `close` event does not fire again, but the response `close` fires
+        // with writableEnded=false.
         res.write(
           `data: ${JSON.stringify({ choices: [{ delta: { content: state.chunks[0] ?? "Part " } }] })}\n\n`,
         );
         await new Promise<void>((resolve) => {
-          req.on("close", () => {
-            record.aborted = true;
+          res.on("close", () => {
+            if (!res.writableEnded) record.aborted = true;
             resolve();
           });
         });
