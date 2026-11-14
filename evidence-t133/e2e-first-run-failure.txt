@@ -1,0 +1,85 @@
+e2e	Run the browser tests (zero skips allowed)	﻿2026-11-14T16:54:55.0497183Z ##[group]Run ENV_FILE=.env.live tests/e2e.sh
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:54:55.0497634Z ^[[36;1mENV_FILE=.env.live tests/e2e.sh^[[0m
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:54:55.0527940Z shell: /usr/bin/bash -e {0}
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:54:55.0528211Z ##[endgroup]
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:54:55.0799447Z e2e: browser tests against http://localhost:8080 (gateway http://localhost:8000)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:54:56.3506323Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:54:56.3506868Z Running 29 tests using 1 worker
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:54:56.3507309Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:54:58.6548668Z   ✓   1 [chromium] › e2e/campaign-access.spec.ts:55:3 › campaign access › a member opens a campaign they belong to and sees its screen (1.2s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:55:01.8805670Z   ✓   2 [chromium] › e2e/campaign-access.spec.ts:66:3 › campaign access › an outsider cannot open a campaign they do not belong to (3.1s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:55:09.2831071Z   ✓   3 [chromium] › e2e/chat-active-character.spec.ts:80:3 › active character › retire, add new, post as new, then make the old one active again (6.9s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:55:10.9255917Z   ✓   4 [chromium] › e2e/chat-channels.spec.ts:54:3 › chat channels › a member opens a campaign on the Chat tab with its starting channels (1.3s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:55:12.0531683Z   ✓   5 [chromium] › e2e/chat-channels.spec.ts:68:3 › chat channels › a player sees no channel-management controls (1.0s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:55:17.0754543Z   ✓   6 [chromium] › e2e/chat-edit-delete.spec.ts:70:3 › chat post edits and deletes › an edit marks the post edited in both browsers (4.7s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:55:21.7860561Z   ✓   7 [chromium] › e2e/chat-edit-delete.spec.ts:119:3 › chat post edits and deletes › a GM delete leaves a deleted marker in both browsers (4.6s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:55:25.0021950Z   ✓   8 [chromium] › e2e/chat-images.spec.ts:70:3 › chat images › a picked image arrives inline in a second browser (2.8s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:55:30.2312369Z   ✓   9 [chromium] › e2e/chat-momentum-burn.spec.ts:125:3 › chat momentum burn on a posted roll › a player burns momentum on a posted roll, and a second browser sees the update (4.6s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:55:35.0833680Z   ✓  10 [chromium] › e2e/chat-posts.spec.ts:64:3 › chat text posts › a text post arrives live in a second browser (4.5s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:55:40.6431322Z   ✓  11 [chromium] › e2e/chat-posts.spec.ts:100:3 › chat text posts › an out-of-character post shows the display name and campaign character (5.5s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:55:45.2316538Z   ✓  12 [chromium] › e2e/chat-posts.spec.ts:165:3 › chat text posts › a GM post as a world NPC shows the NPC with a GM tag (4.5s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:55:48.0404841Z   ✓  13 [chromium] › e2e/chat-private-channels.spec.ts:59:3 › chat private channels › a GM creates a private channel for one member (2.2s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:55:49.7721582Z   ✓  14 [chromium] › e2e/chat-private-channels.spec.ts:80:3 › chat private channels › the chosen member sees the private channel (1.7s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:55:51.7501260Z   ✓  15 [chromium] › e2e/chat-private-channels.spec.ts:89:3 › chat private channels › another member does not see the private channel (1.9s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:55:57.7895363Z   ✓  16 [chromium] › e2e/chat-rolls.spec.ts:66:3 › chat rolls from the composer › a dice roll attaches to the draft and posts as a one-liner (5.7s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:56:06.0006217Z   ✓  17 [chromium] › e2e/chat-rolls.spec.ts:131:3 › chat rolls from the composer › a GM-only roll never reaches players (8.1s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:56:13.3887761Z   ✓  18 [chromium] › e2e/chat-sheet-rolls.spec.ts:72:3 › sheet rolls land in the starting IC channel › a custom dice roll from the sheet posts as the character (6.9s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:56:49.4548229Z   ✘  19 [chromium] › e2e/gm-assistant-outline-revision.spec.ts:171:3 › outline revisions › a GM requests a revision, applies it behind a confirmation, then undoes it (29.1s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:05.7306034Z   ✓  20 [chromium] › e2e/gm-assistant-outline.spec.ts:85:3 › campaign outline › a GM writes the outline and a co-GM sees it live (15.2s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:07.8161180Z   ✓  21 [chromium] › e2e/gm-assistant-outline.spec.ts:117:3 › campaign outline › a player in the same campaign can't find the outline anywhere (2.0s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:14.6736525Z   ✓  22 [chromium] › e2e/gm-assistant.spec.ts:122:3 › gm assistant panel › a GM opens the assistant, sees the streamed reply and sends it to the composer (3.4s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:16.9913353Z   ✓  23 [chromium] › e2e/gm-assistant.spec.ts:190:3 › gm assistant panel › a GM opens the Context tab, sees option groups and jumps there from the size bar (2.3s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:21.8336980Z   ✓  24 [chromium] › e2e/gm-assistant.spec.ts:234:3 › gm assistant panel › a player in the same campaign sees no Assistant button (1.8s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:23.3666788Z   ✓  25 [chromium] › e2e/my-notes.spec.ts:75:3 › my notes › a member opens My notes from the chat side screens on desktop (1.1s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:24.4837630Z   ✓  26 [chromium] › e2e/my-notes.spec.ts:84:3 › my notes › a member opens My notes from the chat side screens at mid widths (1.1s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:25.7054920Z   ✓  27 [chromium] › e2e/my-notes.spec.ts:94:3 › my notes › the campaign Notes screen is My notes (1.2s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:26.7892770Z   ✓  28 [chromium] › e2e/my-notes.spec.ts:109:3 › my notes › a member opens My notes from the bottom navigation on phones (1.1s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3159913Z   ✓  29 [chromium] › e2e/my-notes.spec.ts:131:3 › my notes › a member reaches Locations, NPCs and Lore from the phone World screen (1.4s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3847964Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3851233Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3859985Z   1) [chromium] › e2e/gm-assistant-outline-revision.spec.ts:171:3 › outline revisions › a GM requests a revision, applies it behind a confirmation, then undoes it 
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3860798Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3861060Z     Error: expect(locator).toContainText(expected) failed
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3861354Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3861531Z     Locator: getByRole('textbox', { name: 'Note text' })
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3862256Z     Expected substring: "E2E original plan 1794675373410 the bell rings twice"
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3862852Z     Received string:    ""
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3863197Z     Timeout: 15000ms
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3863368Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3863510Z     Call log:
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3864085Z       - Expect "toContainText" getByRole('textbox', { name: 'Note text' }) with timeout 15000ms
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3864926Z       - waiting for getByRole('textbox', { name: 'Note text' })
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3866189Z         34 × locator resolved to <div tabindex="0" role="textbox" translate="no" aria-multiline="true" contenteditable="true" aria-label="Note text" class="tiptap ProseMirror">…</div>
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3867036Z            - unexpected value ""
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3867182Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3867189Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3867294Z       191 |       await expect(
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3867609Z       192 |         gmPage.getByRole("textbox", { name: "Note text" })
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3867927Z     > 193 |       ).toContainText(ORIGINAL);
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3868165Z           |         ^
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3868365Z       194 |
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3868631Z       195 |       // An explicit revision action sends the instruction in
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3869033Z       196 |       // outline-revision mode; the reply previews both versions.
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3869718Z         at /home/runner/work/Iron-Fellowship_and_Crew-Link_pbp_edition/Iron-Fellowship_and_Crew-Link_pbp_edition/e2e/gm-assistant-outline-revision.spec.ts:193:9
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3870175Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3870513Z     attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3871122Z     test-results/gm-assistant-outline-revis-7c346-confirmation-then-undoes-it-chromium/test-failed-1.png
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3871759Z     ────────────────────────────────────────────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3871990Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3872363Z     Error Context: test-results/gm-assistant-outline-revis-7c346-confirmation-then-undoes-it-chromium/error-context.md
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3872749Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3873108Z     Error Context: test-results/gm-assistant-outline-revis-7c346-confirmation-then-undoes-it-chromium/error-context.md
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3873615Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3873935Z     attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3874782Z     test-results/gm-assistant-outline-revis-7c346-confirmation-then-undoes-it-chromium/trace.zip
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3875413Z     Usage:
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3875521Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3875912Z         npx playwright show-trace test-results/gm-assistant-outline-revis-7c346-confirmation-then-undoes-it-chromium/trace.zip
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3876320Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3876604Z     ────────────────────────────────────────────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3876838Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3876958Z   1 failed
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3877970Z     [chromium] › e2e/gm-assistant-outline-revision.spec.ts:171:3 › outline revisions › a GM requests a revision, applies it behind a confirmation, then undoes it 
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.3878518Z   28 passed (2.5m)
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.4908194Z e2e: 29 browser test(s): 28 passed, 1 failed, 0 flaky, 0 skipped
+e2e	Run the browser tests (zero skips allowed)	2026-11-14T16:57:28.4948046Z ##[error]Process completed with exit code 1.
