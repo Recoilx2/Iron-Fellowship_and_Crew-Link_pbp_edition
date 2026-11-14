@@ -362,6 +362,21 @@ describe.skipIf(!config)("characters end to end", () => {
       is_active: true,
     });
 
+    // A direct write of the flag is owner-only too: row-level security
+    // leaves a non-owner's update (a GM is no exception -- the only UPDATE
+    // policy on the table is owner-only) touching zero rows, so the flags
+    // stand without a privilege error from the swap function.
+    const directRetire = await other.client
+      .from("characters")
+      .update({ is_active: false })
+      .eq("id", secondId)
+      .select("id");
+    expect(directRetire.error).toBeNull();
+    expect(directRetire.data ?? []).toEqual([]);
+    expect((await readFlags([secondId])).get(secondId)).toMatchObject({
+      is_active: true,
+    });
+
     // Swapping by unlinking the old character first still succeeds: the
     // unlinked row leaves the campaign, and the other links active.
     expect((await link(owner, secondId, null)).error).toBeNull();

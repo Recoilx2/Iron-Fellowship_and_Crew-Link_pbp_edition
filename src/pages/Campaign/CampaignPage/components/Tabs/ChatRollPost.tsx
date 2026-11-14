@@ -11,6 +11,7 @@ import { isMomentumBurnUseful, burnMomentumResult } from "functions/momentumBurn
 import { burnPostMomentum } from "api-calls/chat/burnPostMomentum";
 import { useSnackbar } from "providers/SnackbarProvider";
 import type { CharacterDocument } from "api-calls/character/_character.type";
+import { isActiveCampaignCharacter } from "functions/isActiveCampaignCharacter";
 import { getRollResultLabel } from "components/features/charactersAndCampaigns/RollDisplay/getRollResultLabel";
 
 /**
@@ -51,7 +52,7 @@ export function ChatRollPost(props: {
     post.speakerNpcId == null &&
     speakerCharacter?.uid === uid &&
     speakerCharacter != null &&
-    speakerCharacter.isActive !== false &&
+    isActiveCampaignCharacter(speakerCharacter) &&
     isMomentumBurnUseful(roll, speakerCharacter.momentum);
 
   const burn = () => {

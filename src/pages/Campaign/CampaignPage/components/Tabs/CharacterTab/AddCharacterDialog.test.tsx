@@ -96,7 +96,7 @@ describe("AddCharacterDialog one active character per player", () => {
     // The dialog names the character already in this campaign.
     expect(document.body.textContent).toMatch(/Ash/);
     const currentButton = buttonFor("Ash");
-    expect(currentButton?.textContent).toBe("Current");
+    expect(currentButton?.textContent).toBe("Active");
     expect(currentButton?.disabled).toBe(true);
 
     // The other character is offered as a swap, not a second add.
@@ -173,7 +173,7 @@ describe("AddCharacterDialog one active character per player", () => {
     // The dialog names the active character and the retirement it offers.
     expect(document.body.textContent).toMatch(/Ash is your active character/);
     expect(document.body.textContent).toMatch(/retires Ash/);
-    expect(buttonFor("Ash")?.textContent).toBe("Current");
+    expect(buttonFor("Ash")?.textContent).toBe("Active");
     // The retired character stays listed but unavailable here: the
     // Characters screen makes it active again.
     expect(buttonFor("Birch")?.textContent).toBe("In campaign");

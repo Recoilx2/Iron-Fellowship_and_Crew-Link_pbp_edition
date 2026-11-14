@@ -36,6 +36,7 @@ import { useSnackbar } from "providers/SnackbarProvider";
 import type { ChatRollContext, DiceRoller } from "functions/chatRolls";
 import { ChatRollPicker, type ChatRollKind } from "./ChatRollPickers";
 import { defaultChatSpeaker } from "functions/chatSpeaker";
+import { isActiveCampaignCharacter } from "functions/isActiveCampaignCharacter";
 
 interface PendingAttachment {
   key: string;
@@ -168,7 +169,7 @@ export function ChatComposer(props: {
 
   const myEntry = Object.entries(characterMap).find(
     ([, character]) =>
-      character.uid === uid && character.isActive !== false
+      character.uid === uid && isActiveCampaignCharacter(character)
   );
   const myCharacter = myEntry?.[1];
   const isGM = gmIds.includes(uid);
