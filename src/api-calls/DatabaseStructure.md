@@ -49,12 +49,14 @@ go through the same checks as the posts they belong to (ticket #118,
 channel members through the `private.can_read_channel` visibility check,
 GMs alone for GM-only roll posts. A file uploaded before its post exists
 (the composer attaches at once so sending is instant) reads only for its
-uploader. Only the uploader overwrites or deletes a file; the author of a
-post or a GM of its campaign may also remove the post's files when clearing
+uploader. Uploads land only in a not-yet-posted folder or the uploader's
+own post, and nobody overwrites a sent file's bytes -- a post
+edit changes the text, never the images (#118); the author of a
+post or a GM of its campaign may still remove the post's files when clearing
 the post. The bucket backstops what the composer accepts (PNG, JPEG, GIF
 and WebP through `allowed_mime_types`, and the `CHAT_IMAGE_MAX_MB`
-deployment setting through `file_size_limit`). Signed links stay
-short-lived on the client (minutes, re-signed when shown, see
+deployment setting through `file_size_limit`, re-applied on every start).
+Signed links stay short-lived on the client (minutes, re-signed when shown, see
 `src/api-calls/chat/chatImages.ts`).
 
 ## Type Links

@@ -7,6 +7,7 @@ import { CampaignType } from "api-calls/campaign/_campaign.type";
 import { CHAT_CHANNELS_TABLE } from "api-calls/chat/_getRef";
 import { CHAT_POSTS_TABLE, type PostRow } from "api-calls/chat/_postRef";
 import { createPost } from "api-calls/chat/createPost";
+import { deletePost } from "api-calls/chat/deletePost";
 import {
   CHAT_IMAGES_BUCKET,
   chatImageFilePath,
@@ -15,10 +16,12 @@ import {
   uploadChatImage,
 } from "api-calls/chat/chatImages";
 import { validateChatImageFile } from "api-calls/chat/chatImageLimits";
+import { MAX_CHAT_IMAGE_BYTES } from "api-calls/chat/chatImageLimits";
 import {
   createPerson,
   deletePerson,
   liveStackConfig,
+  adminClient,
   type LivePerson,
   type LiveStackConfig,
 } from "api-calls/testing/liveHarness";
@@ -385,6 +388,91 @@ describe.skipIf(!config)("chat images end to end", () => {
       .upload(path, png("lantern.png"), { upsert: true });
     expect(ownError).toBeNull();
     await signOut();
+  });
+
+  it("refuses uploads into another member's post folder", { timeout: 120000 }, async () => {
+    const { player, other, campaignId, icChannelId } = await setUpMembers();
+    const path = await postImageAs(player, campaignId, icChannelId);
+    const postId = path.split("/")[1];
+
+    // A fellow member cannot top up someone else's post ...
+    const { error: strangerError } = await other.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .upload(chatImageFilePath(campaignId, postId, "sneaky.png"), png("sneaky.png"));
+    expect(strangerError).not.toBeNull();
+
+    // ... while the author can attach another file to their own post.
+    const ownPath = chatImageFilePath(campaignId, postId, "extra.png");
+    const { error: ownError } = await player.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .upload(ownPath, png("extra.png"));
+    expect(ownError).toBeNull();
+    const { error: cleanupError } = await player.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .remove([ownPath]);
+    expect(cleanupError).toBeNull();
+  });
+
+  it("locks a sent post's images against edits", { timeout: 120000 }, async () => {
+    const { player, campaignId, icChannelId } = await setUpMembers();
+    const path = await postImageAs(player, campaignId, icChannelId);
+    const postId = path.split("/")[1];
+
+    // The author cannot swap the attachments after sending: the edit
+    // trigger refuses image_paths changes, so the row stays as posted.
+    const { data: updated, error: editError } = await player.client
+      .from(CHAT_POSTS_TABLE)
+      .update({ image_paths: [] })
+      .eq("id", postId)
+      .select("id");
+    expect(editError !== null || (updated ?? []).length === 0).toBe(true);
+    const { data: rows, error: readError } = await player.client
+      .from(CHAT_POSTS_TABLE)
+      .select("image_paths")
+      .eq("id", postId);
+    expect(readError).toBeNull();
+    expect((rows as unknown as Array<{ image_paths: string[] }>)[0]?.image_paths).toEqual([path]);
+
+    // Deleting still clears the images: the pin sits on the edit path, and
+    // the delete posts the cleared images with the marker itself.
+    await signInAs(player);
+    await deletePost({ postId });
+    await signOut();
+    const { data: gone, error: goneError } = await player.client
+      .from(CHAT_POSTS_TABLE)
+      .select("deleted_at,image_paths")
+      .eq("id", postId);
+    expect(goneError).toBeNull();
+    const deleted = (gone as unknown as Array<{ deleted_at: string | null; image_paths: string[] }>)[0];
+    expect(deleted?.deleted_at).not.toBeNull();
+    expect(deleted?.image_paths).toEqual([]);
+  });
+
+  it("refuses storage overwrites of a sent post's image", { timeout: 120000 }, async () => {
+    const { player, campaignId, icChannelId } = await setUpMembers();
+    const path = await postImageAs(player, campaignId, icChannelId);
+
+    // The uploader cannot replace the bytes once the post claims them ...
+    const { error: overwriteError } = await player.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .upload(path, png("lantern.png"), { upsert: true });
+    expect(overwriteError).not.toBeNull();
+
+    // ... the sent bytes still read back.
+    const { error: downloadError } = await player.client.storage
+      .from(CHAT_IMAGES_BUCKET)
+      .download(path);
+    expect(downloadError).toBeNull();
+  });
+
+  it("keeps the bucket cap and the client cap on the one deployment setting", { timeout: 60000 }, async () => {
+    const { data: bucket, error } = await adminClient(cfg).storage.getBucket(CHAT_IMAGES_BUCKET);
+    expect(error).toBeNull();
+    expect(bucket).not.toBeNull();
+    expect(bucket?.file_size_limit).toBe(MAX_CHAT_IMAGE_BYTES);
+    for (const mime of ["image/png", "image/jpeg", "image/gif", "image/webp"]) {
+      expect(bucket?.allowed_mime_types ?? []).toContain(mime);
+    }
   });
 
   it("refuses non-image uploads on the server", { timeout: 120000 }, async () => {
