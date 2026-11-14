@@ -116,7 +116,7 @@ describe("burnPostMomentum", () => {
     vi.resetAllMocks();
   });
 
-  it("records the burn with the recalculated outcome and resets momentum", async () => {
+  it("records the burn with the recalculated outcome and leaves the reset to the database", async () => {
     const { updates } = setUpClient();
     await burnPostMomentum({ postId: "post-1" });
     const rollUpdate = updates.find((u) => u.table === "chat_posts");
@@ -127,8 +127,11 @@ describe("burnPostMomentum", () => {
       challenge1: 3,
       challenge2: 8,
     });
-    const charUpdate = updates.find((u) => u.table === "characters");
-    expect(charUpdate?.payload).toEqual({ momentum: 2 });
+    // One update only: the database's burn trigger resets the character's
+    // momentum in the same transaction, so the wrapper never writes the
+    // character and a failed second request cannot strand a burn unspent.
+    // The atomic reset is covered by the live access-rule tests.
+    expect(updates).toHaveLength(1);
   });
 
   it("refuses a second burn", async () => {

@@ -32,7 +32,6 @@ import type { Roll } from "types/DieRolls.type";
 import { ROLL_TYPE } from "types/DieRolls.type";
 import { RollDisplay } from "components/features/charactersAndCampaigns/RollDisplay";
 import { burnMomentumResult, isMomentumBurnUseful } from "functions/momentumBurn";
-import { updateCharacter } from "api-calls/character/updateCharacter";
 import { useSnackbar } from "providers/SnackbarProvider";
 import type { ChatRollContext, DiceRoller } from "functions/chatRolls";
 import { ChatRollPicker, type ChatRollKind } from "./ChatRollPickers";
@@ -131,6 +130,7 @@ export function ChatComposer(props: {
   const [attachError, setAttachError] = useState<string | undefined>(
     undefined
   );
+  const [sendError, setSendError] = useState<string | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // The post id is minted with the first attachment so attach-time uploads
@@ -298,10 +298,13 @@ export function ChatComposer(props: {
   };
 
   const { success } = useSnackbar();
-  // Burning before sending: the player burns momentum on the waiting action
-  // roll, then sends the burned result. Only for their own character, at
-  // most once, when the burn would change the outcome. GMs voicing an NPC
-  // or themselves have no momentum to burn.
+  // Burning before sending: the player marks the waiting action roll to
+  // burn, stamping the draft with the recalculated outcome. Nothing is
+  // spent yet: sending posts the burned roll, and the database spends the
+  // momentum in the same transaction. Discarding the draft or a failed
+  // send loses nothing. Only for their own character, at most once, when
+  // the burn would change the outcome. GMs voicing an NPC or themselves
+  // have no momentum to burn.
   const canBurnComposer =
     pendingRoll?.type === ROLL_TYPE.STAT &&
     pendingRoll.momentumBurned === undefined &&
@@ -315,21 +318,14 @@ export function ChatComposer(props: {
     }
     const momentum = myCharacter?.momentum ?? 0;
     const newResult = burnMomentumResult(pendingRoll, momentum);
-    const debilities = myCharacter?.debilities ?? {};
-    const active = Object.values(debilities).filter(Boolean).length;
-    const resetValue = active >= 2 ? 0 : active === 1 ? 1 : 2;
-    if (speaker.characterId) {
-      updateCharacter({
-        characterId: speaker.characterId,
-        character: { momentum: resetValue },
-      }).catch(() => {});
-    }
+    // Stamped, not spent: the momentum leaves only when the post sends,
+    // in the same transaction as the burned roll.
     setPendingRoll(channelId, {
       ...pendingRoll,
       momentumBurned: momentum,
       result: newResult,
     });
-    success("Burned momentum on the draft roll.");
+    success("Momentum will burn when this post sends.");
   };
 
   const send = () => {
@@ -343,6 +339,7 @@ export function ChatComposer(props: {
       sentPathsRef.current.add(path);
     }
     setSending(true);
+    setSendError(undefined);
     const roll = pendingRoll
       ? {
           ...pendingRoll,
@@ -378,6 +375,12 @@ export function ChatComposer(props: {
           // remove them best-effort so a failed send leaves no files behind.
           removeChatImage(path).catch(() => {});
         }
+        // The draft stays put with its burned stamp, and no momentum was
+        // spent: the user sees a generic error with a reference and can
+        // retry the same send.
+        setSendError(
+          `Could not send that post. Try again. (ref: ${mintErrorReference()})`
+        );
       })
       .finally(() => {
         setSending(false);
@@ -478,6 +481,15 @@ export function ChatComposer(props: {
           sx={{ mb: 1 }}
         >
           {attachError}
+        </Alert>
+      )}
+      {sendError && (
+        <Alert
+          severity={"error"}
+          onClose={() => setSendError(undefined)}
+          sx={{ mb: 1 }}
+        >
+          {sendError}
         </Alert>
       )}
       {pendingRoll && (

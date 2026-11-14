@@ -14,9 +14,11 @@ import {
  * burn together with the recalculated outcome and nothing else -- and
  * refuses every other roll change, a second burn, burns by anyone else,
  * burns on deleted posts and burns on NPC or GM-self voices. The
- * character's momentum resets the same way as a burn from the sheet, and
- * the burned result arrives live as a post update, GM-only staying
- * GM-only.
+ * character's momentum resets in the same transaction, applied by the
+ * database's burn trigger from the same debility rule as a sheet burn, so
+ * one update both burns and spends: a failed second request can never
+ * strand a burn with its momentum unspent. The burned result arrives live
+ * as a post update, GM-only staying GM-only.
  */
 export const burnPostMomentum = createApiFunction<{ postId: string }, void>(
   async (params) => {
@@ -77,7 +79,7 @@ export const burnPostMomentum = createApiFunction<{ postId: string }, void>(
 
     const { data: charRow, error: charError } = await client
       .from("characters")
-      .select("id,owner_id,momentum,debilities")
+      .select("id,owner_id,momentum")
       .eq("id", post.speaker_character_id)
       .single();
     if (charError || !charRow) {
@@ -86,7 +88,6 @@ export const burnPostMomentum = createApiFunction<{ postId: string }, void>(
     const character = charRow as unknown as {
       owner_id: string;
       momentum: number;
-      debilities?: Record<string, boolean> | null;
     };
     if (character.owner_id !== authorId) {
       throw new Error("Only the author may burn momentum on a roll.");
@@ -108,16 +109,15 @@ export const burnPostMomentum = createApiFunction<{ postId: string }, void>(
       momentum
     );
 
-    const debilities = character.debilities ?? {};
-    const active = Object.values(debilities).filter(Boolean).length;
-    const resetValue = active >= 2 ? 0 : active === 1 ? 1 : 2;
-
     const burnedRoll = {
       ...stored,
       momentumBurned: momentum,
       result: newResult,
     };
 
+    // One update only: the database rechecks the burn against the
+    // speaker's current momentum and resets the character in the same
+    // transaction, so the spend cannot be skipped or stranded.
     const { data: updated, error: updateError } = await client
       .from(CHAT_POSTS_TABLE)
       .update({ roll: burnedRoll })
@@ -125,14 +125,6 @@ export const burnPostMomentum = createApiFunction<{ postId: string }, void>(
       .select("id");
     if (updateError || !updated || updated.length === 0) {
       throw updateError ?? new Error("Post not found.");
-    }
-
-    const { error: momentumError } = await client
-      .from("characters")
-      .update({ momentum: resetValue })
-      .eq("id", post.speaker_character_id);
-    if (momentumError) {
-      throw momentumError;
     }
   },
   "Failed to burn momentum."
