@@ -31,8 +31,6 @@ test.describe("chat momentum burn on a posted roll", () => {
   let player: E2EPerson;
   let other: E2EPerson;
   let people: E2EPerson[] = [];
-  let kiraId: string;
-  let postId: string;
 
   test.beforeAll(async () => {
     config = stackConfig();
@@ -44,23 +42,26 @@ test.describe("chat momentum burn on a posted roll", () => {
     await joinCampaignAs(player, campaignId);
     await joinCampaignAs(other, campaignId);
 
-    // The player's campaign character with momentum to burn.
-    const { data: charData, error: charError } = await player.client
+    // The player's campaign character with momentum to burn. The id is
+    // generated here so the insert needs no RETURNING clause: the
+    // characters SELECT policy re-queries its own table, which cannot see
+    // a just-inserted row in the same statement, so insert-then-select
+    // always fails RLS (#69).
+    const kiraId = crypto.randomUUID();
+    const { error: charError } = await player.client
       .from("characters")
       .insert({
+        id: kiraId,
         owner_id: player.userId,
         name: "E2E Kira",
         campaign_id: campaignId,
         momentum: 5,
-      })
-      .select("id")
-      .single();
-    if (charError || !charData) {
+      });
+    if (charError) {
       throw new Error(
-        `e2e: could not create player character: ${charError?.message}`
+        `e2e: could not create player character: ${charError.message}`
       );
     }
-    kiraId = (charData as { id: string }).id;
 
     // The starting IC channel.
     const { data: channelData, error: channelError } = await gm.client
@@ -107,8 +108,6 @@ test.describe("chat momentum burn on a posted roll", () => {
     if (postError || !postData) {
       throw new Error(`e2e: could not post roll: ${postError?.message}`);
     }
-    postId = (postData as { id: string }).id;
-    void postId;
   });
 
   test.afterAll(async () => {
