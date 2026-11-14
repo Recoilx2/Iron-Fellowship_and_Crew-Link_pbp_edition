@@ -263,8 +263,14 @@ test.describe("outline revisions", () => {
       ).toEqual([ORIGINAL]);
 
       // The Outline tab's Undo restores the previous version, and the
-      // editor moves back onto it at once.
-      await gmPage.getByRole("button", { name: "Undo outline revision" }).click();
+      // editor moves back onto it at once. Scope to the tab header's
+      // button: the applied preview carries its own Undo.
+      await gmPage
+        .getByRole("button", {
+          name: "Undo outline revision",
+          description: "Restore the previous outline version",
+        })
+        .click();
       expect(await outlineContents()).toBe(ORIGINAL);
       await expect(
         gmPage.getByRole("textbox", { name: "Note text" })
