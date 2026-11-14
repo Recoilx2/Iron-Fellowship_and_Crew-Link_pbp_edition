@@ -106,4 +106,19 @@ describe("campaign active character migration", () => {
       "composer-send burns do not require the active character"
     );
   });
+
+  it("leaves direct flag writes to the owner-only update policy", () => {
+    // No new UPDATE policy and no extra grant: the base characters
+    // migration restricts every UPDATE (including is_active) to the row
+    // owner with no GM exception, so a direct write by anyone else touches
+    // zero rows and the swap function stays the only path with its own
+    // owner-only refusal.
+    const sql = text();
+    assert.ok(
+      !/CREATE POLICY[\s\S]*?ON public\.characters[\s\S]*?FOR UPDATE/i.test(
+        sql
+      ),
+      "the migration adds a characters UPDATE policy beside the owner-only one"
+    );
+  });
 });

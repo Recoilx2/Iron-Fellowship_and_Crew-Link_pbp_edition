@@ -1,4 +1,5 @@
 import type { ChannelKind, ChannelVisibility } from "api-calls/chat/_chat.type";
+import { isActiveCampaignCharacter } from "functions/isActiveCampaignCharacter";
 
 export interface ChatNameLine {
   /** The bold lead of the name line: the speaker, or the author. */
@@ -48,7 +49,8 @@ export function resolveChatNameLine(params: {
     };
   }
   const authorCharacter = Object.values(characterMap).find(
-    (character) => character.uid === post.authorId && character.isActive !== false
+    (character) =>
+      character.uid === post.authorId && isActiveCampaignCharacter(character)
   );
   return {
     title: authorName,

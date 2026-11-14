@@ -1,4 +1,5 @@
 import type { CharacterDocument } from "api-calls/character/_character.type";
+import { isActiveCampaignCharacter } from "functions/isActiveCampaignCharacter";
 
 export interface PlayerCharacterGroup {
   uid: string;
@@ -23,8 +24,8 @@ export function groupCampaignCharactersByPlayer(
   }
   for (const [uid, characterIds] of byPlayer) {
     characterIds.sort((a, b) => {
-      const aActive = characterMap[a].isActive !== false;
-      const bActive = characterMap[b].isActive !== false;
+      const aActive = isActiveCampaignCharacter(characterMap[a]);
+      const bActive = isActiveCampaignCharacter(characterMap[b]);
       return Number(bActive) - Number(aActive);
     });
     byPlayer.set(uid, characterIds);

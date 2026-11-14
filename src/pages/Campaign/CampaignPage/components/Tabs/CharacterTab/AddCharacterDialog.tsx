@@ -12,6 +12,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import { CharacterList } from "components/features/characters/CharacterList";
 import { Link } from "react-router-dom";
 import { constructCharacterCreateInCampaignUrl } from "pages/Character/routes";
+import { isActiveCampaignCharacter } from "functions/isActiveCampaignCharacter";
 import { useStore } from "stores/store";
 import { useId, useState } from "react";
 
@@ -49,7 +50,7 @@ export function AddCharacterDialog(props: AddCharacterDialogProps) {
   const activeCharacterId = Object.keys(characters).find(
     (characterId) =>
       characters[characterId].campaignId === campaignId &&
-      characters[characterId].isActive !== false
+      isActiveCampaignCharacter(characters[characterId])
   );
   const activeCharacter = activeCharacterId
     ? characters[activeCharacterId]
@@ -93,20 +94,21 @@ export function AddCharacterDialog(props: AddCharacterDialogProps) {
             maxColumns={1}
             actions={(characterId) => {
               if (characterId === activeCharacterId) {
-                return <Button disabled>Current</Button>;
+                return <Button disabled>Active</Button>;
               }
               const inThisCampaign =
                 characters[characterId].campaignId === campaignId;
-              const inAnotherCampaign = !!characters[characterId].campaignId;
+              const inOtherCampaign =
+                !!characters[characterId].campaignId && !inThisCampaign;
               if (inThisCampaign) {
                 return <Button disabled>In campaign</Button>;
               }
               return (
                 <Button
-                  disabled={inAnotherCampaign || addCharacterLoading}
+                  disabled={inOtherCampaign || addCharacterLoading}
                   onClick={() => addCharacter(characterId)}
                 >
-                  {inAnotherCampaign
+                  {inOtherCampaign
                     ? "Selected"
                     : activeCharacter
                       ? "Swap"

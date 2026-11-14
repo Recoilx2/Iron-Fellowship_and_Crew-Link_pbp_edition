@@ -23,6 +23,7 @@ import {
   InitiativeStatus,
 } from "api-calls/character/_character.type";
 import { LinkComponent } from "components/shared/LinkComponent";
+import { isActiveCampaignCharacter } from "functions/isActiveCampaignCharacter";
 import { constructCharacterSheetPath } from "pages/Character/routes";
 import { useCampaignType } from "hooks/useCampaignType";
 
@@ -74,7 +75,7 @@ export function CharacterCard(props: CharacterCardProps) {
     (store) => store.campaigns.currentCampaign.setCharacterActive
   );
 
-  const isActive = character.isActive !== false;
+  const isActive = isActiveCampaignCharacter(character);
 
   return (
     <Card variant={"outlined"}>
