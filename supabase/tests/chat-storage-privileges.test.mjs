@@ -21,6 +21,20 @@ const privilegesFile = () => {
 
 const text = () => readFileSync(join(dir, privilegesFile()), "utf8");
 
+// App roles must never reach the private schema: only SECURITY DEFINER
+// functions cross that boundary. Strip comments so prose about grants
+// cannot trip (or satisfy) the checks below.
+const codeOf = (sql) =>
+  sql
+    .replace(/--[^\n]*/g, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+
+const allMigrationCode = () =>
+  readdirSync(dir)
+    .filter((f) => f.endsWith(".sql"))
+    .map((f) => codeOf(readFileSync(join(dir, f), "utf8")))
+    .join("\n");
+
 describe("chat storage privileges migration (#125 burn, #118 uploads)", () => {
   it("follows the <UTC timestamp>_<short-name>.sql convention on a later stamp", () => {
     assert.match(
@@ -36,17 +50,40 @@ describe("chat storage privileges migration (#125 burn, #118 uploads)", () => {
     );
   });
 
-  it("lets the invoker burn lock resolve the private helpers", () => {
+  it("runs the roll lock as definer with a pinned search path", () => {
     const sql = text();
+    const lock = sql.split(
+      "CREATE OR REPLACE FUNCTION public.keep_chat_roll_immutable()"
+    )[1];
+    assert.ok(lock, "the roll lock is not replaced here");
+    const head = lock.split("AS $$")[0];
     assert.ok(
-      /GRANT\s+USAGE\s+ON\s+SCHEMA\s+private\s+TO\s+authenticated/i.test(sql),
-      "no USAGE on schema private for authenticated"
+      /SECURITY\s+DEFINER/i.test(head),
+      "keep_chat_roll_immutable is not SECURITY DEFINER (the schema-USAGE boundary still blocks burns)"
     );
     assert.ok(
-      /GRANT\s+EXECUTE\s+ON\s+FUNCTION\s+private\.chat_stat_result\s*\(\s*integer\s*,\s*integer\s*,\s*integer\s*\)\s*TO\s+authenticated/i.test(
-        sql
+      /SET\s+search_path\s*=\s*(''|"")/i.test(head),
+      "keep_chat_roll_immutable does not pin search_path"
+    );
+    assert.ok(
+      /private\.chat_stat_result/i.test(lock),
+      "the definer lock no longer rechecks the burn outcome"
+    );
+  });
+
+  it("never grants the private schema to app roles", () => {
+    const code = allMigrationCode();
+    assert.ok(
+      !/GRANT\s+[\w\s,]*USAGE[\s\S]*?ON\s+SCHEMA\s+private[\s\S]*?TO\s+(authenticated|anon|public)\b/i.test(
+        code
       ),
-      "no EXECUTE on private.chat_stat_result for authenticated"
+      "a migration grants USAGE on schema private to an app role: only SECURITY DEFINER functions may reach into it"
+    );
+    assert.ok(
+      !/GRANT\s+EXECUTE\s+ON\s+FUNCTION\s+private\.[\w$]+\s*\([^)]*\)\s*TO\s+(authenticated|anon|public)\b/i.test(
+        code
+      ),
+      "a migration grants EXECUTE on a private function to an app role: only SECURITY DEFINER functions may reach into it"
     );
   });
 
