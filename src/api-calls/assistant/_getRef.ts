@@ -12,16 +12,74 @@ import type {
 
 /**
  * Identifiers and row mapping for the GM assistant: one conversation row
- * per GM-started thread, one message row per turn, and one settings row per
- * (campaign, GM) holding the model and the saved context choice. The data
+ * per GM-started thread, one message row per turn, one settings row per
+ * (campaign, GM) holding the model and the saved context choice, and one
+ * row per kept outline version holding replaced outline text for Undo.
+ * The data
  * layer is the only place that names these tables, the live-update channels
  * and the row filters; stores, tabs and components only ever see
- * conversation, message and settings documents.
+ * conversation, message, settings and version documents.
  */
 
 export const ASSISTANT_CONVERSATIONS_TABLE = "assistant_conversations";
 export const ASSISTANT_MESSAGES_TABLE = "assistant_messages";
 export const ASSISTANT_SETTINGS_TABLE = "assistant_settings";
+export const ASSISTANT_OUTLINE_VERSIONS_TABLE = "assistant_outline_versions";
+
+export interface AssistantOutlineVersionRow {
+  id: string;
+  campaign_id: string;
+  created_by: string | null;
+  content: string;
+  created_at: string;
+}
+
+export interface AssistantOutlineVersion {
+  id: string;
+  campaignId: string;
+  content: string;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export function outlineVersionRowToDocument(
+  row: AssistantOutlineVersionRow
+): AssistantOutlineVersion {
+  return {
+    id: row.id,
+    campaignId: row.campaign_id,
+    content: row.content,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+  };
+}
+
+export function constructAssistantOutlineVersionsChannelName(
+  campaignId: string
+): string {
+  return `assistant-outline-versions:${campaignId}`;
+}
+
+export function constructAssistantOutlineVersionsFilter(
+  campaignId: string
+): string {
+  return `campaign_id=eq.${campaignId}`;
+}
+
+export function assistantOutlineVersionPayloadToChange(
+  payload: PostgresChangePayload<AssistantOutlineVersionRow>
+): RowChange<AssistantOutlineVersionRow> | null {
+  if (payload.eventType === "DELETE") {
+    const old = payload.old as Partial<AssistantOutlineVersionRow>;
+    return typeof old.id === "string"
+      ? { kind: "remove", key: old.id }
+      : null;
+  }
+  const row = payload.new as Partial<AssistantOutlineVersionRow>;
+  return row && typeof row.id === "string"
+    ? { kind: "upsert", row: row as AssistantOutlineVersionRow }
+    : null;
+}
 
 export interface AssistantConversationRow {
   id: string;

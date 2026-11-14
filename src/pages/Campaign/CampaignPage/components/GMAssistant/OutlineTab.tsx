@@ -1,62 +1,72 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Box, Button, LinearProgress, Typography } from "@mui/material";
-import { getOrCreateCampaignOutline } from "api-calls/notes/campaignOutline";
-import { listenToNoteContent } from "api-calls/notes/listenToNoteContent";
+import {
+  Alert,
+  Box,
+  Button,
+  LinearProgress,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 import { updateNote } from "api-calls/notes/updateNote";
 import { getCampaignNoteDocumentName } from "config/hocuspocus.config";
 import { RtcRichTextEditor } from "components/shared/RichTextEditor/RtcRichTextEditor";
+import { createConversation } from "api-calls/assistant/createConversation";
+import {
+  extractOutlineProposal,
+  streamAssistantChat,
+} from "api-calls/assistant/gmAssistantClient";
+import { undoOutlineRevision } from "api-calls/assistant/outlineVersions";
+import { listenToOutlineVersions } from "api-calls/assistant/listenToOutlineVersions";
+import { useOutlineDocument } from "./useOutlineDocument";
+import { OutlineRevision } from "./OutlineRevision";
 
 /**
- * The GM assistant's Outline tab (spec #10, ticket #131): the campaign's
- * one GM-only outline note, edited with the same editor as other notes.
- * The row is created the first time a GM opens it and shared by all of
- * the campaign's GMs; players never see it (no assistant, hidden rows,
- * refused note-server documents). Bytes sync live through the note
- * server, so co-GMs editing together merge; the title saves through the
- * notes data layer like any other server-persisted note.
+ * The GM assistant's Outline tab (spec #10, tickets #131 and #133): the
+ * campaign's one GM-only outline note, edited with the same editor as
+ * other notes. The row is created the first time a GM opens it and shared
+ * by all of the campaign's GMs; players never see it (no assistant,
+ * hidden rows, refused note-server documents). Bytes sync live through
+ * the note server, so co-GMs editing together merge; the title saves
+ * through the notes data layer like any other server-persisted note.
+ *
+ * Revisions (ticket #133): an explicit "Revise outline" action sends the
+ * GM's instruction in a dedicated outline-revision mode -- never guessed
+ * from the wording -- and the reply previews the current outline beside
+ * the proposed complete replacement, with Apply to outline and Discard.
+ * Apply asks for confirmation, then replaces the outline and keeps the
+ * previous version for Undo, offered here and on the applied preview.
+ * Only the GM's Apply or Undo ever changes the outline; Discard leaves it
+ * untouched.
  */
 export function OutlineTab(props: { campaignId: string }) {
   const { campaignId } = props;
-  const [outlineId, setOutlineId] = useState<string | null>(null);
-  const [content, setContent] = useState<Uint8Array | null | undefined>(
-    undefined
+  const { outlineId, bytes, text, loaded, failed, reload } =
+    useOutlineDocument(campaignId);
+  const [versions, setVersions] = useState(0);
+  const [undoing, setUndoing] = useState(false);
+  const [undoError, setUndoError] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [instruction, setInstruction] = useState("");
+  const [requesting, setRequesting] = useState(false);
+  const [revisionError, setRevisionError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{
+    current: string;
+    proposed: string;
+  } | null>(null);
+
+  useEffect(
+    () =>
+      listenToOutlineVersions(
+        campaignId,
+        {
+          onVersions: (rows) => setVersions(rows.length),
+          onLoaded: () => {},
+        },
+        () => {}
+      ),
+    [campaignId]
   );
-  const [failed, setFailed] = useState(false);
-  const [reloads, setReloads] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    setOutlineId(null);
-    setContent(undefined);
-    setFailed(false);
-    getOrCreateCampaignOutline({ campaignId })
-      .then((id) => {
-        if (!cancelled) {
-          setOutlineId(id);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setFailed(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [campaignId, reloads]);
-
-  useEffect(() => {
-    if (!outlineId) {
-      return;
-    }
-    return listenToNoteContent(
-      campaignId,
-      undefined,
-      outlineId,
-      (bytes) => setContent(bytes ?? null),
-      () => setFailed(true)
-    );
-  }, [campaignId, outlineId, reloads]);
 
   const save = useCallback(
     (
@@ -81,13 +91,63 @@ export function OutlineTab(props: { campaignId: string }) {
     [campaignId, outlineId]
   );
 
+  const requestRevision = async (): Promise<void> => {
+    const trimmed = instruction.trim();
+    if (!trimmed || requesting || !outlineId) {
+      return;
+    }
+    const current = text;
+    setRequesting(true);
+    setRevisionError(null);
+    try {
+      const conversationId = await createConversation({ campaignId });
+      const result = await streamAssistantChat({
+        conversationId,
+        message: trimmed,
+        mode: "outline-revision",
+        signal: new AbortController().signal,
+        onChunk: () => {},
+      });
+      const proposed = extractOutlineProposal(result.text);
+      if (!proposed) {
+        setRevisionError(
+          "The assistant didn't return a marked revision. Try again with a plainer instruction."
+        );
+        return;
+      }
+      setPreview({ current, proposed });
+      setShowForm(false);
+      setInstruction("");
+    } catch {
+      setRevisionError("The revision request failed. Try again.");
+    } finally {
+      setRequesting(false);
+    }
+  };
+
+  const undo = async (): Promise<void> => {
+    if (undoing || !outlineId) {
+      return;
+    }
+    setUndoing(true);
+    setUndoError(null);
+    try {
+      await undoOutlineRevision({ campaignId, outlineId });
+      reload();
+    } catch {
+      setUndoError("The revision couldn't be undone. Nothing was changed.");
+    } finally {
+      setUndoing(false);
+    }
+  };
+
   if (failed) {
     return (
       <Box sx={{ p: 2 }}>
         <Alert
           severity={"error"}
           action={
-            <Button size={"small"} onClick={() => setReloads((n) => n + 1)}>
+            <Button size={"small"} onClick={reload}>
               Retry
             </Button>
           }
@@ -98,7 +158,7 @@ export function OutlineTab(props: { campaignId: string }) {
     );
   }
 
-  if (!outlineId || content === undefined) {
+  if (!loaded || !outlineId || bytes === undefined) {
     return (
       <Box sx={{ p: 2 }}>
         <LinearProgress aria-label={"Loading outline"} />
@@ -122,11 +182,97 @@ export function OutlineTab(props: { campaignId: string }) {
       >
         GM-only. Never shared with players.
       </Typography>
+      <Stack direction={"row"} spacing={1} sx={{ px: 1.5, py: 0.5 }}>
+        <Button
+          size={"small"}
+          variant={showForm ? "outlined" : "contained"}
+          disabled={requesting}
+          onClick={() => setShowForm((open) => !open)}
+          aria-label={"Revise outline"}
+        >
+          Revise outline
+        </Button>
+        <Button
+          size={"small"}
+          disabled={versions === 0 || undoing}
+          onClick={() => void undo()}
+          aria-label={"Undo outline revision"}
+          title={
+            versions === 0
+              ? "No kept version to restore"
+              : "Restore the previous outline version"
+          }
+        >
+          Undo
+        </Button>
+      </Stack>
+      {undoError && (
+        <Box sx={{ px: 1.5, pb: 0.5 }}>
+          <Alert severity={"error"} onClose={() => setUndoError(null)}>
+            {undoError}
+          </Alert>
+        </Box>
+      )}
+      {showForm && (
+        <Box sx={{ px: 1.5, pb: 1 }}>
+          <TextField
+            multiline
+            fullWidth
+            size={"small"}
+            placeholder={"How should the outline change?"}
+            value={instruction}
+            onChange={(event) => setInstruction(event.target.value)}
+            inputProps={{ "aria-label": "Revision instruction" }}
+          />
+          <Stack direction={"row"} spacing={1} sx={{ mt: 0.5 }}>
+            <Button
+              size={"small"}
+              variant={"contained"}
+              disabled={instruction.trim().length === 0 || requesting}
+              onClick={() => void requestRevision()}
+              aria-label={"Request outline revision"}
+            >
+              Request revision
+            </Button>
+            <Button
+              size={"small"}
+              disabled={requesting}
+              onClick={() => setShowForm(false)}
+              aria-label={"Cancel outline revision"}
+            >
+              Cancel
+            </Button>
+          </Stack>
+        </Box>
+      )}
+      {requesting && (
+        <Box sx={{ px: 1.5, pb: 1 }}>
+          <LinearProgress aria-label={"Requesting outline revision"} />
+        </Box>
+      )}
+      {revisionError && (
+        <Box sx={{ px: 1.5, pb: 1 }}>
+          <Alert severity={"error"} onClose={() => setRevisionError(null)}>
+            {revisionError}
+          </Alert>
+        </Box>
+      )}
+      {preview && (
+        <Box sx={{ px: 1.5, pb: 1 }}>
+          <OutlineRevision
+            campaignId={campaignId}
+            outlineId={outlineId}
+            current={preview.current}
+            proposed={preview.proposed}
+            onDiscard={() => setPreview(null)}
+          />
+        </Box>
+      )}
       <Box sx={{ flexGrow: 1, minHeight: 0, display: "flex" }}>
         <RtcRichTextEditor
           id={outlineId}
           documentName={getCampaignNoteDocumentName(outlineId)}
-          initialValue={content ?? undefined}
+          initialValue={bytes ?? undefined}
           showTitle
           serverPersisted
           onSave={save}

@@ -13,6 +13,30 @@ vi.mock("api-calls/notes/listenToNoteContent", () => ({
 vi.mock("api-calls/notes/updateNote", () => ({
   updateNote: vi.fn(),
 }));
+vi.mock("api-calls/assistant/listenToOutlineVersions", () => ({
+  listenToOutlineVersions: vi.fn(),
+}));
+vi.mock("api-calls/assistant/outlineVersions", () => ({
+  applyOutlineRevision: vi.fn(),
+  undoOutlineRevision: vi.fn(),
+}));
+vi.mock("api-calls/assistant/gmAssistantClient", () => ({
+  // Faithful copy of the marker extraction: revision replies carry the
+  // proposal between markers, ordinary replies carry none.
+  extractOutlineProposal: (reply: string) => {
+    const begin = "<<<OUTLINE-BEGIN>>>";
+    const end = "<<<OUTLINE-END>>>";
+    const start = reply.indexOf(begin);
+    const stop = reply.lastIndexOf(end);
+    if (start < 0 || stop < 0 || stop <= start + begin.length) return null;
+    const proposed = reply.slice(start + begin.length, stop).trim();
+    return proposed.length > 0 ? proposed : null;
+  },
+  streamAssistantChat: vi.fn(),
+}));
+vi.mock("api-calls/assistant/createConversation", () => ({
+  createConversation: vi.fn(),
+}));
 vi.mock("components/shared/RichTextEditor/RtcRichTextEditor", () => ({
   // Stand-in for the shared note editor: the Outline tab reuses the same
   // editor as other notes, so the stub only needs its wiring (document
@@ -50,6 +74,15 @@ vi.mock("components/shared/RichTextEditor/RtcRichTextEditor", () => ({
 import { OutlineTab } from "../OutlineTab";
 import { getOrCreateCampaignOutline } from "api-calls/notes/campaignOutline";
 import { listenToNoteContent } from "api-calls/notes/listenToNoteContent";
+import { listenToOutlineVersions } from "api-calls/assistant/listenToOutlineVersions";
+import {
+  applyOutlineRevision,
+  undoOutlineRevision,
+} from "api-calls/assistant/outlineVersions";
+import { createConversation } from "api-calls/assistant/createConversation";
+import {
+  streamAssistantChat,
+} from "api-calls/assistant/gmAssistantClient";
 import { updateNote } from "api-calls/notes/updateNote";
 
 const theme = createTheme();
@@ -84,7 +117,21 @@ describe("OutlineTab", () => {
         return () => {};
       }
     );
+    vi.mocked(listenToOutlineVersions).mockImplementation(
+      (_campaignId, handlers) => {
+        handlers.onVersions([]);
+        handlers.onLoaded();
+        return () => {};
+      }
+    );
     vi.mocked(updateNote).mockResolvedValue(undefined);
+    vi.mocked(createConversation).mockResolvedValue("conversation-1");
+    vi.mocked(streamAssistantChat).mockResolvedValue({
+      text: "<<<OUTLINE-BEGIN>>>\nAct one revised.\n<<<OUTLINE-END>>>",
+      aborted: false,
+    });
+    vi.mocked(applyOutlineRevision).mockResolvedValue("version-1");
+    vi.mocked(undoOutlineRevision).mockResolvedValue("Act one: the bell rings.");
   });
 
   afterEach(() => {
@@ -166,5 +213,160 @@ describe("OutlineTab", () => {
     await flush();
 
     expect(vi.mocked(getOrCreateCampaignOutline).mock.calls.length).toBe(2);
+  });
+
+  it("requests a revision in outline-revision mode and previews it", async () => {
+    const view = render();
+    await flush();
+
+    act(() => {
+      view
+        .querySelector('button[aria-label="Revise outline"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const field = view.querySelector(
+      'textarea, input[aria-label="Revision instruction"]'
+    ) as HTMLTextAreaElement | null;
+    if (!field) {
+      throw new Error("no revision instruction field");
+    }
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value"
+    )?.set;
+    act(() => {
+      setter?.call(field, "Add a betrayal in act two.");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => {
+      view
+        .querySelector('button[aria-label="Request outline revision"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    // The request goes in the dedicated revision mode, never guessed.
+    expect(createConversation).toHaveBeenCalledWith({
+      campaignId: "campaign-1",
+    });
+    expect(streamAssistantChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: "conversation-1",
+        message: "Add a betrayal in act two.",
+        mode: "outline-revision",
+      })
+    );
+    // The reply previews current and proposed side by side.
+    expect(view.textContent).toContain("Current outline");
+    expect(view.textContent).toContain("Proposed outline");
+    expect(view.textContent).toContain("Act one revised.");
+
+    // Applying from the preview keeps the replaced text and replaces the
+    // outline, behind the same confirmation as every other preview.
+    act(() => {
+      Array.from(view.querySelectorAll("button"))
+        .find((entry) => entry.textContent === "Apply to outline")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(applyOutlineRevision).not.toHaveBeenCalled();
+    act(() => {
+      Array.from(view.querySelectorAll("button"))
+        .find((entry) => entry.textContent === "Confirm replace")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(applyOutlineRevision).toHaveBeenCalledWith({
+      campaignId: "campaign-1",
+      outlineId: "outline-1",
+      currentText: "",
+      proposedText: "Act one revised.",
+    });
+  });
+
+  it("shows an error when the reply carries no marked revision", async () => {
+    vi.mocked(streamAssistantChat).mockResolvedValueOnce({
+      text: "Just some chat with no proposal.",
+      aborted: false,
+    });
+    const view = render();
+    await flush();
+
+    act(() => {
+      view
+        .querySelector('button[aria-label="Revise outline"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const field = view.querySelector("textarea");
+    if (!field) {
+      throw new Error("no revision instruction field");
+    }
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value"
+    )?.set;
+    act(() => {
+      setter?.call(field, "Tighten act one.");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => {
+      view
+        .querySelector('button[aria-label="Request outline revision"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(view.textContent).toContain("didn't return a marked revision");
+    expect(view.textContent).not.toContain("Proposed outline");
+  });
+
+  it("offers undo while a version is kept and undoes on click", async () => {
+    vi.mocked(listenToOutlineVersions).mockImplementation(
+      (_campaignId, handlers) => {
+        handlers.onVersions([
+          {
+            id: "version-1",
+            campaignId: "campaign-1",
+            content: "Act one: the bell rings.",
+            createdBy: "gm-1",
+            createdAt: "2026-11-14T00:00:00Z",
+          },
+        ]);
+        handlers.onLoaded();
+        return () => {};
+      }
+    );
+    const view = render();
+    await flush();
+
+    const undo = view.querySelector(
+      'button[aria-label="Undo outline revision"]'
+    ) as HTMLButtonElement | null;
+    if (!undo) {
+      throw new Error("no undo button");
+    }
+    expect(undo.disabled).toBe(false);
+    act(() => {
+      undo.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(undoOutlineRevision).toHaveBeenCalledWith({
+      campaignId: "campaign-1",
+      outlineId: "outline-1",
+    });
+  });
+
+  it("disables undo when no version is kept", async () => {
+    const view = render();
+    await flush();
+
+    const undo = view.querySelector(
+      'button[aria-label="Undo outline revision"]'
+    ) as HTMLButtonElement | null;
+    if (!undo) {
+      throw new Error("no undo button");
+    }
+    expect(undo.disabled).toBe(true);
   });
 });

@@ -33,6 +33,17 @@ vi.mock("api-calls/assistant/gmAssistantClient", () => ({
   fetchAssistantModels: vi.fn(),
   fetchAssistantContextSize: vi.fn(),
   streamAssistantChat: vi.fn(),
+  // Faithful copy of the marker extraction: revision replies carry the
+  // proposal between markers, ordinary replies carry none.
+  extractOutlineProposal: (reply: string) => {
+    const begin = "<<<OUTLINE-BEGIN>>>";
+    const end = "<<<OUTLINE-END>>>";
+    const start = reply.indexOf(begin);
+    const stop = reply.lastIndexOf(end);
+    if (start < 0 || stop < 0 || stop <= start + begin.length) return null;
+    const proposed = reply.slice(start + begin.length, stop).trim();
+    return proposed.length > 0 ? proposed : null;
+  },
   approximateTokensForChars: (chars: number) =>
     !Number.isFinite(chars) || chars <= 0 ? 0 : Math.ceil(chars / 4),
   AssistantRequestError: class extends Error {
@@ -67,6 +78,13 @@ vi.mock("api-calls/assistant/createConversation", () => ({
 vi.mock("api-calls/assistant/deleteConversation", () => ({
   deleteConversation: vi.fn(),
 }));
+vi.mock("../useOutlineDocument", () => ({
+  useOutlineDocument: vi.fn(),
+}));
+vi.mock("api-calls/assistant/outlineVersions", () => ({
+  applyOutlineRevision: vi.fn(),
+  undoOutlineRevision: vi.fn(),
+}));
 
 import { GMAssistant } from "../GMAssistant";
 import {
@@ -83,6 +101,11 @@ import { listenToMessages } from "api-calls/assistant/listenToMessages";
 import { createConversation } from "api-calls/assistant/createConversation";
 import { deleteConversation } from "api-calls/assistant/deleteConversation";
 import { emptyAssistantContextChoice } from "api-calls/assistant/_assistant.type";
+import { useOutlineDocument } from "../useOutlineDocument";
+import {
+  applyOutlineRevision,
+  undoOutlineRevision,
+} from "api-calls/assistant/outlineVersions";
 
 const theme = createTheme();
 
@@ -154,6 +177,14 @@ describe("GMAssistant model picker", () => {
   const savedContext = emptyAssistantContextChoice();
 
   beforeEach(() => {
+    vi.mocked(useOutlineDocument).mockReturnValue({
+      outlineId: "outline-1",
+      bytes: new Uint8Array(),
+      text: "Act one: the bell rings.",
+      loaded: true,
+      failed: false,
+      reload: () => {},
+    });
     mockViewport(1400);
     state.auth.uid = "gm-1";
     state.campaigns.currentCampaign.currentCampaign = { gmIds: ["gm-1"] };
@@ -278,6 +309,14 @@ describe("GMAssistant gating", () => {
   let container: HTMLDivElement | undefined;
 
   beforeEach(() => {
+    vi.mocked(useOutlineDocument).mockReturnValue({
+      outlineId: "outline-1",
+      bytes: new Uint8Array(),
+      text: "Act one: the bell rings.",
+      loaded: true,
+      failed: false,
+      reload: () => {},
+    });
     mockViewport(1400);
     state.auth.uid = "gm-1";
     state.campaigns.currentCampaign.currentCampaign = { gmIds: ["gm-1"] };
@@ -443,6 +482,14 @@ describe("GMAssistant chat thread", () => {
   ];
 
   beforeEach(() => {
+    vi.mocked(useOutlineDocument).mockReturnValue({
+      outlineId: "outline-1",
+      bytes: new Uint8Array(),
+      text: "Act one: the bell rings.",
+      loaded: true,
+      failed: false,
+      reload: () => {},
+    });
     mockViewport(1400);
     state.auth.uid = "gm-1";
     state.campaigns.currentCampaign.currentCampaign = { gmIds: ["gm-1"] };
@@ -637,6 +684,14 @@ describe("GMAssistant streaming", () => {
   ];
 
   beforeEach(() => {
+    vi.mocked(useOutlineDocument).mockReturnValue({
+      outlineId: "outline-1",
+      bytes: new Uint8Array(),
+      text: "Act one: the bell rings.",
+      loaded: true,
+      failed: false,
+      reload: () => {},
+    });
     mockViewport(1400);
     state.auth.uid = "gm-1";
     state.campaigns.currentCampaign.currentCampaign = { gmIds: ["gm-1"] };
@@ -818,5 +873,231 @@ describe("GMAssistant streaming", () => {
 
     expect(view.textContent).toContain("m1");
     expect(view.textContent).toContain("configured endpoint");
+  });
+});
+
+// Seam under test: outline revisions from the Chat tab. A "Revise
+// outline" toggle arms the next send in the dedicated revision mode, and
+// any assistant reply carrying a marked proposal previews current and
+// proposed side by side with Apply and Discard.
+describe("GMAssistant outline revisions", () => {
+  let root: Root | undefined;
+  let container: HTMLDivElement | undefined;
+
+  const convoA = {
+    id: "c-a",
+    campaignId: "campaign-1",
+    ownerId: "gm-1",
+    title: "Outline work",
+    createdAt: "2026-11-14T00:00:00Z",
+    updatedAt: "2026-11-14T00:01:00Z",
+  };
+  const proposedText = "Act one revised: the bell cracks.";
+  const markedReply =
+    `Here is the new plan:\n<<<OUTLINE-BEGIN>>>\n${proposedText}\n<<<OUTLINE-END>>>`;
+  const threadMessages = [
+    {
+      id: "m-u",
+      conversationId: "c-a",
+      role: "user" as const,
+      content: "Tighten act one.",
+      stoppedPartway: false,
+      createdAt: "2026-11-14T00:00:00Z",
+    },
+    {
+      id: "m-a",
+      conversationId: "c-a",
+      role: "assistant" as const,
+      content: markedReply,
+      stoppedPartway: false,
+      createdAt: "2026-11-14T00:00:01Z",
+    },
+  ];
+
+  beforeEach(() => {
+    vi.mocked(useOutlineDocument).mockReturnValue({
+      outlineId: "outline-1",
+      bytes: new Uint8Array(),
+      text: "Act one: the bell rings.",
+      loaded: true,
+      failed: false,
+      reload: () => {},
+    });
+    mockViewport(1400);
+    state.auth.uid = "gm-1";
+    state.campaigns.currentCampaign.currentCampaign = { gmIds: ["gm-1"] };
+    state.chat.openChannelId = "ic";
+    vi.mocked(fetchAssistantContextSize).mockResolvedValue({
+      items: [],
+      totalChars: 0,
+      totalTokens: 0,
+      instructionChars: 0,
+      instructionTokens: 0,
+      unavailable: [],
+    } as AssistantContextSize);
+    vi.mocked(fetchAssistantModels).mockResolvedValue([
+      { id: "m1", contextTokens: 4096 },
+    ]);
+    vi.mocked(fetchAssistantSettings).mockResolvedValue({
+      model: null,
+      context: emptyAssistantContextChoice(),
+      updatedAt: "2026-11-14T00:00:00Z",
+    });
+    vi.mocked(saveAssistantSettings).mockResolvedValue(undefined);
+    vi.mocked(listenToConversations).mockImplementation(
+      (_campaignId, handlers) => {
+        handlers.onConversations([convoA]);
+        handlers.onLoaded();
+        return () => {};
+      }
+    );
+    vi.mocked(listenToMessages).mockImplementation(
+      (conversationId, handlers) => {
+        handlers.onMessages(
+          conversationId === "c-a" ? threadMessages : []
+        );
+        handlers.onLoaded();
+        return () => {};
+      }
+    );
+    vi.mocked(applyOutlineRevision).mockResolvedValue("version-9");
+    vi.mocked(undoOutlineRevision).mockResolvedValue(
+      "Act one: the bell rings."
+    );
+  });
+
+  afterEach(() => {
+    act(() => root?.unmount());
+    container?.remove();
+    root = undefined;
+    container = undefined;
+    vi.clearAllMocks();
+  });
+
+  function render() {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <ThemeProvider theme={theme}>
+          <GMAssistant />
+        </ThemeProvider>
+      );
+    });
+    return container as HTMLDivElement;
+  }
+
+  async function renderAndOpen() {
+    const view = render();
+    act(() => {
+      view
+        .querySelector("button")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+    return view;
+  }
+
+  function buttonByLabel(view: HTMLDivElement, label: string) {
+    const found = Array.from(view.querySelectorAll("button")).find(
+      (entry) => entry.getAttribute("aria-label") === label
+    );
+    if (!found) {
+      throw new Error(`no button labelled ${label}`);
+    }
+    return found as HTMLButtonElement;
+  }
+
+  function typeMessage(view: HTMLDivElement, text: string) {
+    const box = view.querySelector("textarea");
+    if (!box) {
+      throw new Error("no assistant input");
+    }
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value"
+    )?.set;
+    act(() => {
+      setter?.call(box, text);
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  it("arms the next send in outline-revision mode from the composer", async () => {
+    const { streamAssistantChat } = await import(
+      "api-calls/assistant/gmAssistantClient"
+    );
+    vi.mocked(streamAssistantChat).mockResolvedValue({
+      text: "ok",
+      aborted: false,
+    });
+    const view = await renderAndOpen();
+    typeMessage(view, "Tighten act one.");
+
+    act(() => {
+      buttonByLabel(view, "Revise outline").dispatchEvent(
+        new MouseEvent("click", { bubbles: true })
+      );
+    });
+    expect(
+      buttonByLabel(view, "Revise outline").getAttribute("aria-pressed")
+    ).toBe("true");
+    act(() => {
+      buttonByLabel(view, "Send to assistant").dispatchEvent(
+        new MouseEvent("click", { bubbles: true })
+      );
+    });
+    await flush();
+
+    expect(streamAssistantChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: "c-a",
+        message: "Tighten act one.",
+        mode: "outline-revision",
+      })
+    );
+  });
+
+  it("previews a marked reply side by side with apply and discard", async () => {
+    const view = await renderAndOpen();
+
+    expect(view.textContent).toContain("Current outline");
+    expect(view.textContent).toContain("Proposed outline");
+    expect(view.textContent).toContain(proposedText);
+
+    act(() => {
+      Array.from(view.querySelectorAll("button"))
+        .find((entry) => entry.textContent === "Apply to outline")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    act(() => {
+      Array.from(view.querySelectorAll("button"))
+        .find((entry) => entry.textContent === "Confirm replace")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(applyOutlineRevision).toHaveBeenCalledWith({
+      campaignId: "campaign-1",
+      outlineId: "outline-1",
+      currentText: "Act one: the bell rings.",
+      proposedText,
+    });
+    expect(view.textContent).toContain("Applied");
+  });
+
+  it("discards a marked reply without touching the outline", async () => {
+    const view = await renderAndOpen();
+
+    act(() => {
+      Array.from(view.querySelectorAll("button"))
+        .find((entry) => entry.textContent === "Discard")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(applyOutlineRevision).not.toHaveBeenCalled();
+    expect(view.textContent).not.toContain("Proposed outline");
   });
 });

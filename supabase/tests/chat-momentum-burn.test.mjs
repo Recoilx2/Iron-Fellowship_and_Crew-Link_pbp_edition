@@ -41,6 +41,7 @@ describe("chat momentum burn hardening migration (#125)", () => {
       "20261121000003_campaign_burn_campaign_match.sql",
       "20261121000004_assistant_conversations.sql",
       "20261121000005_campaign_outline.sql",
+      "20261121000006_assistant_outline_versions.sql",
     ]);
     const others = readdirSync(dir).filter(
       (f) =>

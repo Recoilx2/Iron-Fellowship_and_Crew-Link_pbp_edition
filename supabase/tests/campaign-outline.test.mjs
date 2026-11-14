@@ -29,11 +29,16 @@ describe("campaign outline migration (#131)", () => {
   it("follows the <UTC timestamp>_<short-name>.sql convention on a later stamp", () => {
     assert.match(outlineFile(), /^\d{14}_campaign_outline\.sql$/);
     const stamp = outlineFile().slice(0, 14);
+    // Migrations that landed after the outline (the #133 outline
+    // versions) sort later by design, so they are excluded here.
+    const landedLater = new Set([
+      "20261121000006_assistant_outline_versions.sql",
+    ]);
     // The outline is the latest migration on the branch: nothing landed
     // after it, so nothing is excluded here. A later migration re-adds
     // this file to its own landedLater set, following the branch pattern.
     const others = readdirSync(dir).filter(
-      (f) => /^\d{14}_/.test(f) && f !== outlineFile()
+      (f) => /^\d{14}_/.test(f) && f !== outlineFile() && !landedLater.has(f)
     );
     assert.ok(others.length > 0, "no earlier migrations to sort after");
     for (const other of others) {

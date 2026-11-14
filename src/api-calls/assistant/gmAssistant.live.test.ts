@@ -12,6 +12,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as Y from "yjs";
 import type { GmAssistantEnv } from "../../../supabase/functions/gm-assistant/handler";
+import {
+  OUTLINE_PROPOSAL_BEGIN,
+  OUTLINE_PROPOSAL_END,
+} from "../../../supabase/functions/gm-assistant/handler";
 
 // Pulls the edge-function handler into the repo type-check (it ships outside
 // src, so nothing else covers it); erased at runtime.
@@ -576,6 +580,63 @@ describe.skipIf(!config)("gm assistant server function", () => {
       });
       expect(chat.status).toBe(200);
       expect(upstreamContextText()).toContain(LORE_GM_TEXT);
+    });
+
+    it("revises the outline in outline-revision mode with the current text", { timeout: 180000 }, async () => {
+      await ensureConfigured();
+      const { gm, campaignId, noteId, channelId } = await setUpContextCampaign();
+      // The saved choice excludes the outline: revision mode includes it
+      // anyway, so the model always sees what it is replacing.
+      await signInAs(gm);
+      await saveAssistantSettings({
+        campaignId,
+        model: null,
+        context: {
+          includeOutline: false,
+          lore: [],
+          npcs: [],
+          locations: [],
+          notes: [noteId],
+          channels: [{ id: channelId, postCount: 5 }],
+        },
+      });
+      const conversationId = await createConversation({ campaignId, title: "Outline work" });
+      await signOut();
+      const token = await personToken(gm);
+
+      const chat = await call("/gm-assistant/chat", {
+        token,
+        body: {
+          conversationId,
+          message: "Tighten act one.",
+          mode: "outline-revision",
+        },
+      });
+      expect(chat.status).toBe(200);
+      expect(chat.text).not.toContain(TEST_API_KEY);
+
+      // The current outline travels even though the saved choice excludes
+      // it, beside the marked-replacement instruction; the GM-only lore
+      // part stays out without its toggle.
+      const joined = upstreamMessages()
+        .map((message) => message.content)
+        .join("\n");
+      expect(joined).toContain(OUTLINE_TEXT);
+      expect(joined).toContain(OUTLINE_PROPOSAL_BEGIN);
+      expect(joined).toContain(OUTLINE_PROPOSAL_END);
+      expect(joined.toLowerCase()).toContain("complete replacement");
+      expect(joined).not.toContain(LORE_GM_TEXT);
+      expect(upstreamMessages().at(-1)).toMatchObject({
+        role: "user",
+        content: "Tighten act one.",
+      });
+
+      // Both turns are saved like any other chat, and the key never leaks.
+      await waitFor(async () => {
+        const rows = await readMessagesAs(gm, conversationId);
+        return rows.length === 2 ? rows : null;
+      });
+      expect(chat.text).not.toContain(TEST_API_KEY);
     });
   });
 });
