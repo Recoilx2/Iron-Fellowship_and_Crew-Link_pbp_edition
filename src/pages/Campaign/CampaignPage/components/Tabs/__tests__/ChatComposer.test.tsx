@@ -252,6 +252,73 @@ describe("ChatComposer", () => {
     expect(view.textContent).toContain("Kira Vey");
   });
 
+  it("posts in character as the active character when the player holds several", () => {
+    // The retired character sorts first: without the active-only lookup
+    // the composer would speak as them.
+    state.campaigns.currentCampaign.characters.characterMap = {
+      brannoc: {
+        uid: "player-1",
+        name: "Brannoc",
+        isActive: false,
+        stats: { edge: 2, wits: 1 },
+        conditionMeters: { supply: 3 },
+      },
+      kira: {
+        uid: "player-1",
+        name: "Kira Vey",
+        isActive: true,
+        stats: { edge: 2, wits: 1 },
+        conditionMeters: { supply: 3 },
+      },
+    } as never;
+    try {
+      const view = render(ic);
+      expect(view.textContent).toContain("Posting as");
+      expect(view.textContent).toContain("Kira Vey");
+      expect(view.textContent).not.toContain("Brannoc");
+    } finally {
+      state.campaigns.currentCampaign.characters.characterMap = {
+        kira: {
+          uid: "player-1",
+          name: "Kira Vey",
+          stats: { edge: 2, wits: 1 },
+          conditionMeters: { supply: 3 },
+        },
+      };
+    }
+  });
+
+  it("tells a player with no active character how to post in character", () => {
+    state.campaigns.currentCampaign.characters.characterMap = {
+      brannoc: {
+        uid: "player-1",
+        name: "Brannoc",
+        isActive: false,
+        stats: { edge: 2, wits: 1 },
+        conditionMeters: { supply: 3 },
+      },
+    } as never;
+    try {
+      const view = render(ic);
+      // With no voice to pick, the composer posts as the player: the
+      // prompt names the way back in character.
+      expect(view.textContent).toContain("Posting as");
+      expect(view.textContent).toContain("Sam");
+      expect(view.textContent).toContain(
+        "Make a character active or add one"
+      );
+    } finally {
+      state.campaigns.currentCampaign.characters.characterMap = {
+        kira: {
+          uid: "player-1",
+          name: "Kira Vey",
+          stats: { edge: 2, wits: 1 },
+          conditionMeters: { supply: 3 },
+        },
+      };
+    }
+  });
+
   it("posts out of character as self", () => {
     const view = render(ooc);
     expect(view.textContent).toContain("Posting as");

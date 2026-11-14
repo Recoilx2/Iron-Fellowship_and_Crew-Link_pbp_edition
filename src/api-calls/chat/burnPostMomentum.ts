@@ -79,7 +79,7 @@ export const burnPostMomentum = createApiFunction<{ postId: string }, void>(
 
     const { data: charRow, error: charError } = await client
       .from("characters")
-      .select("id,owner_id,momentum")
+      .select("id,owner_id,momentum,is_active")
       .eq("id", post.speaker_character_id)
       .single();
     if (charError || !charRow) {
@@ -88,9 +88,13 @@ export const burnPostMomentum = createApiFunction<{ postId: string }, void>(
     const character = charRow as unknown as {
       owner_id: string;
       momentum: number;
+      is_active: boolean;
     };
     if (character.owner_id !== authorId) {
       throw new Error("Only the author may burn momentum on a roll.");
+    }
+    if (!character.is_active) {
+      throw new Error("Momentum burns only on your active character's roll.");
     }
     const momentum = character.momentum ?? 0;
 

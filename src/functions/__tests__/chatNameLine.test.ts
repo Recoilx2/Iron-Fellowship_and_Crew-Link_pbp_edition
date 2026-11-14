@@ -77,6 +77,24 @@ describe("chat name line", () => {
     ).toEqual({ title: "Rin", subtitle: undefined, showGM: false });
   });
 
+  it("shows no character beside the display name when the author's character is retired", () => {
+    expect(
+      resolveChatNameLine({
+        channel: { kind: "OOC", visibility: "public" },
+        post: {
+          authorId: "player-1",
+          speakerCharacterId: null,
+          speakerNpcId: null,
+        },
+        characterMap: {
+          kira: { uid: "player-1", name: "Kira Vey", isActive: false },
+        },
+        authorName: "Sam",
+        isGM: false,
+      })
+    ).toEqual({ title: "Sam", subtitle: undefined, showGM: false });
+  });
+
   it("tags the GM out of character after the campaign character", () => {
     expect(
       resolveChatNameLine({

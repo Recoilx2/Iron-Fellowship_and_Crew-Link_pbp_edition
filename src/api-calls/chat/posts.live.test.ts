@@ -18,6 +18,7 @@ import { fetchOlderChannelPosts } from "api-calls/chat/fetchOlderChannelPosts";
 import { createWorld } from "api-calls/world/createWorld";
 import { updateCampaignWorld } from "api-calls/campaign/updateCampaignWorld";
 import { createNPC } from "api-calls/world/npcs/createNPC";
+import { ROLL_RESULT, ROLL_TYPE, type Roll } from "types/DieRolls.type";
 import {
   createPerson,
   deletePerson,
@@ -225,6 +226,164 @@ describe.skipIf(!config)("chat text posts end to end", () => {
     });
     expect(strayPost.error).not.toBeNull();
     expect(await readPostsAs(player, icChannelId)).toHaveLength(1);
+  });
+
+  it("refuses in-character posts as an inactive character but keeps their history", { timeout: 120000 }, async () => {
+    const { player, campaignId, icChannelId } = await setUpCampaign();
+    const kira = await createCharacterAs(player, campaignId, "Kira Vey");
+
+    // The player posts in character while Kira is active.
+    await signInAs(player);
+    const postId = await createPost({
+      channelId: icChannelId,
+      text: "Kira reporting in.",
+      speakerCharacterId: kira,
+    });
+
+    // Retiring Kira closes the in-character voice: posting as her is
+    // refused through the call and direct, while posting as self stays
+    // open for out-of-character play.
+    const { error: retireError } = await player.client.rpc(
+      "set_campaign_character_active",
+      { char_id: kira, make_active: false }
+    );
+    expect(retireError).toBeNull();
+    await expect(
+      createPost({
+        channelId: icChannelId,
+        text: "Kira from the sidelines",
+        speakerCharacterId: kira,
+      })
+    ).rejects.toMatchObject({ code: "42501" });
+    const forged = await player.client.from(CHAT_POSTS_TABLE).insert({
+      id: crypto.randomUUID(),
+      channel_id: icChannelId,
+      author_id: player.userId,
+      speaker_character_id: kira,
+      text: "Kira from the sidelines",
+    });
+    expect(forged.error?.code, "forged inactive speaker").toBe("42501");
+    const oocId = await createPost({
+      channelId: icChannelId,
+      text: "Kira is benched, brb",
+    });
+    expect(oocId).toBeTruthy();
+
+    // The earlier post keeps Kira as its speaker with her name and
+    // portrait beside it: retiring changes no history.
+    const posts = await readPostsAs(player, icChannelId);
+    expect(posts.find((row) => row.id === postId)).toMatchObject({
+      speaker_character_id: kira,
+      text: "Kira reporting in.",
+    });
+
+    // Reactivating Kira reopens the voice.
+    const { error: reactivateError } = await player.client.rpc(
+      "set_campaign_character_active",
+      { char_id: kira, make_active: true }
+    );
+    expect(reactivateError).toBeNull();
+    await createPost({
+      channelId: icChannelId,
+      text: "Kira is back.",
+      speakerCharacterId: kira,
+    });
+    expect(await readPostsAs(player, icChannelId)).toHaveLength(3);
+  });
+
+  it("refuses rolls posted as an inactive character", { timeout: 120000 }, async () => {
+    const { player, campaignId, icChannelId } = await setUpCampaign();
+    const kira = await createCharacterAs(player, campaignId, "Kira Vey");
+
+    const roll: Roll = {
+      type: ROLL_TYPE.STAT,
+      rollLabel: "Edge",
+      moveName: "Face Danger",
+      action: 2,
+      challenge1: 3,
+      challenge2: 8,
+      result: ROLL_RESULT.MISS,
+      timestamp: new Date(),
+      characterId: kira,
+      uid: player.userId,
+      gmsOnly: false,
+    };
+
+    // While Kira is active, her roll posts fine.
+    await signInAs(player);
+    await createPost({
+      channelId: icChannelId,
+      text: "Kira strikes.",
+      speakerCharacterId: kira,
+      roll,
+    });
+
+    // Retiring Kira closes the roll voice too: the speaker check binds
+    // new posts and rolls to the active character, so both the call and
+    // a direct insert are refused with a privilege error.
+    const { error: retireError } = await player.client.rpc(
+      "set_campaign_character_active",
+      { char_id: kira, make_active: false }
+    );
+    expect(retireError).toBeNull();
+    await expect(
+      createPost({
+        channelId: icChannelId,
+        text: "Kira from the sidelines.",
+        speakerCharacterId: kira,
+        roll,
+      })
+    ).rejects.toMatchObject({ code: "42501" });
+    const forged = await player.client.from(CHAT_POSTS_TABLE).insert({
+      id: crypto.randomUUID(),
+      channel_id: icChannelId,
+      author_id: player.userId,
+      speaker_character_id: kira,
+      text: "Kira from the sidelines.",
+      roll: roll as unknown as Record<string, unknown>,
+    });
+    expect(forged.error?.code, "forged inactive roll").toBe("42501");
+    await signOut();
+  });
+
+  it("refuses a burn carried by a new post as an inactive character", { timeout: 120000 }, async () => {
+    const { player, campaignId, icChannelId } = await setUpCampaign();
+    const kira = await createCharacterAs(player, campaignId, "Kira Vey");
+
+    // A composer send stamps the burn onto the roll before posting: 5
+    // beats 3 but not 8, so a miss becomes a weak hit.
+    const burned: Roll = {
+      type: ROLL_TYPE.STAT,
+      rollLabel: "Edge",
+      moveName: "Face Danger",
+      action: 2,
+      challenge1: 3,
+      challenge2: 8,
+      result: ROLL_RESULT.WEAK_HIT,
+      momentumBurned: 5,
+      timestamp: new Date(),
+      characterId: kira,
+      uid: player.userId,
+      gmsOnly: false,
+    };
+
+    // Retiring Kira first: the insert burn check fires before the row
+    // lands, so the send is refused as a retired character's burn.
+    const { error: retireError } = await player.client.rpc(
+      "set_campaign_character_active",
+      { char_id: kira, make_active: false }
+    );
+    expect(retireError).toBeNull();
+    await signInAs(player);
+    await expect(
+      createPost({
+        channelId: icChannelId,
+        text: "Kira strikes.",
+        speakerCharacterId: kira,
+        roll: burned,
+      })
+    ).rejects.toThrow(/active character/);
+    await signOut();
   });
 
   it("keeps outsiders from reading or posting", { timeout: 90000 }, async () => {

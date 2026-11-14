@@ -19,8 +19,12 @@ A person running a campaign. A campaign can have more than one.
 _Avoid_: DM, narrator, guide
 
 **Player**:
-A person in a campaign who plays one character in it.
+A person in a campaign who plays through their active character in it.
 _Avoid_: User (when meaning a campaign member)
+
+**Active character**:
+The one character per campaign a player currently plays as. A player can keep any number of characters in a campaign but only one is active at a time; the rest are retired (inactive) and can be made active again. In-character posts speak as the active character.
+_Avoid_: Current character, main character
 
 **Roll**:
 A dice result from a move, stat, progress track or oracle. In a campaign, a roll appears in chat as a post.
