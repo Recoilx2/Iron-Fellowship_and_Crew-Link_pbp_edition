@@ -125,7 +125,7 @@ export function startFakeAssistantUpstream(port: number): Promise<FakeAssistantU
   });
   return new Promise((resolve, reject) => {
     server.on("error", reject);
-    server.listen(port, "127.0.0.1", () => {
+    server.listen(port, "0.0.0.0", () => {
       resolve({
         containerUrl: `http://host.docker.internal:${port}`,
         receivedChats,
