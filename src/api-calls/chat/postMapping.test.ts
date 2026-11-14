@@ -191,6 +191,44 @@ describe("chat post mapping", () => {
     ).toMatchObject({ roll: stored });
   });
 
+  it("names the feed roll's roller from the post, not from the roll", () => {
+    // A stored roll claiming another character (or author) still shows in
+    // the feed under the post's own speaker and author: the database
+    // refuses such rows at insert, and the feed never trusts the JSON
+    // regardless.
+    const stored = {
+      ...statRoll(),
+      characterId: "character-9",
+      uid: "player-9",
+      timestamp: "2026-11-13T12:00:00.000Z",
+    };
+    const document = postRowToDocument(
+      row({
+        author_id: "player-2",
+        speaker_character_id: "character-2",
+        roll: stored,
+      })
+    );
+    expect(document.roll).toMatchObject({
+      characterId: "character-2",
+      uid: "player-2",
+      action: 4,
+      challenge1: 3,
+      challenge2: 8,
+    });
+    // Posting as oneself (or as an NPC) names nobody: a claimed character
+    // still shows empty in the feed.
+    expect(
+      postRowToDocument(
+        row({
+          author_id: "player-2",
+          speaker_character_id: null,
+          roll: stored,
+        })
+      ).roll
+    ).toMatchObject({ characterId: null, uid: "player-2" });
+  });
+
   it("turns row events into upserts and deletes into removals", () => {
     const post = row();
     expect(

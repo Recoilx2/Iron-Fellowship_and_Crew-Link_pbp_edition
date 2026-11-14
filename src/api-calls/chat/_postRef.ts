@@ -46,7 +46,9 @@ export function postRowToDocument(row: PostRow): PostDocument {
     speakerNpcId: row.speaker_npc_id,
     text: row.text,
     imagePaths: row.image_paths ?? [],
-    roll: postRowToRoll(row.roll),
+    // Like the roll log, the feed names the roller from the post's author
+    // and speaker columns (postRowToLogRoll), never from the roll JSON.
+    roll: postRowToLogRoll(row),
     gmsOnly: row.gms_only,
     createdAt: row.created_at,
     editedAt: row.edited_at,
@@ -74,12 +76,13 @@ export function postRowToRoll(
 }
 
 /**
- * Reads a roll post's roll for the campaign roll log: the same dice and
- * outcome as postRowToRoll, but the roller comes from the post's author
- * and speaker columns, never from the roll JSON -- the database binds a
- * posted roll to its post at insert, and the log names the roller from
- * the post regardless, so a forged roll could never attribute dice to
- * another character. A post with no roll reads back null.
+ * Reads a roll post's roll for display -- the feed and the campaign roll
+ * log alike: the same dice and outcome as postRowToRoll, but the roller
+ * comes from the post's author and speaker columns, never from the roll
+ * JSON -- the database binds a posted roll to its post at insert, and the
+ * display names the roller from the post regardless, so a forged roll
+ * could never attribute dice to another character. A post with no roll
+ * reads back null.
  */
 export function postRowToLogRoll(row: PostRow): PostDocument["roll"] {
   const roll = postRowToRoll(row.roll);
