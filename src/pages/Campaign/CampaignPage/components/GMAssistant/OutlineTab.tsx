@@ -139,6 +139,9 @@ export function OutlineTab(props: { campaignId: string }) {
   // bytes, which would merge as duplicated text -- and the remounted
   // provider syncs them to the note server, so its next persisted store
   // keeps the replacement instead of resurrecting what it held before.
+  // No reload: that would unmount the tab (and the just-applied preview)
+  // while the outline id is re-resolved; the live subscription already
+  // carries the same bytes everywhere else.
   const moveEditorTo = async (): Promise<void> => {
     const fresh = await fetchOutlineContentBytes(outlineId ?? "").catch(
       () => null
@@ -147,7 +150,6 @@ export function OutlineTab(props: { campaignId: string }) {
       overrideBytes(fresh);
     }
     setEditorEpoch((epoch) => epoch + 1);
-    reload();
   };
 
   const undo = async (): Promise<void> => {
