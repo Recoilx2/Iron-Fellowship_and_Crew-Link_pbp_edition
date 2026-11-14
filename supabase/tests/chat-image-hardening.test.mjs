@@ -40,6 +40,7 @@ describe("chat image hardening migration (#118 points 1-3)", () => {
       "20261119000000_chat_momentum_burn_gms_pin.sql",
       "20261120000000_chat_storage_privileges.sql",
       "20261121000000_campaign_active_character.sql",
+      "20261121000001_chat_roll_lock_definer.sql",
     ]);
     const others = readdirSync(migrationsDir).filter(
       (f) => /^\d{14}_/.test(f) && f !== hardeningFile() && !landedLater.has(f)
