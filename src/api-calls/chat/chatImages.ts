@@ -11,10 +11,12 @@ import { shrinkImageFile } from "api-calls/storage/shrinkImage";
  * campaign and post: chat-images/<campaignId>/<postId>/<filename>. The
  * access rules on the bucket let an image read exactly when its post reads
  * (channel members through the visibility check, GMs alone for GM-only
- * roll posts); files waiting for a post read only for their uploader, and
- * only the uploader overwrites them. Outsiders load nothing. Large images
- * are shrunk in the browser before upload, except GIFs, which go up
- * untouched so animations survive.
+ * roll posts); files waiting for a post read only for their uploader.
+ * Uploads land only in a not-yet-posted folder or the uploader's own
+ * post, and nobody overwrites a sent file: pending uploads may be
+ * retried, but a posted image's bytes are final. Outsiders load nothing.
+ * Large images are shrunk in the browser before upload, except GIFs,
+ * which go up untouched so animations survive.
  */
 
 export const CHAT_IMAGES_BUCKET = "chat-images";

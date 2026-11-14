@@ -105,6 +105,29 @@ def main() -> int:
         else:
             filled.append(line)
 
+    # Storage's own upload ceiling (FILE_SIZE_LIMIT, bytes) derives from the
+    # one image size setting CHAT_IMAGE_MAX_MB (ticket #118), so the bucket
+    # cap (apply.sh, every start), the client cap (site build) and Storage
+    # follow it together on every deploy.
+    image_max_mb = 10
+    for line in filled:
+        if line.startswith("CHAT_IMAGE_MAX_MB="):
+            raw = line.split("=", 1)[1].strip()
+            if raw.isdigit() and int(raw) > 0:
+                image_max_mb = int(raw)
+    derived_limit = f"FILE_SIZE_LIMIT={image_max_mb * 1024 * 1024}"
+    for i, line in enumerate(filled):
+        if line.startswith("FILE_SIZE_LIMIT="):
+            filled[i] = derived_limit
+            break
+    else:
+        for i, line in enumerate(filled):
+            if line.startswith("CHAT_IMAGE_MAX_MB="):
+                filled.insert(i + 1, derived_limit)
+                break
+        else:
+            filled.append(derived_limit)
+
     with open(out, "w") as fh:
         fh.write("\n".join(filled) + "\n")
 

@@ -29,8 +29,12 @@ describe("deleted-post cleanup and roll forgery migration (#120)", () => {
     assert.match(cleanupFile(), /^\d{14}_chat_roll_cleanup\.sql$/);
     const stamp = cleanupFile().slice(0, 14);
     // Migrations that landed after #120 (e.g. #125 momentum burn,
-    // 20261116000000) sort later by design, so they are excluded here.
-    const landedLater = new Set(["20261116000000_chat_momentum_burn.sql"]);
+    // 20261116000000, and #118 image hardening, 20261117000000) sort later
+    // by design, so they are excluded here.
+    const landedLater = new Set([
+      "20261116000000_chat_momentum_burn.sql",
+      "20261117000000_chat_image_hardening.sql",
+    ]);
     const others = readdirSync(dir).filter(
       (f) => /^\d{14}_/.test(f) && f !== cleanupFile() && !landedLater.has(f)
     );
