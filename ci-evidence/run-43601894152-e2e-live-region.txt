@@ -1,0 +1,151 @@
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: chat-active-character.spec.ts >> active character >> retire, add new, post as new, then make the old one active again
+- Location: e2e/chat-active-character.spec.ts:80:3
+
+# Error details
+
+```
+Error: expect(locator).toBeVisible() failed
+
+Locator: getByText('Kira is back 1794664559233')
+Expected: visible
+Error: strict mode violation: getByText('Kira is back 1794664559233') resolved to 2 elements:
+    1) <div id="live-region" aria-live="polite" class="MuiBox-root css-ak5uu4">New post in # In character: Kira is back 17946645…</div> aka getByText('New post in # In character:')
+    2) <p class="MuiTypography-root MuiTypography-body2 css-1pck9zw">Kira is back 1794664559233</p> aka getByText('Kira is back 1794664559233', { exact: true })
+
+Call log:
+  - Expect "toBeVisible" getByText('Kira is back 1794664559233') with timeout 15000ms
+  - waiting for getByText('Kira is back 1794664559233')
+
+```
+
+# Test source
+
+```ts
+  39  |     people = [gm, player];
+  40  |     campaignId = await createCampaignAs(gm, campaignName, "co-op");
+  41  |     await joinCampaignAs(player, campaignId);
+  42  |     // The player's first campaign character: the insert defaults to
+  43  |     // active, so the IC composer posts as them.
+  44  |     const { error: kiraError } = await player.client
+  45  |       .from("characters")
+  46  |       .insert({
+  47  |         owner_id: player.userId,
+  48  |         name: "Kira (E2E)",
+  49  |         campaign_id: campaignId,
+  50  |       });
+  51  |     if (kiraError) {
+  52  |       throw new Error(
+  53  |         `e2e: could not create player character: ${kiraError.message}`
+  54  |       );
+  55  |     }
+  56  |     // The replacement waits offstage: adding it through the Characters
+  57  |     // screen retires whoever is active.
+  58  |     const { error: sableError } = await player.client
+  59  |       .from("characters")
+  60  |       .insert({ owner_id: player.userId, name: "Sable (E2E)" });
+  61  |     if (sableError) {
+  62  |       throw new Error(
+  63  |         `e2e: could not create replacement character: ${sableError.message}`
+  64  |       );
+  65  |     }
+  66  |   });
+  67  | 
+  68  |   test.afterAll(async () => {
+  69  |     if (campaignId) {
+  70  |       await deleteCampaignAsAdmin(config, campaignId).catch(() => {});
+  71  |     }
+  72  |     await Promise.all(
+  73  |       people.map((person) =>
+  74  |         deletePerson(config, person.userId).catch(() => {})
+  75  |       )
+  76  |     );
+  77  |     people = [];
+  78  |   });
+  79  | 
+  80  |   test("retire, add new, post as new, then make the old one active again", async ({
+  81  |     browser,
+  82  |   }) => {
+  83  |     const playerContext = await browser.newContext();
+  84  |     const playerPage = await playerContext.newPage();
+  85  |     try {
+  86  |       await signInAs(playerPage, config, player, campaignUrl(campaignId));
+  87  |       await expect(
+  88  |         playerPage.getByRole("tab", { name: "Characters" })
+  89  |       ).toBeVisible();
+  90  | 
+  91  |       // The player retires their active character from the Characters
+  92  |       // screen.
+  93  |       await playerPage.getByRole("tab", { name: "Characters" }).click();
+  94  |       await expect(playerPage.getByText("Kira (E2E)").first()).toBeVisible();
+  95  |       await playerPage
+  96  |         .getByRole("button", { name: "Retire: Kira (E2E)" })
+  97  |         .click();
+  98  |       await expect(
+  99  |         playerPage.getByRole("button", { name: "Make active: Kira (E2E)" })
+  100 |       ).toBeVisible();
+  101 | 
+  102 |       // Adding the replacement makes it active; posting in character
+  103 |       // speaks as the new character.
+  104 |       await playerPage
+  105 |         .getByRole("button", { name: "Add a Character" })
+  106 |         .click();
+  107 |       await playerPage.getByRole("button", { name: "Select" }).click();
+  108 |       // The dialog closes once the link lands; the tab behind it is only
+  109 |       // clickable afterwards.
+  110 |       await expect(playerPage.getByRole("dialog")).toBeHidden();
+  111 |       await playerPage.getByRole("tab", { name: "Chat" }).click();
+  112 |       await expect(
+  113 |         playerPage.getByText("Posting as Sable (E2E)")
+  114 |       ).toBeVisible();
+  115 |       const firstText = `Sable takes point ${Date.now()}`;
+  116 |       await playerPage
+  117 |         .getByRole("textbox", { name: /Post in #/ })
+  118 |         .fill(firstText);
+  119 |       await playerPage.getByRole("button", { name: "Send" }).click();
+  120 |       await expect(playerPage.getByText(firstText)).toBeVisible();
+  121 |       await expect(playerPage.getByText("Sable (E2E)").first()).toBeVisible();
+  122 | 
+  123 |       // Making the old character active again retires the replacement:
+  124 |       // the composer speaks as Kira once more.
+  125 |       await playerPage.getByRole("tab", { name: "Characters" }).click();
+  126 |       await playerPage
+  127 |         .getByRole("button", { name: "Make active: Kira (E2E)" })
+  128 |         .click();
+  129 |       await expect(
+  130 |         playerPage.getByRole("button", { name: "Retire: Kira (E2E)" })
+  131 |       ).toBeVisible();
+  132 |       await playerPage.getByRole("tab", { name: "Chat" }).click();
+  133 |       await expect(playerPage.getByText("Posting as Kira (E2E)")).toBeVisible();
+  134 |       const secondText = `Kira is back ${Date.now()}`;
+  135 |       await playerPage
+  136 |         .getByRole("textbox", { name: /Post in #/ })
+  137 |         .fill(secondText);
+  138 |       await playerPage.getByRole("button", { name: "Send" }).click();
+> 139 |       await expect(playerPage.getByText(secondText)).toBeVisible();
+      |                                                      ^ Error: expect(locator).toBeVisible() failed
+  140 |       await expect(playerPage.getByText("Kira (E2E)").first()).toBeVisible();
+  141 | 
+  142 |       // The retired replacement's earlier post keeps her name and
+  143 |       // portrait beside it: retiring changes no history. The portrait
+  144 |       // without an upload is her initial, which no other visible text
+  145 |       // repeats.
+  146 |       await expect(playerPage.getByText(firstText)).toBeVisible();
+  147 |       await expect(playerPage.getByText("Sable (E2E)").first()).toBeVisible();
+  148 |       await expect(
+  149 |         playerPage.getByText("S", { exact: true }).first()
+  150 |       ).toBeVisible();
+  151 |     } finally {
+  152 |       await playerContext.close().catch(() => {});
+  153 |     }
+  154 |   });
+  155 | });
+  156 | 
+```
