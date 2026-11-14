@@ -12,7 +12,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import { CharacterList } from "components/features/characters/CharacterList";
 import { Link } from "react-router-dom";
 import { constructCharacterCreateInCampaignUrl } from "pages/Character/routes";
-import { isActiveCampaignCharacter } from "functions/isActiveCampaignCharacter";
+import { findActiveCampaignCharacter } from "functions/isActiveCampaignCharacter";
 import { useStore } from "stores/store";
 import { useId, useState } from "react";
 
@@ -26,6 +26,7 @@ export function AddCharacterDialog(props: AddCharacterDialogProps) {
   const { open, handleClose, campaignId } = props;
 
   const characters = useStore((store) => store.characters.characterMap);
+  const currentUserUid = useStore((store) => store.auth.uid);
   const isLoading = useStore((store) => store.characters.loading);
 
   const addCharacterToCampaign = useStore(
@@ -47,10 +48,10 @@ export function AddCharacterDialog(props: AddCharacterDialogProps) {
   // At most one active character per player per campaign (#127): the
   // player's active character in this campaign is the active one, and
   // choosing another retires it and makes the new one active.
-  const activeCharacterId = Object.entries(characters).find(
-    ([, character]) =>
-      character.campaignId === campaignId &&
-      isActiveCampaignCharacter(character)
+  const activeCharacterId = findActiveCampaignCharacter(
+    characters,
+    currentUserUid,
+    campaignId
   )?.[0];
   const activeCharacter = activeCharacterId
     ? characters[activeCharacterId]

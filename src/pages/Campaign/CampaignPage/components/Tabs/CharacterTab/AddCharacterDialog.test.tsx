@@ -49,6 +49,7 @@ describe("AddCharacterDialog one active character per player", () => {
     const addCharacter = vi.fn().mockResolvedValue(undefined);
     const handleClose = vi.fn();
     useStore.setState((store) => {
+      store.auth.uid = "user-A";
       store.campaigns.currentCampaign.addCharacter =
         addCharacter as unknown as typeof originalAddCharacter;
     });

@@ -61,4 +61,20 @@ describe("findActiveCampaignCharacter", () => {
       )
     ).toBeUndefined();
   });
+
+  it("scopes the search to one campaign", () => {
+    const scoped = {
+      a: { uid: "player-1", campaignId: "camp-1", isActive: true },
+      b: { uid: "player-1", campaignId: "camp-2", isActive: true },
+    };
+    expect(
+      findActiveCampaignCharacter(scoped, "player-1", "camp-2")
+    ).toEqual([
+      "b",
+      { uid: "player-1", campaignId: "camp-2", isActive: true },
+    ]);
+    expect(
+      findActiveCampaignCharacter(scoped, "player-1", "camp-3")
+    ).toBeUndefined();
+  });
 });

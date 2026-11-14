@@ -45,7 +45,7 @@ test.describe("active character", () => {
       .from("characters")
       .insert({
         owner_id: player.userId,
-        name: "E2E Kira",
+        name: "Kira (E2E)",
         campaign_id: campaignId,
       });
     if (kiraError) {
@@ -57,7 +57,7 @@ test.describe("active character", () => {
     // screen retires whoever is active.
     const { error: sableError } = await player.client
       .from("characters")
-      .insert({ owner_id: player.userId, name: "E2E Sable" });
+      .insert({ owner_id: player.userId, name: "Sable (E2E)" });
     if (sableError) {
       throw new Error(
         `e2e: could not create replacement character: ${sableError.message}`
@@ -91,12 +91,12 @@ test.describe("active character", () => {
       // The player retires their active character from the Characters
       // screen.
       await playerPage.getByRole("tab", { name: "Characters" }).click();
-      await expect(playerPage.getByText("E2E Kira").first()).toBeVisible();
+      await expect(playerPage.getByText("Kira (E2E)").first()).toBeVisible();
       await playerPage
-        .getByRole("button", { name: "Retire: E2E Kira" })
+        .getByRole("button", { name: "Retire: Kira (E2E)" })
         .click();
       await expect(
-        playerPage.getByRole("button", { name: "Make active: E2E Kira" })
+        playerPage.getByRole("button", { name: "Make active: Kira (E2E)" })
       ).toBeVisible();
 
       // Adding the replacement makes it active; posting in character
@@ -110,7 +110,7 @@ test.describe("active character", () => {
       await expect(playerPage.getByRole("dialog")).toBeHidden();
       await playerPage.getByRole("tab", { name: "Chat" }).click();
       await expect(
-        playerPage.getByText("Posting as E2E Sable")
+        playerPage.getByText("Posting as Sable (E2E)")
       ).toBeVisible();
       const firstText = `Sable takes point ${Date.now()}`;
       await playerPage
@@ -118,31 +118,36 @@ test.describe("active character", () => {
         .fill(firstText);
       await playerPage.getByRole("button", { name: "Send" }).click();
       await expect(playerPage.getByText(firstText)).toBeVisible();
-      await expect(playerPage.getByText("E2E Sable").first()).toBeVisible();
+      await expect(playerPage.getByText("Sable (E2E)").first()).toBeVisible();
 
       // Making the old character active again retires the replacement:
       // the composer speaks as Kira once more.
       await playerPage.getByRole("tab", { name: "Characters" }).click();
       await playerPage
-        .getByRole("button", { name: "Make active: E2E Kira" })
+        .getByRole("button", { name: "Make active: Kira (E2E)" })
         .click();
       await expect(
-        playerPage.getByRole("button", { name: "Retire: E2E Kira" })
+        playerPage.getByRole("button", { name: "Retire: Kira (E2E)" })
       ).toBeVisible();
       await playerPage.getByRole("tab", { name: "Chat" }).click();
-      await expect(playerPage.getByText("Posting as E2E Kira")).toBeVisible();
+      await expect(playerPage.getByText("Posting as Kira (E2E)")).toBeVisible();
       const secondText = `Kira is back ${Date.now()}`;
       await playerPage
         .getByRole("textbox", { name: /Post in #/ })
         .fill(secondText);
       await playerPage.getByRole("button", { name: "Send" }).click();
       await expect(playerPage.getByText(secondText)).toBeVisible();
-      await expect(playerPage.getByText("E2E Kira").first()).toBeVisible();
+      await expect(playerPage.getByText("Kira (E2E)").first()).toBeVisible();
 
-      // The retired replacement's earlier post keeps her name beside it:
-      // retiring changes no history.
+      // The retired replacement's earlier post keeps her name and
+      // portrait beside it: retiring changes no history. The portrait
+      // without an upload is her initial, which no other visible text
+      // repeats.
       await expect(playerPage.getByText(firstText)).toBeVisible();
-      await expect(playerPage.getByText("E2E Sable").first()).toBeVisible();
+      await expect(playerPage.getByText("Sable (E2E)").first()).toBeVisible();
+      await expect(
+        playerPage.getByText("S", { exact: true }).first()
+      ).toBeVisible();
     } finally {
       await playerContext.close().catch(() => {});
     }
