@@ -28,8 +28,11 @@ describe("deleted-post cleanup and roll forgery migration (#120)", () => {
   it("follows the <UTC timestamp>_<short-name>.sql convention on a later stamp", () => {
     assert.match(cleanupFile(), /^\d{14}_chat_roll_cleanup\.sql$/);
     const stamp = cleanupFile().slice(0, 14);
+    // Migrations that landed after #120 (e.g. #125 momentum burn,
+    // 20261116000000) sort later by design, so they are excluded here.
+    const landedLater = new Set(["20261116000000_chat_momentum_burn.sql"]);
     const others = readdirSync(dir).filter(
-      (f) => /^\d{14}_/.test(f) && f !== cleanupFile()
+      (f) => /^\d{14}_/.test(f) && f !== cleanupFile() && !landedLater.has(f)
     );
     for (const other of others) {
       assert.ok(
