@@ -33,10 +33,12 @@ describe("chat image hardening migration (#118 points 1-3)", () => {
       `${hardeningFile()} does not sort after the momentum-burn edit trigger`
     );
     // The #125 burn hardening (20261118000000) and its GM-only pin
-    // (20261119000000) land after #118 by design, so they are excluded here.
+    // (20261119000000) land after #118 by design, so they are excluded
+    // here. The storage-privileges fix (20261120000000) lands later still.
     const landedLater = new Set([
       "20261118000000_chat_momentum_burn_hardening.sql",
       "20261119000000_chat_momentum_burn_gms_pin.sql",
+      "20261120000000_chat_storage_privileges.sql",
     ]);
     const others = readdirSync(migrationsDir).filter(
       (f) => /^\d{14}_/.test(f) && f !== hardeningFile() && !landedLater.has(f)
