@@ -281,14 +281,17 @@ describe.skipIf(!config)("campaign outline end to end (#131)", () => {
       await expect(
         getOrCreateCampaignOutline({ campaignId })
       ).rejects.toBeTruthy();
-      await expect(
-        getAllNotesWithContent({ source: "campaign", ownerId: campaignId })
-      ).resolves.toEqual(
+      const withContent = await getAllNotesWithContent({
+        source: "campaign",
+        ownerId: campaignId,
+      });
+      expect(
+        withContent.map((entry) => entry.noteId)
+      ).not.toContain(outlineId);
+      expect(withContent.map((entry) => entry.noteId)).toEqual(
         person === outsider
           ? []
-          : expect.arrayContaining([
-              expect.objectContaining({ noteId: sharedId }),
-            ])
+          : expect.arrayContaining([sharedId])
       );
       await signOut();
 
