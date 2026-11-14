@@ -56,6 +56,10 @@ import { CharacterTab } from "./CharacterTab";
 import { TracksTab } from "./TracksTab";
 import { MyNotesTab } from "./MyNotesTab";
 import { WorldTab } from "./WorldTab";
+import { LocationsSection } from "components/features/worlds/Locations";
+import { NPCSection } from "components/features/worlds/NPCSection";
+import { LoreSection } from "components/features/worlds/Lore";
+import { useCampaignType } from "hooks/useCampaignType";
 
 export interface RosterEntry {
   uid: string;
@@ -303,7 +307,7 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
               <CharacterTab openInviteDialog={openInviteDialog} />
             )}
             {phoneScreen === "Tracks" && <TracksTab />}
-            {phoneScreen === "World" && <WorldTab />}
+            {phoneScreen === "World" && <PhoneWorldScreen />}
             {phoneScreen === "My notes" && <MyNotesTab />}
           </Box>
         )}
@@ -882,6 +886,40 @@ function CampaignScreens(props: { openInviteDialog: () => void }) {
       {tab === "World" && <WorldTab />}
       {tab === "My notes" && <MyNotesTab />}
     </>
+  );
+}
+
+/**
+ * Phone World screen (ticket #122 regression): phones are locked to the Chat
+ * panel, so the desktop Locations/NPCs/Lore tabs are out of reach there. The
+ * World bottom-bar screen carries its own sub-tabs, so each one opens one
+ * step down from World with the same hidden-tag hints as the desktop tabs.
+ */
+type PhoneWorldSection = "World" | "Locations" | "NPCs" | "Lore";
+
+function PhoneWorldScreen() {
+  const { showGuideTips } = useCampaignType();
+  const [section, setSection] = useState<PhoneWorldSection>("World");
+  return (
+    <Box>
+      <StyledTabs
+        value={section}
+        onChange={(_, next) => setSection(next)}
+        variant={"scrollable"}
+        aria-label={"World sections"}
+      >
+        <StyledTab label="World" value="World" />
+        <StyledTab label="Locations" value="Locations" />
+        <StyledTab label="NPCs" value="NPCs" />
+        <StyledTab label="Lore" value="Lore" />
+      </StyledTabs>
+      {section === "World" && <WorldTab />}
+      {section === "Locations" && (
+        <LocationsSection showHiddenTag openNPCTab={() => setSection("NPCs")} />
+      )}
+      {section === "NPCs" && <NPCSection showHiddenTag={showGuideTips} />}
+      {section === "Lore" && <LoreSection showHiddenTag={showGuideTips} />}
+    </Box>
   );
 }
 

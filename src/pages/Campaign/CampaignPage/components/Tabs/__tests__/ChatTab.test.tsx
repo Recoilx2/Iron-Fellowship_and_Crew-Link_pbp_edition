@@ -121,7 +121,22 @@ vi.mock("../TracksTab", () => ({ TracksTab: () => null }));
 vi.mock("../MyNotesTab", () => ({
   MyNotesTab: () => <div>My notes pane</div>,
 }));
-vi.mock("../WorldTab", () => ({ WorldTab: () => null }));
+vi.mock("../WorldTab", () => ({ WorldTab: () => <div>World pane</div> }));
+vi.mock("components/features/worlds/Locations", () => ({
+  LocationsSection: () => <div>Locations pane</div>,
+}));
+vi.mock("components/features/worlds/NPCSection", () => ({
+  NPCSection: () => <div>NPCs pane</div>,
+}));
+vi.mock("components/features/worlds/Lore", () => ({
+  LoreSection: () => <div>Lore pane</div>,
+}));
+vi.mock("hooks/useCampaignType", () => ({
+  useCampaignType: () => ({
+    showGuideTips: false,
+    showGuidedPlayerView: false,
+  }),
+}));
 vi.mock("components/shared/UserAvatar", () => ({
   UserAvatar: ({ uid }: { uid: string }) => <span>{`Avatar ${uid}`}</span>,
 }));
@@ -455,6 +470,43 @@ describe("ChatTab channels", () => {
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(view.textContent).toContain("My notes pane");
+  });
+
+  it("reaches Locations, NPCs and Lore from the phone World screen", () => {
+    mockViewport(390);
+    const view = render();
+
+    act(() => {
+      Array.from(view.querySelectorAll("button"))
+        .find((button) => button.textContent === "World")
+        ?.click();
+    });
+    expect(view.textContent).toContain("World pane");
+
+    const sections = view.querySelector(
+      '[role="tablist"][aria-label="World sections"]'
+    );
+    expect(sections).toBeTruthy();
+    const names = Array.from(
+      sections?.querySelectorAll('[role="tab"]') ?? []
+    ).map((tab) => tab.textContent ?? "");
+    expect(names).toEqual(["World", "Locations", "NPCs", "Lore"]);
+
+    for (const [tabName, pane] of [
+      ["Locations", "Locations pane"],
+      ["NPCs", "NPCs pane"],
+      ["Lore", "Lore pane"],
+      ["World", "World pane"],
+    ] as const) {
+      act(() => {
+        Array.from(
+          sections?.querySelectorAll('[role="tab"]') ?? []
+        )
+          .find((tab) => tab.textContent === tabName)
+          ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      expect(view.textContent).toContain(pane);
+    }
   });
 
   it("leaves the side screens out below md, where the bottom bar takes over", () => {

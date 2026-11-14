@@ -32,12 +32,13 @@ test.describe("my notes", () => {
   let config: StackConfig;
   let campaignId: string;
   const campaignName = `E2E My Notes ${Date.now()}`;
+  let gm: E2EPerson;
   let player: E2EPerson;
   let people: E2EPerson[] = [];
 
   test.beforeAll(async () => {
     config = stackConfig();
-    const gm = await createPerson(config, "e2e-gm");
+    gm = await createPerson(config, "e2e-gm");
     player = await createPerson(config, "e2e-player");
     people = [gm, player];
     campaignId = await createCampaignAs(gm, campaignName);
@@ -125,5 +126,81 @@ test.describe("my notes", () => {
 
     await expect(page.getByText("Campaign Notes")).toBeVisible();
     await expect(page.getByText("Roll Log")).toHaveCount(0);
+  });
+
+  test("a member reaches Locations, NPCs and Lore from the phone World screen", async ({
+    page,
+  }) => {
+    // Link a world with one entry per section, the way the app does (the
+    // worlds SELECT policy re-queries its own table, so insert with a
+    // pre-generated id, #69). Entries stay shared so the player sees them.
+    const worldId = crypto.randomUUID();
+    const { error: worldError } = await gm.client.from("worlds").insert({
+      id: worldId,
+      name: "E2E Harbor world",
+      owner_ids: [gm.userId],
+    });
+    if (worldError) {
+      throw new Error(`e2e: could not create world: ${worldError.message}`);
+    }
+    const { error: linkError } = await gm.client
+      .from("campaigns")
+      .update({ world_id: worldId })
+      .eq("id", campaignId);
+    if (linkError) {
+      throw new Error(`e2e: could not link world: ${linkError.message}`);
+    }
+    const locationName = `E2E Harbor ${Date.now()}`;
+    const { error: locationError } = await gm.client
+      .from("world_locations")
+      .insert({ world_id: worldId, name: locationName });
+    if (locationError) {
+      throw new Error(
+        `e2e: could not create location: ${locationError.message}`
+      );
+    }
+    const npcName = `E2E Elder ${Date.now()}`;
+    const { error: npcError } = await gm.client
+      .from("world_npcs")
+      .insert({ world_id: worldId, name: npcName });
+    if (npcError) {
+      throw new Error(`e2e: could not create NPC: ${npcError.message}`);
+    }
+    const loreName = `E2E Oath ${Date.now()}`;
+    const { error: loreError } = await gm.client
+      .from("world_lore")
+      .insert({ world_id: worldId, name: loreName });
+    if (loreError) {
+      throw new Error(`e2e: could not create lore: ${loreError.message}`);
+    }
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signInAs(page, config, player, campaignUrl(campaignId));
+
+    const worldAction = page.getByRole("button", {
+      name: "World",
+      exact: true,
+    });
+    await expect(worldAction).toBeVisible();
+    await worldAction.click();
+
+    // One step down from the phone World screen: each section opens from
+    // the World sections sub-tabs and shows its entry.
+    const sections = page.getByRole("tablist", { name: "World sections" });
+    await expect(
+      sections.getByRole("tab", { name: "World", exact: true })
+    ).toBeVisible();
+
+    await sections.getByRole("tab", { name: "Locations" }).click();
+    await expect(page.getByText(locationName)).toBeVisible();
+
+    await sections.getByRole("tab", { name: "NPCs" }).click();
+    await expect(page.getByText(npcName)).toBeVisible();
+
+    await sections.getByRole("tab", { name: "Lore" }).click();
+    await expect(page.getByText(loreName)).toBeVisible();
+
+    await sections.getByRole("tab", { name: "World", exact: true }).click();
+    await expect(page.getByText("E2E Harbor world")).toBeVisible();
   });
 });
