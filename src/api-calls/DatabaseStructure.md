@@ -28,7 +28,7 @@ chat_channels                one row per channel in a campaign (kind IC/OOC;
 chat_posts                   one row per post in a channel (text, image
                              paths, roll in its existing shape, speaker,
                              GM-only flag, edited/deleted markers; the
-                             campaign roll log is a view over roll posts,
+                             campaign roll log is a client-side query over roll posts,
                              ticket #30, so the old campaign_rolls table
                              is gone)
 chat_channel_members         one roster row per person in a private channel
