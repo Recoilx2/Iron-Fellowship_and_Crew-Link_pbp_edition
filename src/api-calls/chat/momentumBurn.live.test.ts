@@ -314,6 +314,44 @@ describe.skipIf(!config)("chat momentum burn end to end", () => {
   );
 
   it(
+    "refuses a lone GM-only flip and leaves the row unchanged",
+    { timeout: 120000 },
+    async () => {
+      const { player, campaignId, icChannelId } = await setUpCampaign();
+      const kira = await createCharacterAs(player, campaignId, "Kira Vey", 5);
+
+      await signInAs(player);
+      const postId = await createPost({
+        channelId: icChannelId,
+        text: "Kira strikes.",
+        speakerCharacterId: kira,
+        roll: missRoll(kira, player.userId),
+      });
+      await signOut();
+
+      // A lone gms_only flip with the roll untouched is refused: the flag
+      // stays pinned always, so a burn can never leak a secret roll. A
+      // denied update can return no error with zero rows, so the row
+      // itself -- flag, roll and momentum -- must stand either way.
+      const before = await readPostAs(player, postId);
+      const { data: updated, error } = await player.client
+        .from(CHAT_POSTS_TABLE)
+        .update({ gms_only: true })
+        .eq("id", postId)
+        .select("id");
+      expect(
+        error !== null || (updated ?? []).length === 0,
+        "lone gms_only flip"
+      ).toBe(true);
+      const after = await readPostAs(player, postId);
+      expect(after.gms_only, "lone gms_only flip").toBe(before.gms_only);
+      expect(after.roll, "lone gms_only flip").toEqual(before.roll);
+      expect(after.text, "lone gms_only flip").toBe(before.text);
+      expect(await readMomentumAs(player, kira), "lone gms_only flip").toBe(5);
+    }
+  );
+
+  it(
     "refuses burns by anyone else, by GMs, and on deleted posts at the database",
     { timeout: 180000 },
     async () => {

@@ -32,10 +32,11 @@ describe("chat image hardening migration (#118 points 1-3)", () => {
       stamp > "20261116000000",
       `${hardeningFile()} does not sort after the momentum-burn edit trigger`
     );
-    // The #125 burn hardening (20261118000000) lands after #118 by design,
-    // so it is excluded here.
+    // The #125 burn hardening (20261118000000) and its GM-only pin
+    // (20261119000000) land after #118 by design, so they are excluded here.
     const landedLater = new Set([
       "20261118000000_chat_momentum_burn_hardening.sql",
+      "20261119000000_chat_momentum_burn_gms_pin.sql",
     ]);
     const others = readdirSync(migrationsDir).filter(
       (f) => /^\d{14}_/.test(f) && f !== hardeningFile() && !landedLater.has(f)
@@ -132,6 +133,50 @@ describe("chat image hardening migration (#118 points 1-3)", () => {
     assert.ok(
       /1048576|1024\s*\*\s*1024/.test(genEnv),
       "gen-env.py does not convert megabytes to bytes"
+    );
+  });
+
+  it("fails the site start when the built client and the bucket disagree", () => {
+    const dockerfile = readRepo("supabase/site/Dockerfile");
+    assert.ok(
+      /chat-image-max-mb\.txt/.test(dockerfile),
+      "the site build does not record the baked VITE_CHAT_IMAGE_MAX_MB"
+    );
+    assert.ok(
+      /check-image-cap\.sh/.test(dockerfile),
+      "the site image does not install the cap agreement check"
+    );
+    assert.ok(
+      /ENTRYPOINT.*check-image-cap\.sh/.test(dockerfile),
+      "the site image does not fail its start on a cap disagreement"
+    );
+    const check = readRepo("supabase/site/check-image-cap.sh");
+    assert.ok(
+      /CHAT_IMAGE_MAX_MB/.test(check) &&
+        /VITE_CHAT_IMAGE_MAX_MB|chat-image-max-mb\.txt/.test(check),
+      "the start check does not compare the baked client cap with CHAT_IMAGE_MAX_MB"
+    );
+    assert.ok(
+      /exit 1/.test(check),
+      "the start check does not fail when the caps disagree"
+    );
+    const compose = readRepo("supabase/docker-compose.yml");
+    // The site runtime carries the deployment setting the bucket follows,
+    // so the check compares the baked client against it. VITE_ must stay a
+    // build arg only: passing it at runtime would mask the baked value.
+    const siteSection = compose.slice(compose.indexOf("\n  site:"));
+    const siteEnd = siteSection.search(/\n  [a-z-]+:/);
+    const siteBlock =
+      siteEnd > 0 ? siteSection.slice(0, siteEnd) : siteSection;
+    assert.ok(
+      /CHAT_IMAGE_MAX_MB/.test(siteBlock),
+      "the site service does not carry CHAT_IMAGE_MAX_MB at runtime"
+    );
+    assert.ok(
+      !/VITE_CHAT_IMAGE_MAX_MB:\s*\$\{/.test(
+        siteBlock.split("environment:")[1] ?? ""
+      ),
+      "VITE_CHAT_IMAGE_MAX_MB is passed at runtime and would mask the baked cap"
     );
   });
 });

@@ -412,6 +412,14 @@ services:
     restart: unless-stopped
     ports:
       - ${SITE_HTTP_PORT:-8080}:80/tcp
+    # Runtime copy of the one image size setting: the entrypoint
+    # (supabase/site/check-image-cap.sh) compares it against the baked
+    # VITE_CHAT_IMAGE_MAX_MB and fails the start when they disagree, so a
+    # stale site image can never serve a client cap the bucket does not
+    # share. Never pass VITE_CHAT_IMAGE_MAX_MB here: it would mask the
+    # baked value the check compares.
+    environment:
+      CHAT_IMAGE_MAX_MB: ${CHAT_IMAGE_MAX_MB:-10}
 
   # Comment out everything below this point if you are using an external Postgres database
   db:
