@@ -156,12 +156,12 @@ test.describe("chat momentum burn on a posted roll", () => {
       // replaces the action total, so the miss becomes a weak hit.
       await expect(
         playerPage.getByRole("button", {
-          name: /^Face Danger:.*Weak hit.*2 vs 3, 8/,
+          name: /^Face Danger:.*Weak Hit.*2 vs 3, 8/,
         })
       ).toBeVisible();
       await expect(
         otherPage.getByRole("button", {
-          name: /^Face Danger:.*Weak hit.*2 vs 3, 8/,
+          name: /^Face Danger:.*Weak Hit.*2 vs 3, 8/,
         })
       ).toBeVisible();
 

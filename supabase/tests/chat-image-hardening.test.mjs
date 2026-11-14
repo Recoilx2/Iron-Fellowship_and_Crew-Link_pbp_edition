@@ -32,8 +32,13 @@ describe("chat image hardening migration (#118 points 1-3)", () => {
       stamp > "20261116000000",
       `${hardeningFile()} does not sort after the momentum-burn edit trigger`
     );
+    // The #125 burn hardening (20261118000000) lands after #118 by design,
+    // so it is excluded here.
+    const landedLater = new Set([
+      "20261118000000_chat_momentum_burn_hardening.sql",
+    ]);
     const others = readdirSync(migrationsDir).filter(
-      (f) => /^\d{14}_/.test(f) && f !== hardeningFile()
+      (f) => /^\d{14}_/.test(f) && f !== hardeningFile() && !landedLater.has(f)
     );
     for (const other of others) {
       assert.ok(

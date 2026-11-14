@@ -6,6 +6,10 @@ import { ThemeProvider, createTheme } from "@mui/material";
 import { ROLL_RESULT, ROLL_TYPE } from "types/DieRolls.type";
 
 const updateCharacter = vi.fn();
+const createPost = vi.fn((params: unknown) => {
+  void params;
+  return Promise.resolve("post-1");
+});
 const success = vi.fn();
 
 const state = {
@@ -75,7 +79,7 @@ vi.mock("stores/store", () => ({
   useStore: (selector: (store: typeof state) => unknown) => selector(state),
 }));
 vi.mock("api-calls/chat/createPost", () => ({
-  createPost: () => Promise.resolve("post-1"),
+  createPost: (params: unknown) => createPost(params),
 }));
 vi.mock("api-calls/chat/chatImages", () => ({
   uploadChatImage: () => Promise.resolve("path"),
@@ -114,8 +118,9 @@ const ic = {
 
 // Seam under test: the composer burn button (ticket #125). A waiting action
 // roll that momentum would lift offers a burn; burning stamps the draft
-// with the recalculated outcome and resets the character's momentum the
-// same way as a sheet burn, so sending posts the burned result.
+// with the recalculated outcome without spending anything, so sending
+// posts the burned result and the database spends the momentum in the same
+// transaction. Discarding the draft or a failed send spends nothing.
 describe("ChatComposer burn momentum", () => {
   let root: Root | undefined;
   let container: HTMLDivElement | undefined;
@@ -126,6 +131,7 @@ describe("ChatComposer burn momentum", () => {
     root = undefined;
     container = undefined;
     vi.clearAllMocks();
+    state.chat.drafts = {};
     state.chat.pendingRolls = {
       ic: {
         type: ROLL_TYPE.STAT,
@@ -164,7 +170,7 @@ describe("ChatComposer burn momentum", () => {
     ).toBe(true);
   });
 
-  it("burns the draft and resets momentum", async () => {
+  it("stamps the draft without spending momentum", async () => {
     updateCharacter.mockResolvedValue(undefined);
     const view = render();
     const button = Array.from(view.querySelectorAll("button")).find(
@@ -176,10 +182,10 @@ describe("ChatComposer burn momentum", () => {
     await act(async () => {
       button.click();
     });
-    expect(updateCharacter).toHaveBeenCalledWith({
-      characterId: "kira",
-      character: { momentum: 2 },
-    });
+    // Nothing is spent until the post is sent: the character update must
+    // never fire from the draft button, so a discarded draft or a failed
+    // send loses no momentum. The mock stays as a regression guard.
+    expect(updateCharacter).not.toHaveBeenCalled();
     const pending = state.chat.pendingRolls["ic"] as {
       momentumBurned: number;
       result: number;
@@ -187,5 +193,36 @@ describe("ChatComposer burn momentum", () => {
     expect(pending.momentumBurned).toBe(5);
     expect(pending.result).toBe(ROLL_RESULT.WEAK_HIT);
     expect(success).toHaveBeenCalled();
+  });
+
+  it("keeps the burned draft and shows a referenced error when sending fails", async () => {
+    createPost.mockRejectedValueOnce(new Error("database down"));
+    state.chat.drafts = { ic: "Kira dives." };
+    const view = render();
+    // Stamp the burn first: the failed send below must spend nothing.
+    const burn = Array.from(view.querySelectorAll("button")).find(
+      (b) => b.textContent === "Burn momentum"
+    ) as HTMLButtonElement;
+    await act(async () => {
+      burn.click();
+    });
+    expect(updateCharacter).not.toHaveBeenCalled();
+    const send = view.querySelector(
+      'button[aria-label="Send"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      send.click();
+    });
+    expect(createPost).toHaveBeenCalled();
+    const alerts = Array.from(view.querySelectorAll('[role="alert"]'));
+    expect(
+      alerts.some((a) => /ref: [A-Z0-9]{6}/.test(a.textContent ?? ""))
+    ).toBe(true);
+    // The draft survives for a retry: words kept, burn stamp kept.
+    expect(state.chat.setDraft).not.toHaveBeenCalledWith("ic", "");
+    const pending = state.chat.pendingRolls["ic"] as {
+      momentumBurned: number;
+    };
+    expect(pending.momentumBurned).toBe(5);
   });
 });
