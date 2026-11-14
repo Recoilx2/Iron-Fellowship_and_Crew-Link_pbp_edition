@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 import * as Y from "yjs";
+import { TiptapTransformer } from "@hocuspocus/transformer";
 import {
   campaignUrl,
   createCampaignAs,
@@ -52,9 +53,38 @@ function resolveEnvFile(value: string): string {
   return resolve(dirname(__dirname), "supabase", basename(value));
 }
 
-function yjsToText(content: string): string {
+function inlineText(node: unknown): string {
+  if (Array.isArray(node)) {
+    return node.map(inlineText).join("");
+  }
+  if (node && typeof node === "object") {
+    const record = node as { text?: unknown; content?: unknown };
+    if (typeof record.text === "string") {
+      return record.text;
+    }
+    if (Array.isArray(record.content)) {
+      return inlineText(record.content);
+    }
+  }
+  return "";
+}
+
+// The editor binds its content to the TipTap `default` fragment (the
+// collaboration extension's default field); fixtures that seed bytes by
+// hand use the plain `body` text instead. Read the fragment first, then
+// the body, mirroring src/api-calls/assistant/outlineText.ts (kept local
+// because the browser runner does not resolve the repo's src aliases).
+function outlineBytesToText(content: string): string {
   const doc = new Y.Doc();
   Y.applyUpdate(doc, new Uint8Array(Buffer.from(content, "base64")));
+  const json = TiptapTransformer.fromYdoc(doc, "default") as {
+    content?: unknown;
+  };
+  const blocks = Array.isArray(json.content) ? json.content : [];
+  const tipTap = blocks.map(inlineText).join("\n");
+  if (tipTap.trim().length > 0) {
+    return tipTap;
+  }
   return doc.getText("body").toString();
 }
 
@@ -145,7 +175,7 @@ test.describe("outline revisions", () => {
       .eq("note_id", id);
     expect(error).toBeNull();
     const content = (data?.[0] as { content?: unknown } | undefined)?.content;
-    return typeof content === "string" ? yjsToText(content) : null;
+    return typeof content === "string" ? outlineBytesToText(content) : null;
   }
 
   async function openOutlineTab(page: Parameters<typeof signInAs>[0]) {

@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as Y from "yjs";
+import { TiptapTransformer } from "@hocuspocus/transformer";
 
 import {
   applyOutlineRevision,
@@ -7,8 +9,22 @@ import {
 } from "./outlineVersions";
 import { ASSISTANT_OUTLINE_VERSIONS_TABLE } from "./_getRef";
 import { CAMPAIGN_NOTE_CONTENTS_TABLE } from "api-calls/notes/_getRef";
+import { encodeNoteContent } from "api-calls/notes/noteContent";
 import { getSupabaseClient } from "config/supabase.config";
 import { decodeOutlineContent } from "./outlineText";
+
+function editorContentsRow(text: string): Record<string, unknown> {
+  const doc = TiptapTransformer.toYdoc(
+    {
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [{ type: "text", text }] },
+      ],
+    },
+    "default"
+  );
+  return { content: encodeNoteContent(Y.encodeStateAsUpdate(doc)) };
+}
 
 vi.mock("config/supabase.config");
 
@@ -138,6 +154,22 @@ describe("outline versions", () => {
     expect(
       decodeOutlineContent(state.upsertedContents[0]?.content as string)
     ).toBe("A fresh plan.");
+  });
+
+  it("apply replaces the editor fragment without duplicating it", async () => {
+    state.contentRows = [editorContentsRow("Act one: the bell rings.")];
+
+    await applyOutlineRevision({
+      campaignId: "campaign-1",
+      outlineId: "outline-1",
+      currentText: "Act one: the bell rings.",
+      proposedText: "Act one revised: the bell cracks.",
+    });
+
+    expect(state.upsertedContents).toHaveLength(1);
+    expect(
+      decodeOutlineContent(state.upsertedContents[0]?.content as string)
+    ).toBe("Act one revised: the bell cracks.");
   });
 
   it("apply refuses a blank proposal without writing anything", async () => {

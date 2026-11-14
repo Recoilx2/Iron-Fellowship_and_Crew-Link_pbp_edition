@@ -8,7 +8,7 @@ import {
   type AssistantOutlineVersion,
   type AssistantOutlineVersionRow,
 } from "./_getRef";
-import { replaceOutlineBodyText } from "./outlineText";
+import { replaceOutlineContent } from "./outlineText";
 
 /**
  * The outline version history behind Apply and Undo (ticket #133): every
@@ -85,7 +85,7 @@ async function replaceOutlineContents(
     .from(CAMPAIGN_NOTE_CONTENTS_TABLE)
     .upsert({
       note_id: outlineId,
-      content: encodeNoteContent(replaceOutlineBodyText(storedBytes, text)),
+      content: encodeNoteContent(replaceOutlineContent(storedBytes, text)),
     });
   if (writeError) {
     throw writeError;

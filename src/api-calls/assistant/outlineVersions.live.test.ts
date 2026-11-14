@@ -6,6 +6,7 @@ import { createCampaign } from "api-calls/campaign/createCampaign";
 import { joinCampaign } from "api-calls/campaign/joinCampaign";
 import { CampaignType } from "api-calls/campaign/_campaign.type";
 import { getOrCreateCampaignOutline } from "api-calls/notes/campaignOutline";
+import { decodeOutlineContent } from "api-calls/assistant/outlineText";
 import { ASSISTANT_OUTLINE_VERSIONS_TABLE } from "api-calls/assistant/_getRef";
 import {
   applyOutlineRevision,
@@ -50,15 +51,7 @@ async function outlineTextAs(
     .eq("note_id", outlineId);
   if (error) return null;
   const content = (data?.[0] as { content?: unknown } | undefined)?.content;
-  if (typeof content !== "string" || !content) return null;
-  try {
-    const binary = Buffer.from(content, "base64");
-    const doc = new Y.Doc();
-    Y.applyUpdate(doc, new Uint8Array(binary));
-    return doc.getText("body").toString();
-  } catch {
-    return null;
-  }
+  return typeof content === "string" ? decodeOutlineContent(content) : null;
 }
 
 describe.skipIf(!config)("assistant outline versions end to end (#133)", () => {
