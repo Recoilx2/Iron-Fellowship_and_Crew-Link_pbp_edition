@@ -20,7 +20,11 @@ const handleGmAssistant = createGmAssistantHandler({
 
 Deno.serve((req: Request): Promise<Response> => {
   const { pathname } = new URL(req.url);
-  if (pathname === "/gm-assistant/models" || pathname === "/gm-assistant/chat") {
+  if (
+    pathname === "/gm-assistant/models" ||
+    pathname === "/gm-assistant/context-size" ||
+    pathname === "/gm-assistant/chat"
+  ) {
     return handleGmAssistant(req);
   }
   if (req.method === "OPTIONS" && pathname.startsWith("/gm-assistant/")) {

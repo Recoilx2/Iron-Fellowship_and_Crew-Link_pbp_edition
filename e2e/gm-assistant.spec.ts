@@ -220,8 +220,10 @@ test.describe("gm assistant panel", () => {
         "Notes",
         "Recent posts",
       ]) {
+        // Headings, not the campaign screen's own world tabs of similar
+        // names: the group titles render as headings inside the panel.
         await expect(
-          gmPage.getByText(heading, { exact: true })
+          gmPage.getByRole("heading", { name: heading })
         ).toBeVisible();
       }
     } finally {
