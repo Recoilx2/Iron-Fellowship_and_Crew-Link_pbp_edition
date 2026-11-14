@@ -117,7 +117,7 @@ test.describe("active character", () => {
         .getByRole("textbox", { name: /Post in #/ })
         .fill(firstText);
       await playerPage.getByRole("button", { name: "Send" }).click();
-      await expect(playerPage.getByText(firstText)).toBeVisible();
+      await expect(playerPage.getByText(firstText, { exact: true })).toBeVisible();
       await expect(playerPage.getByText("Sable (E2E)").first()).toBeVisible();
 
       // Making the old character active again retires the replacement:
@@ -136,14 +136,14 @@ test.describe("active character", () => {
         .getByRole("textbox", { name: /Post in #/ })
         .fill(secondText);
       await playerPage.getByRole("button", { name: "Send" }).click();
-      await expect(playerPage.getByText(secondText)).toBeVisible();
+      await expect(playerPage.getByText(secondText, { exact: true })).toBeVisible();
       await expect(playerPage.getByText("Kira (E2E)").first()).toBeVisible();
 
       // The retired replacement's earlier post keeps her name and
       // portrait beside it: retiring changes no history. The portrait
       // without an upload is her initial, which no other visible text
       // repeats.
-      await expect(playerPage.getByText(firstText)).toBeVisible();
+      await expect(playerPage.getByText(firstText, { exact: true })).toBeVisible();
       await expect(playerPage.getByText("Sable (E2E)").first()).toBeVisible();
       await expect(
         playerPage.getByText("S", { exact: true }).first()
