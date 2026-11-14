@@ -247,7 +247,11 @@ test.describe("outline revisions", () => {
       expect(await outlineContents()).toBe(ORIGINAL);
       await gmPage.getByRole("button", { name: "Confirm replace" }).click();
       await expect(gmPage.getByText("Applied.")).toBeVisible();
-      expect(await outlineContents()).toBe(PROPOSED);
+      // The row settles once the remounted editor's sync reaches the
+      // server: a stale persisted store can briefly flip it back first.
+      await expect
+        .poll(() => outlineContents(), { timeout: 30000 })
+        .toBe(PROPOSED);
       await expect(
         gmPage.getByRole("textbox", { name: "Note text" })
       ).toContainText(PROPOSED);
@@ -274,7 +278,11 @@ test.describe("outline revisions", () => {
       await expect(
         gmPage.getByRole("textbox", { name: "Note text" })
       ).toContainText(ORIGINAL);
-      expect(await outlineContents()).toBe(ORIGINAL);
+      // Same settling as after Apply: the remount disconnect lets a stale
+      // store flip the row back briefly before the new sync lands.
+      await expect
+        .poll(() => outlineContents(), { timeout: 30000 })
+        .toBe(ORIGINAL);
       const { data: kept, error: keptError } = await gm.client
         .from("assistant_outline_versions")
         .select("id")
