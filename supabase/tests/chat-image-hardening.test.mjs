@@ -35,7 +35,7 @@ describe("chat image hardening migration (#118 points 1-3)", () => {
     // The #125 burn hardening (20261118000000) and its GM-only pin
     // (20261119000000) land after #118 by design, so they are excluded
     // here. The storage-privileges fix (20261120000000) lands later still, as does
-    // the #128 assistant-tables migration (20261121000004).
+    // the #128 assistant-tables migration (20261121000004), and the #131 campaign outline (20261121000005).
     const landedLater = new Set([
       "20261118000000_chat_momentum_burn_hardening.sql",
       "20261119000000_chat_momentum_burn_gms_pin.sql",
@@ -45,6 +45,7 @@ describe("chat image hardening migration (#118 points 1-3)", () => {
       "20261121000002_campaign_swap_owner_guard.sql",
       "20261121000003_campaign_burn_campaign_match.sql",
       "20261121000004_assistant_conversations.sql",
+      "20261121000005_campaign_outline.sql",
     ]);
     const others = readdirSync(migrationsDir).filter(
       (f) => /^\d{14}_/.test(f) && f !== hardeningFile() && !landedLater.has(f)
