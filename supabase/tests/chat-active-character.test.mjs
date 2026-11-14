@@ -57,13 +57,27 @@ describe("campaign active character migration", () => {
 
   it("retires and reactivates owner-only with a single-step swap", () => {
     const sql = text();
+    const swap = sql.match(
+      /CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.set_campaign_character_active[\s\S]*?^\$\$;/m
+    );
+    assert.ok(
+      swap,
+      "no set_campaign_character_active(char_id, make_active) definition"
+    );
     assert.ok(
       /set_campaign_character_active\s*\(\s*char_id\s+uuid\s*,\s*make_active\s+boolean\s*\)/i.test(
-        sql
+        swap[0]
       ),
-      "no set_campaign_character_active(char_id, make_active) function"
+      "no set_campaign_character_active(char_id, make_active) signature"
     );
-    assert.ok(/SECURITY DEFINER/i.test(sql), "swap is not security definer");
+    assert.ok(
+      /SECURITY\s+DEFINER/i.test(swap[0]),
+      "set_campaign_character_active itself is not security definer"
+    );
+    assert.ok(
+      /SET\s+search_path\s*=\s*(''|"")/i.test(swap[0]),
+      "set_campaign_character_active does not pin search_path"
+    );
     assert.ok(
       /only the owner/i.test(sql),
       "no owner-only refusal for retire/reactivate"

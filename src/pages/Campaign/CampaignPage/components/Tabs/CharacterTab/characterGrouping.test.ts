@@ -6,7 +6,7 @@ import type { CharacterDocument } from "api-calls/character/_character.type";
 function makeCharacter(
   overrides: Partial<CharacterDocument> & { uid: string; name: string }
 ): CharacterDocument {
-  return { stats: {}, momentum: 2, ...overrides };
+  return { stats: {}, momentum: 2, isActive: true, ...overrides };
 }
 
 // Seam under test: the Characters screen groups each player's campaign

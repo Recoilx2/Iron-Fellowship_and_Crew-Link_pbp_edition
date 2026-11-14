@@ -113,6 +113,14 @@ export function CharacterCard(props: CharacterCardProps) {
               >
                 {user ? user.displayName : "Loading..."}
               </Typography>
+              <Typography
+                variant={"caption"}
+                component={"p"}
+                color={"textSecondary"}
+                aria-label={isActive ? "Active character" : "Retired character"}
+              >
+                {isActive ? "Active" : "Retired"}
+              </Typography>
             </Box>
           </Box>
         </Box>

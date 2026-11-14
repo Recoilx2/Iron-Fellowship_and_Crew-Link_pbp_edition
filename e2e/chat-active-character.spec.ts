@@ -138,6 +138,11 @@ test.describe("active character", () => {
       await playerPage.getByRole("button", { name: "Send" }).click();
       await expect(playerPage.getByText(secondText)).toBeVisible();
       await expect(playerPage.getByText("E2E Kira").first()).toBeVisible();
+
+      // The retired replacement's earlier post keeps her name beside it:
+      // retiring changes no history.
+      await expect(playerPage.getByText(firstText)).toBeVisible();
+      await expect(playerPage.getByText("E2E Sable").first()).toBeVisible();
     } finally {
       await playerContext.close().catch(() => {});
     }

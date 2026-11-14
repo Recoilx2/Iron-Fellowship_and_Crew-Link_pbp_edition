@@ -41,6 +41,8 @@ describe("removed campaign members keep no private access migration (#117)", () 
       "20261120000000_chat_storage_privileges.sql",
       "20261121000000_campaign_active_character.sql",
       "20261121000001_chat_roll_lock_definer.sql",
+      "20261121000002_campaign_swap_owner_guard.sql",
+      "20261121000003_campaign_burn_campaign_match.sql",
     ]);
     const others = readdirSync(dir).filter(
       (f) => /^\d{14}_.*\.sql$/.test(f) && f !== mine && !landedLater.has(f)

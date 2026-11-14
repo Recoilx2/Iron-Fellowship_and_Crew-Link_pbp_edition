@@ -533,13 +533,17 @@ describe.skipIf(!config)("chat momentum burn end to end", () => {
       });
 
       // Retiring Kira freezes the burn: the wrapper refuses, and the
-      // database refuses a valid burn outright, spending nothing.
+      // database refuses a valid burn outright, spending nothing. Both
+      // refusals name the active character, so a schema-permission
+      // regression cannot pass for the real rule.
       const { error: retireError } = await player.client.rpc(
         "set_campaign_character_active",
         { char_id: kira, make_active: false }
       );
       expect(retireError).toBeNull();
-      await expect(burnPostMomentum({ postId })).rejects.toBeTruthy();
+      await expect(burnPostMomentum({ postId })).rejects.toThrow(
+        /active character/
+      );
       {
         const before = await readPostAs(player, postId);
         const { error } = await player.client
@@ -552,7 +556,9 @@ describe.skipIf(!config)("chat momentum burn end to end", () => {
             },
           })
           .eq("id", postId);
-        expect(error, "burn on an inactive roll").not.toBeNull();
+        expect(error?.message, "burn on an inactive roll").toMatch(
+          /active character/
+        );
         const after = await readPostAs(player, postId);
         expect(after.roll, "burn on an inactive roll").toEqual(before.roll);
         expect(await readMomentumAs(player, kira), "burn on an inactive roll").toBe(5);

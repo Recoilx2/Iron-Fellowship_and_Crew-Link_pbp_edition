@@ -36,6 +36,8 @@ describe("chat momentum burn hardening migration (#125)", () => {
       "20261120000000_chat_storage_privileges.sql",
       "20261121000000_campaign_active_character.sql",
       "20261121000001_chat_roll_lock_definer.sql",
+      "20261121000002_campaign_swap_owner_guard.sql",
+      "20261121000003_campaign_burn_campaign_match.sql",
     ]);
     const others = readdirSync(dir).filter(
       (f) =>

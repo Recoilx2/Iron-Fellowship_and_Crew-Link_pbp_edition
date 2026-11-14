@@ -14,6 +14,7 @@ import {
   ensureCampaign,
   grantMembership,
   liveStackConfig,
+  personClient,
   randomCampaignId,
   waitFor,
   type LivePerson,
@@ -316,9 +317,10 @@ describe.skipIf(!config)("characters end to end", () => {
     // The owner's first character links fine, active.
     expect((await link(owner, firstId, campaignId)).error).toBeNull();
 
-    // A second active character from the same player is refused.
+    // A second active character from the same player is refused by the
+    // partial unique index.
     const duplicate = await link(owner, secondId, campaignId);
-    expect(duplicate.error).not.toBeNull();
+    expect(duplicate.error?.code, "second active character").toBe("23505");
 
     // The same character linked inactive is allowed.
     expect((await link(owner, secondId, campaignId, false)).error).toBeNull();
@@ -354,10 +356,34 @@ describe.skipIf(!config)("characters end to end", () => {
       is_active: true,
     });
 
-    // Only the owner retires or reactivates: another player is refused and
-    // the flags stand.
+    // Only the owner retires or reactivates: another player is refused
+    // with a privilege error and the flags stand.
     const refused = await setActive(other, secondId, false);
-    expect(refused.error).not.toBeNull();
+    expect(refused.error?.code, "non-owner swap").toBe("42501");
+    expect((await readFlags([secondId])).get(secondId)).toMatchObject({
+      is_active: true,
+    });
+
+    // A GM who does not own the character is refused the same way: the
+    // swap is owner-only with no GM exception.
+    const gm = await createPerson(cfg, "gm");
+    people.push(gm);
+    await grantMembership(cfg, campaignId, gm.userId, "gm");
+    const gmRefused = await setActive(gm, secondId, false);
+    expect(gmRefused.error?.code, "gm non-owner swap").toBe("42501");
+    expect((await readFlags([secondId])).get(secondId)).toMatchObject({
+      is_active: true,
+    });
+
+    // A signed-out caller never reaches the owner check: with no JWT,
+    // auth.uid() is NULL, so the guard refuses outright -- and anon holds
+    // no EXECUTE on the swap at all. The flags stand either way.
+    const anon = personClient(cfg);
+    const anonRefused = await anon.rpc("set_campaign_character_active", {
+      char_id: secondId,
+      make_active: false,
+    });
+    expect(anonRefused.error?.code, "signed-out swap").toBe("42501");
     expect((await readFlags([secondId])).get(secondId)).toMatchObject({
       is_active: true,
     });

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { isActiveCampaignCharacter } from "functions/isActiveCampaignCharacter";
+import {
+  findActiveCampaignCharacter,
+  isActiveCampaignCharacter,
+} from "functions/isActiveCampaignCharacter";
 
 // Seam under test: the active-character predicate. Every active-only lookup
 // (chat name line, composer speaker, sheet-roll routing, Characters screen
@@ -25,5 +28,37 @@ describe("isActiveCampaignCharacter", () => {
   it("treats a missing character as not active", () => {
     expect(isActiveCampaignCharacter(null)).toBe(false);
     expect(isActiveCampaignCharacter(undefined)).toBe(false);
+  });
+});
+
+describe("findActiveCampaignCharacter", () => {
+  const map = {
+    kira: { uid: "player-1", isActive: true as boolean | undefined },
+    sable: { uid: "player-1", isActive: false as boolean | undefined },
+    brack: { uid: "player-2", isActive: true as boolean | undefined },
+    old: { uid: "player-1" },
+  };
+
+  it("finds the player's active character entry", () => {
+    expect(findActiveCampaignCharacter(map, "player-1")).toEqual([
+      "kira",
+      map.kira,
+    ]);
+  });
+
+  it("skips retired characters and other players", () => {
+    expect(findActiveCampaignCharacter(map, "player-2")).toEqual([
+      "brack",
+      map.brack,
+    ]);
+  });
+
+  it("returns undefined when the player has no active character", () => {
+    expect(
+      findActiveCampaignCharacter(
+        { sable: map.sable, brack: map.brack },
+        "player-1"
+      )
+    ).toBeUndefined();
   });
 });

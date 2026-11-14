@@ -45,13 +45,13 @@ export function AddCharacterDialog(props: AddCharacterDialogProps) {
   };
 
   // At most one active character per player per campaign (#127): the
-  // player's active character in this campaign is the current one, and
+  // player's active character in this campaign is the active one, and
   // choosing another retires it and makes the new one active.
-  const activeCharacterId = Object.keys(characters).find(
-    (characterId) =>
-      characters[characterId].campaignId === campaignId &&
-      isActiveCampaignCharacter(characters[characterId])
-  );
+  const activeCharacterId = Object.entries(characters).find(
+    ([, character]) =>
+      character.campaignId === campaignId &&
+      isActiveCampaignCharacter(character)
+  )?.[0];
   const activeCharacter = activeCharacterId
     ? characters[activeCharacterId]
     : undefined;

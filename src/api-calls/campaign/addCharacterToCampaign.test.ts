@@ -7,8 +7,10 @@ vi.mock("config/supabase.config");
 
 // Seam under test: adding a character to a campaign where the player
 // already plays one. At most one character per player per campaign is
-// active (#127): linking another retires the current active one first and
-// links the new one active, so the database guard never sees two actives.
+// active (#127): the new character links first (inactive while another is
+// active), then a swap retires the active one and activates the new one in
+// a single database call -- so if either step fails, the player's old
+// active character is untouched and never left with none.
 interface CharacterRow {
   id: string;
   owner_id: string;
@@ -20,6 +22,8 @@ const state = {
   sessionUserId: "user-A",
   rows: [] as CharacterRow[],
   updates: [] as Array<{ values: Record<string, unknown>; id: string }>,
+  rpcCalls: [] as Array<{ fn: string; args: Record<string, unknown> }>,
+  failRpc: false,
 };
 
 interface Filter {
@@ -70,6 +74,8 @@ beforeEach(() => {
   state.sessionUserId = "user-A";
   state.rows = [];
   state.updates = [];
+  state.rpcCalls = [];
+  state.failRpc = false;
   mockedGetSupabaseClient.mockReturnValue({
     auth: {
       getSession: async () => ({
@@ -104,6 +110,30 @@ beforeEach(() => {
         },
       }),
     }),
+    rpc: (fn: string, args: Record<string, unknown>) => {
+      state.rpcCalls.push({ fn, args });
+      if (state.failRpc) {
+        return Promise.resolve({ error: new Error("swap failed") });
+      }
+      if (fn === "set_campaign_character_active" && args.make_active) {
+        const row = state.rows.find(
+          (entry) => entry.id === (args.char_id as string)
+        );
+        if (row) {
+          for (const other of state.rows) {
+            if (
+              other.owner_id === row.owner_id &&
+              other.campaign_id === row.campaign_id &&
+              other.id !== row.id
+            ) {
+              other.is_active = false;
+            }
+          }
+          row.is_active = true;
+        }
+      }
+      return Promise.resolve({ error: null });
+    },
   } as unknown as ReturnType<typeof getSupabaseClient>);
 });
 
@@ -123,7 +153,7 @@ function activeInCampaign(ownerId: string, campaignId: string): string[] {
 }
 
 describe("addCharacterToCampaign one active character per player", () => {
-  it("retires the current active character and links the new one active", async () => {
+  it("links inactive first, then swaps to the new active character in one call", async () => {
     seed([
       { id: "old-1", owner_id: "user-A", campaign_id: "camp-1", is_active: true },
       { id: "new-1", owner_id: "user-A", campaign_id: null, is_active: true },
@@ -143,6 +173,37 @@ describe("addCharacterToCampaign one active character per player", () => {
     ).toMatchObject({ campaign_id: "camp-1", is_active: false });
     // The other player's character is untouched.
     expect(activeInCampaign("user-B", "camp-1")).toEqual(["other-1"]);
+    // The swap ran as a single retire-and-activate call.
+    expect(state.rpcCalls).toEqual([
+      {
+        fn: "set_campaign_character_active",
+        args: { char_id: "new-1", make_active: true },
+      },
+    ]);
+  });
+
+  it("leaves the old character active when the swap fails", async () => {
+    seed([
+      { id: "old-1", owner_id: "user-A", campaign_id: "camp-1", is_active: true },
+      { id: "new-1", owner_id: "user-A", campaign_id: null, is_active: true },
+    ]);
+    state.failRpc = true;
+
+    await expect(
+      addCharacterToCampaign({
+        uid: "user-A",
+        characterId: "new-1",
+        campaignId: "camp-1",
+      })
+    ).rejects.toThrow();
+
+    // The link landed inactive, and the old character is still active:
+    // the player is never left with none.
+    expect(activeInCampaign("user-A", "camp-1")).toEqual(["old-1"]);
+    expect(state.rows.find((row) => row.id === "new-1")).toMatchObject({
+      campaign_id: "camp-1",
+      is_active: false,
+    });
   });
 
   it("links directly as active when the player has no character in the campaign yet", async () => {
@@ -176,7 +237,7 @@ describe("addCharacterToCampaign one active character per player", () => {
     expect(activeInCampaign("user-A", "camp-1")).toEqual(["new-1"]);
   });
 
-  it("activates a retired character already in the campaign, retiring the current one", async () => {
+  it("activates a retired character already in the campaign, retiring the active one", async () => {
     seed([
       { id: "old-1", owner_id: "user-A", campaign_id: "camp-1", is_active: true },
       { id: "new-1", owner_id: "user-A", campaign_id: "camp-1", is_active: false },

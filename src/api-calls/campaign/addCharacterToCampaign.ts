@@ -1,6 +1,7 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { CHARACTERS_TABLE } from "../character/_getRef";
 import { CAMPAIGNS_TABLE } from "./_getRef";
+import { setCampaignCharacterActive } from "./setCampaignCharacterActive";
 import { createApiFunction } from "api-calls/createApiFunction";
 
 /**
@@ -8,9 +9,11 @@ import { createApiFunction } from "api-calls/createApiFunction";
  * own character, and only into a campaign they belong to.
  *
  * At most one character per player per campaign is active (#127): when the
- * player already plays one here, linking another retires the current active
- * one first and links the new one active -- the database guard would reject
- * a second active row.
+ * player already plays one here, the new character links inactive first
+ * and a swap then retires the current active one while activating the new
+ * one in a single database call. The link lands before the swap, so if
+ * either step fails the player's old active character is untouched --
+ * a failure never leaves the player with no active character.
  */
 export const addCharacterToCampaign = createApiFunction<
   { uid: string; characterId: string; campaignId: string },
@@ -49,22 +52,26 @@ export const addCharacterToCampaign = createApiFunction<
   if (currentError) {
     throw currentError;
   }
-  for (const row of (current ?? []) as Array<{ id: string }>) {
-    const { error } = await client
-      .from(CHARACTERS_TABLE)
-      .update({ is_active: false })
-      .eq("id", row.id)
-      .select("id");
-    if (error) {
-      throw error;
-    }
-  }
+  // Link first: active when nobody else plays here, inactive otherwise.
+  // If this link fails, the player's old active character is untouched.
+  const linkActive = (current ?? []).length === 0;
   const { data, error } = await client
     .from(CHARACTERS_TABLE)
-    .update({ campaign_id: campaignId, is_active: true })
+    .update({ campaign_id: campaignId, is_active: linkActive })
     .eq("id", characterId)
     .select("id");
   if (error || !data || data.length === 0) {
     throw error ?? new Error("Character not found");
+  }
+  if (!linkActive) {
+    // Another character is active here: the swap retires it and activates
+    // the new one in the same database call. If the swap fails, the old
+    // character is still the active one -- the player is never left with
+    // none.
+    await setCampaignCharacterActive({
+      uid: ownerId,
+      characterId,
+      active: true,
+    });
   }
 }, "Error adding character to campaign.");

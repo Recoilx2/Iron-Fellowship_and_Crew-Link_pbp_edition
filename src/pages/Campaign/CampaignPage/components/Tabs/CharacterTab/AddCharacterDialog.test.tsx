@@ -19,6 +19,7 @@ function makeCharacter(
     stats: {},
     momentum: 2,
     campaignId: null,
+    isActive: true,
     ...overrides,
   };
 }

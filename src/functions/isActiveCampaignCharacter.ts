@@ -15,3 +15,20 @@ export function isActiveCampaignCharacter(
   }
   return character.isActive !== false;
 }
+
+/**
+ * Finds the player's active campaign character in a character map (#127).
+ *
+ * The uid-plus-active lookup repeats in the composer, the name line, the
+ * sheet-roll routing and the add dialog: it lives here so the tri-state
+ * rule above stays in one place. Returns the map entry, or undefined when
+ * the player has no active character.
+ */
+export function findActiveCampaignCharacter<
+  T extends { uid: string; isActive?: boolean },
+>(characterMap: Record<string, T>, uid: string): [string, T] | undefined {
+  return Object.entries(characterMap).find(
+    ([, character]) =>
+      character.uid === uid && isActiveCampaignCharacter(character)
+  );
+}

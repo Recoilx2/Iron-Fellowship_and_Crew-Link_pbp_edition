@@ -3,7 +3,7 @@ import { GameLogSlice } from "./gameLog.slice.type";
 import { addRoll } from "api-calls/game-log/addRoll";
 import { postCampaignRoll } from "api-calls/chat/postCampaignRoll";
 import { defaultChatSpeaker } from "functions/chatSpeaker";
-import { isActiveCampaignCharacter } from "functions/isActiveCampaignCharacter";
+import { findActiveCampaignCharacter } from "functions/isActiveCampaignCharacter";
 import { defaultGameLogSlice } from "./gameLog.slice.default";
 import { removeLog } from "api-calls/game-log/removeLog";
 import { updateLog } from "api-calls/game-log/updateLog";
@@ -27,9 +27,9 @@ export const createGameLogSlice: CreateSliceType<GameLogSlice> = (
       const uid = state.auth.uid;
       const characterMap =
         state.campaigns.currentCampaign.characters.characterMap ?? {};
-      const activeCharacterId = Object.entries(characterMap).find(
-        ([, character]) =>
-          character.uid === uid && isActiveCampaignCharacter(character)
+      const activeCharacterId = findActiveCampaignCharacter(
+        characterMap,
+        uid
       )?.[0];
       if (characterId && characterId !== activeCharacterId) {
         return addRoll({ characterId, roll });

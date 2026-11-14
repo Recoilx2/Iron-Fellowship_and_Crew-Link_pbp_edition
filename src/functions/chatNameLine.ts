@@ -1,6 +1,5 @@
 import type { ChannelKind, ChannelVisibility } from "api-calls/chat/_chat.type";
-import { isActiveCampaignCharacter } from "functions/isActiveCampaignCharacter";
-
+import { findActiveCampaignCharacter } from "functions/isActiveCampaignCharacter";
 export interface ChatNameLine {
   /** The bold lead of the name line: the speaker, or the author. */
   title: string;
@@ -48,10 +47,10 @@ export function resolveChatNameLine(params: {
       showGM: isGM,
     };
   }
-  const authorCharacter = Object.values(characterMap).find(
-    (character) =>
-      character.uid === post.authorId && isActiveCampaignCharacter(character)
-  );
+  const authorCharacter = findActiveCampaignCharacter(
+    characterMap,
+    post.authorId
+  )?.[1];
   return {
     title: authorName,
     subtitle: authorCharacter?.name,
