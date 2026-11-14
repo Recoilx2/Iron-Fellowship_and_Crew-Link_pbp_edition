@@ -12,9 +12,10 @@ import RerollIcon from "@mui/icons-material/Casino";
 import BackspaceIcon from "@mui/icons-material/Backspace";
 import MomentumIcon from "@mui/icons-material/Whatshot";
 import { useSnackbar } from "providers/SnackbarProvider";
+import { burnMomentumResult, isMomentumBurnUseful as isBurnUseful } from "functions/momentumBurn";
 import { convertRollToClipboard } from "./clipboardFormatter";
 import { DieRerollDialog } from "./DieRerollDialog";
-import { ROLL_RESULT, ROLL_TYPE, Roll } from "types/DieRolls.type";
+import { ROLL_TYPE, Roll } from "types/DieRolls.type";
 import { useStore } from "stores/store";
 import { useCampaignType } from "hooks/useCampaignType";
 import { getRollTitle } from "functions/rollText";
@@ -77,21 +78,7 @@ export function NormalRollActions(props: NormalRollActionsProps) {
     (store) => store.characters.currentCharacter.updateCurrentCharacter
   );
 
-  let isMomentumBurnUseful = false;
-  if (roll.type === ROLL_TYPE.STAT && roll.momentumBurned === undefined) {
-    if (
-      roll.result === ROLL_RESULT.MISS &&
-      (momentum > roll.challenge1 || momentum > roll.challenge2)
-    ) {
-      isMomentumBurnUseful = true;
-    } else if (
-      roll.result === ROLL_RESULT.WEAK_HIT &&
-      momentum > roll.challenge1 &&
-      momentum > roll.challenge2
-    ) {
-      isMomentumBurnUseful = true;
-    }
-  }
+  const isMomentumBurnUseful = isBurnUseful(roll, momentum);
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuParent = useRef<HTMLButtonElement>(null);
@@ -123,12 +110,7 @@ export function NormalRollActions(props: NormalRollActionsProps) {
       momentum &&
       momentumResetValue !== undefined
     ) {
-      let newRollResult = ROLL_RESULT.MISS;
-      if (momentum > roll.challenge1 && momentum > roll.challenge2) {
-        newRollResult = ROLL_RESULT.HIT;
-      } else if (momentum > roll.challenge1 || momentum > roll.challenge2) {
-        newRollResult = ROLL_RESULT.WEAK_HIT;
-      }
+      const newRollResult = burnMomentumResult(roll, momentum);
 
       const promises: Promise<unknown>[] = [];
       promises.push(

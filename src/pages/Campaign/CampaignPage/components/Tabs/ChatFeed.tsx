@@ -215,8 +215,14 @@ function ChatPost(props: {
     setEditing(true);
   };
 
+  // Clearing the words is allowed only when images or a roll remain, per the
+  // spec invariant (text, images or a roll); text-only posts still need words.
+  const canClearText =
+    post.imagePaths.length > 0 || post.roll != null;
+  const saveBlocked = busy || (draft.trim().length === 0 && !canClearText);
+
   const saveEdit = () => {
-    if (draft.trim().length === 0 || busy) {
+    if (saveBlocked) {
       return;
     }
     setBusy(true);
@@ -328,7 +334,7 @@ function ChatPost(props: {
                 size={"small"}
                 variant={"contained"}
                 aria-label={"Save edit"}
-                disabled={draft.trim().length === 0 || busy}
+                disabled={saveBlocked}
                 onClick={saveEdit}
               >
                 Save
@@ -348,7 +354,13 @@ function ChatPost(props: {
             {post.imagePaths.length > 0 && (
               <ChatPostImages paths={post.imagePaths} />
             )}
-            {post.roll && <ChatRollPost post={{ ...post, roll: post.roll }} />}
+            {post.roll && (
+              <ChatRollPost
+                post={{ ...post, roll: post.roll }}
+                uid={uid}
+                characterMap={characterMap}
+              />
+            )}
           </>
         )}
         {(canEdit || showDelete) && !editing && (
