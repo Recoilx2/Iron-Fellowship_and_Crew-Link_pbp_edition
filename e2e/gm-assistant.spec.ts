@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { basename, dirname, isAbsolute, resolve } from "node:path";
 import {
   campaignUrl,
   createCampaignAs,
@@ -41,6 +42,20 @@ import {
 const FAKE_PORT = Number(process.env.E2E_FAKE_LLM_PORT ?? 4011);
 const TEST_API_KEY = "sk-e2e-gm-assistant-key-001";
 
+/**
+ * Where the stack copy's env file is. Playwright runs from the repo
+ * root while `ENV_FILE` is written for `supabase/` (which `e2e.sh`
+ * enforces and absolutizes before exporting): anchor a relative value
+ * at the `supabase/` dir beside the `e2e/` dir instead of the test
+ * runner's working directory, so the lookup works from anywhere.
+ */
+function resolveEnvFile(value: string): string {
+  if (isAbsolute(value)) {
+    return value;
+  }
+  return resolve(dirname(__dirname), "supabase", basename(value));
+}
+
 test.describe("gm assistant panel", () => {
   let config: StackConfig;
   let functionsBase: string;
@@ -56,11 +71,7 @@ test.describe("gm assistant panel", () => {
   test.beforeAll(async () => {
     config = stackConfig();
     functionsBase = `${config.url.replace(/\/+$/, "")}/functions/v1`;
-    const envFile =
-      process.env.ENV_FILE ??
-      (() => {
-        throw new Error("e2e: ENV_FILE is not set (run through supabase/tests/e2e.sh)");
-      })();
+    const envFile = resolveEnvFile(process.env.ENV_FILE ?? ".env.live");
     const vars = readEnvFile(envFile);
     if ((vars.GM_ASSISTANT_ENDPOINT ?? "").trim() !== "") {
       throw new Error(

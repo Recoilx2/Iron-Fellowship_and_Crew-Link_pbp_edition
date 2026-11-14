@@ -29,6 +29,11 @@ ENV_FILE="${ENV_FILE:-$ROOT/.env.live}"
 
 get_var() { grep -E "^$2=" "$1" | cut -d= -f2- || true; }
 
+# Playwright itself runs from the repo root while this script runs from
+# supabase/ (and callers pass ENV_FILE relative to supabase/): hand the
+# specs an absolute path so opening the env file and locating the compose
+# project never depends on the test runner's working directory.
+ENV_FILE="$(cd "$(dirname "$ENV_FILE")" && pwd)/$(basename "$ENV_FILE")"
 export ENV_FILE
 export SUPABASE_URL="http://localhost:$(get_var "$ENV_FILE" API_GW_HTTP_PORT)"
 export SUPABASE_ANON_KEY="$(get_var "$ENV_FILE" ANON_KEY)"
