@@ -34,9 +34,9 @@ export function ChatRollPost(props: {
   const title = getRollTitle(roll);
   const summary = getChatRollSummary(roll);
 
-  // Author-only, own character, at most once, never on NPC or GM-self
-  // voices and never on deleted posts. GM-only stays GM-only: the burn
-  // never flips the flag.
+  // Author-only, own active character, at most once, never on NPC or
+  // GM-self voices and never on deleted posts. GM-only stays GM-only: the
+  // burn never flips the flag.
   const speakerCharacter =
     post.speakerCharacterId != null
       ? characterMap?.[post.speakerCharacterId]
@@ -51,6 +51,7 @@ export function ChatRollPost(props: {
     post.speakerNpcId == null &&
     speakerCharacter?.uid === uid &&
     speakerCharacter != null &&
+    speakerCharacter.isActive !== false &&
     isMomentumBurnUseful(roll, speakerCharacter.momentum);
 
   const burn = () => {

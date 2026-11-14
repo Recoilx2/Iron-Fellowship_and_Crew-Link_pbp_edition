@@ -7,9 +7,10 @@ import { createApiFunction } from "api-calls/createApiFunction";
  * Plays a character in a campaign by linking it. Only the owner links their
  * own character, and only into a campaign they belong to.
  *
- * One character per player per campaign (#109): when the player already
- * plays a character here, linking another swaps the old one out instead of
- * adding a second — the database guard would reject the bare link.
+ * At most one character per player per campaign is active (#127): when the
+ * player already plays one here, linking another retires the current active
+ * one first and links the new one active -- the database guard would reject
+ * a second active row.
  */
 export const addCharacterToCampaign = createApiFunction<
   { uid: string; characterId: string; campaignId: string },
@@ -43,6 +44,7 @@ export const addCharacterToCampaign = createApiFunction<
     .select("id")
     .eq("owner_id", ownerId)
     .eq("campaign_id", campaignId)
+    .eq("is_active", true)
     .neq("id", characterId);
   if (currentError) {
     throw currentError;
@@ -50,7 +52,7 @@ export const addCharacterToCampaign = createApiFunction<
   for (const row of (current ?? []) as Array<{ id: string }>) {
     const { error } = await client
       .from(CHARACTERS_TABLE)
-      .update({ campaign_id: null })
+      .update({ is_active: false })
       .eq("id", row.id)
       .select("id");
     if (error) {
@@ -59,7 +61,7 @@ export const addCharacterToCampaign = createApiFunction<
   }
   const { data, error } = await client
     .from(CHARACTERS_TABLE)
-    .update({ campaign_id: campaignId })
+    .update({ campaign_id: campaignId, is_active: true })
     .eq("id", characterId)
     .select("id");
   if (error || !data || data.length === 0) {

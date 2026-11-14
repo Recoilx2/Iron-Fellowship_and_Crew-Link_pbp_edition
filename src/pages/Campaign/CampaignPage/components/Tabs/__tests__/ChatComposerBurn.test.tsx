@@ -170,6 +170,38 @@ describe("ChatComposer burn momentum", () => {
     ).toBe(true);
   });
 
+  it("offers no burn when the speaker is retired", () => {
+    state.campaigns.currentCampaign.characters.characterMap = {
+      kira: {
+        uid: "player-1",
+        name: "Kira Vey",
+        stats: { edge: 2 },
+        conditionMeters: {},
+        momentum: 5,
+        debilities: {},
+        isActive: false,
+      },
+    } as never;
+    try {
+      const view = render();
+      const buttons = Array.from(view.querySelectorAll("button"));
+      expect(
+        buttons.some((b) => b.textContent === "Burn momentum")
+      ).toBe(false);
+    } finally {
+      state.campaigns.currentCampaign.characters.characterMap = {
+        kira: {
+          uid: "player-1",
+          name: "Kira Vey",
+          stats: { edge: 2 },
+          conditionMeters: {},
+          momentum: 5,
+          debilities: {},
+        },
+      } as never;
+    }
+  });
+
   it("stamps the draft without spending momentum", async () => {
     updateCharacter.mockResolvedValue(undefined);
     const view = render();

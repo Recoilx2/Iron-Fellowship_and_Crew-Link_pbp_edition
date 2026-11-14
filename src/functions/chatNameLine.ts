@@ -14,9 +14,10 @@ export interface ChatNameLine {
  * voice leads with the NPC, then the GM behind it, in any channel.
  * Otherwise in-character posts lead with the speaking character, then the
  * player. Out-of-character posts and direct messages lead with the author's
- * display name, then their campaign character beside it: posting as self
- * names no speaker, so the character is looked up by author, and authors
- * with no campaign character show no second name. GMs carry the GM tag.
+ * display name, then their active campaign character beside it: posting as
+ * self names no speaker, so the character is looked up by author, and
+ * authors with no active campaign character show no second name. GMs carry
+ * the GM tag.
  */
 export function resolveChatNameLine(params: {
   channel: { kind: ChannelKind; visibility: ChannelVisibility };
@@ -25,7 +26,7 @@ export function resolveChatNameLine(params: {
     speakerCharacterId: string | null;
     speakerNpcId: string | null;
   };
-  characterMap: Record<string, { uid: string; name: string }>;
+  characterMap: Record<string, { uid: string; name: string; isActive?: boolean }>;
   /** The speaking NPC's name, when the post voices one. */
   npcName?: string;
   authorName: string;
@@ -47,7 +48,7 @@ export function resolveChatNameLine(params: {
     };
   }
   const authorCharacter = Object.values(characterMap).find(
-    (character) => character.uid === post.authorId
+    (character) => character.uid === post.authorId && character.isActive !== false
   );
   return {
     title: authorName,

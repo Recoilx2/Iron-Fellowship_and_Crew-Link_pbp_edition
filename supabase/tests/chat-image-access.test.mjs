@@ -40,6 +40,7 @@ describe("chat image access rules (#118)", () => {
       "20261118000000_chat_momentum_burn_hardening.sql",
       "20261119000000_chat_momentum_burn_gms_pin.sql",
       "20261120000000_chat_storage_privileges.sql",
+      "20261121000000_campaign_active_character.sql",
     ]);
     const others = readdirSync(migrationsDir).filter(
       (f) => /^\d{14}_/.test(f) && f !== accessFile() && !landedLater.has(f)

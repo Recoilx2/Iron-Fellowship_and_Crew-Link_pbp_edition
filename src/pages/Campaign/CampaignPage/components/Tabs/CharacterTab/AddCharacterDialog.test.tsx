@@ -23,7 +23,7 @@ function makeCharacter(
   };
 }
 
-describe("AddCharacterDialog one character per player", () => {
+describe("AddCharacterDialog one active character per player", () => {
   let root: Root | undefined;
   let container: HTMLDivElement | undefined;
   const originalAddCharacter = useStore.getState().campaigns.currentCampaign
@@ -146,5 +146,38 @@ describe("AddCharacterDialog one character per player", () => {
 
     expect(buttonFor("Ash")?.disabled).toBe(true);
     expect(buttonFor("Birch")?.textContent).toBe("Select");
+  });
+
+  it("offers retirement of the active character when adding another", () => {
+    useStore.setState((store) => {
+      store.characters.loading = false;
+      store.characters.characterMap = {
+        "active-1": makeCharacter({
+          uid: "user-A",
+          name: "Ash",
+          campaignId: "camp-1",
+          isActive: true,
+        }),
+        "retired-1": makeCharacter({
+          uid: "user-A",
+          name: "Birch",
+          campaignId: "camp-1",
+          isActive: false,
+        }),
+        "new-1": makeCharacter({ uid: "user-A", name: "Cinder" }),
+      };
+    });
+
+    renderDialog("camp-1");
+
+    // The dialog names the active character and the retirement it offers.
+    expect(document.body.textContent).toMatch(/Ash is your active character/);
+    expect(document.body.textContent).toMatch(/retires Ash/);
+    expect(buttonFor("Ash")?.textContent).toBe("Current");
+    // The retired character stays listed but unavailable here: the
+    // Characters screen makes it active again.
+    expect(buttonFor("Birch")?.textContent).toBe("In campaign");
+    expect(buttonFor("Birch")?.disabled).toBe(true);
+    expect(buttonFor("Cinder")?.textContent).toBe("Swap");
   });
 });

@@ -34,6 +34,7 @@ describe("chat momentum burn hardening migration (#125)", () => {
     const landedLater = new Set([
       "20261119000000_chat_momentum_burn_gms_pin.sql",
       "20261120000000_chat_storage_privileges.sql",
+      "20261121000000_campaign_active_character.sql",
     ]);
     const others = readdirSync(dir).filter(
       (f) =>

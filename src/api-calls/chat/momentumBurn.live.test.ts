@@ -518,6 +518,66 @@ describe.skipIf(!config)("chat momentum burn end to end", () => {
   );
 
   it(
+    "refuses a burn on an inactive character's roll and allows it again when active",
+    { timeout: 120000 },
+    async () => {
+      const { player, campaignId, icChannelId } = await setUpCampaign();
+      const kira = await createCharacterAs(player, campaignId, "Kira Vey", 5);
+
+      await signInAs(player);
+      const postId = await createPost({
+        channelId: icChannelId,
+        text: "Kira strikes.",
+        speakerCharacterId: kira,
+        roll: missRoll(kira, player.userId),
+      });
+
+      // Retiring Kira freezes the burn: the wrapper refuses, and the
+      // database refuses a valid burn outright, spending nothing.
+      const { error: retireError } = await player.client.rpc(
+        "set_campaign_character_active",
+        { char_id: kira, make_active: false }
+      );
+      expect(retireError).toBeNull();
+      await expect(burnPostMomentum({ postId })).rejects.toBeTruthy();
+      {
+        const before = await readPostAs(player, postId);
+        const { error } = await player.client
+          .from(CHAT_POSTS_TABLE)
+          .update({
+            roll: {
+              ...(before.roll as unknown as Record<string, unknown>),
+              momentumBurned: 5,
+              result: ROLL_RESULT.WEAK_HIT,
+            },
+          })
+          .eq("id", postId);
+        expect(error, "burn on an inactive roll").not.toBeNull();
+        const after = await readPostAs(player, postId);
+        expect(after.roll, "burn on an inactive roll").toEqual(before.roll);
+        expect(await readMomentumAs(player, kira), "burn on an inactive roll").toBe(5);
+      }
+
+      // Reactivating Kira reopens the burn, which lands as usual.
+      const { error: reactivateError } = await player.client.rpc(
+        "set_campaign_character_active",
+        { char_id: kira, make_active: true }
+      );
+      expect(reactivateError).toBeNull();
+      await burnPostMomentum({ postId });
+      await signOut();
+      const row = await readPostAs(player, postId);
+      const roll = row.roll as unknown as {
+        momentumBurned: number;
+        result: number;
+      };
+      expect(roll.momentumBurned).toBe(5);
+      expect(roll.result).toBe(ROLL_RESULT.WEAK_HIT);
+      expect(await readMomentumAs(player, kira)).toBe(2);
+    }
+  );
+
+  it(
     "keeps a GM-only roll GM-only after a burn",
     { timeout: 120000 },
     async () => {
