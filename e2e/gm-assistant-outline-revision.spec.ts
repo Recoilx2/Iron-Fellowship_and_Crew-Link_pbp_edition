@@ -175,7 +175,16 @@ test.describe("outline revisions", () => {
       .eq("note_id", id);
     expect(error).toBeNull();
     const content = (data?.[0] as { content?: unknown } | undefined)?.content;
-    return typeof content === "string" ? outlineBytesToText(content) : null;
+    if (typeof content !== "string") {
+      return null;
+    }
+    // The editor normalizes the document on bind (empty blocks around
+    // the text), so compare the non-blank lines: a duplicated merge of
+    // old and new text still fails the match, but editor padding does not.
+    return outlineBytesToText(content)
+      .split("\n")
+      .filter((line) => line.trim().length > 0)
+      .join("\n");
   }
 
   async function openOutlineTab(page: Parameters<typeof signInAs>[0]) {
