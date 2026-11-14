@@ -9,9 +9,31 @@
  * - `GET /gm-assistant/models?campaignId=<uuid>` lists the endpoint's models
  *   filtered by `GM_ASSISTANT_ALLOWED_MODELS`, each with an approximate
  *   context size.
+ * - `GET /gm-assistant/context-size?campaignId=<uuid>` builds the GM's
+ *   saved context server-side (the same code the chat path uses) and
+ *   returns per-item sizes plus the references it had to skip, so the
+ *   panel can show roughly how big each piece is without ever seeing text
+ *   it may not read.
  * - `POST /gm-assistant/chat` takes `{ conversationId, message }`, saves the
  *   GM's message and the streamed reply to `assistant_messages`, and streams
  *   the reply back as server-sent events.
+ *
+ * Assistant context (ticket #132): the GM picks references (the outline,
+ * world entries with an optional GM-only part, notes, channels with a post
+ * count) saved per GM per campaign in `assistant_settings`. The server
+ * builds the actual context text from those references at request time,
+ * reading every row through PostgREST with the caller's JWT so the
+ * row-level security rules stay the only gate: a reference the GM can no
+ * longer read (a deleted entry, or a direct message they are not in) reads
+ * as missing and is skipped, never leaked. A GM-only part is included only
+ * when its toggle is on. Anything context-like the browser sends is
+ * ignored: the request body carries only the conversation and the message.
+ * Note text is stored as Yjs updates (the note server's format, base64
+ * beside each note); the function decodes it to plain text, reusing that
+ * format instead of a second copy of the text. Sizes are characters
+ * converted to approximate tokens (four characters per token); exact
+ * per-model tokenising is not needed, and the same function sizes both the
+ * context-size answer and the chat text.
  *
  * Security: the caller's JWT is verified in code (the gateway's VERIFY_JWT
  * flag is off) and GM membership is checked before anything else. Every
@@ -205,6 +227,115 @@ export function systemPrompt(gameSystem: string): string {
   );
 }
 
+/**
+ * Approximate tokens for a character count (ticket #132): four characters
+ * per token, rounded up. The client duplicates this exact formula (see
+ * `assistantContext.ts`), so the size bar and the server answer agree;
+ * exact per-model tokenising is not needed.
+ */
+export function approximateTokensForChars(chars: number): number {
+  if (!Number.isFinite(chars) || chars <= 0) return 0;
+  return Math.ceil(chars / 4);
+}
+
+const YJS_STRUCTURAL_TOKENS = new Set([
+  "body",
+  "default",
+  "doc",
+  "paragraph",
+  "heading",
+  "text",
+  "title",
+  "bulletList",
+  "orderedList",
+  "listItem",
+  "blockquote",
+  "codeBlock",
+  "hardBreak",
+  "horizontalRule",
+  "image",
+  "mention",
+]);
+
+function readVarInt(bytes: Uint8Array, start: number): { value: number; next: number } | null {
+  let value = 0;
+  let shift = 0;
+  let pos = start;
+  for (let i = 0; i < 5; i++) {
+    if (pos >= bytes.length) return null;
+    const byte = bytes[pos++];
+    value += (byte & 0x7f) * 2 ** shift;
+    shift += 7;
+    if (byte < 0x80) return { value, next: pos };
+  }
+  return null;
+}
+
+const PRINTABLE_RUN = /^[\p{L}\p{N}\p{P}\p{S} \t\n\r.,;:!?'"“”‘’—–()\-…]+$/u;
+
+/**
+ * Decodes note-server Yjs bytes (base64 of a Yjs update, the format the
+ * note server persists beside each note) to plain text. Yjs stores strings
+ * as variable-length-prefixed UTF-8 runs, so scanning for those runs
+ * recovers plain-text inserts and TipTap text nodes alike in document
+ * order, in both Deno and Node with no dependency. Structural type names
+ * (`body`, `default`, `paragraph`, ...) are filtered out; pieces are joined
+ * without a separator across whitespace and with a newline otherwise.
+ * Anything undecodable reads as empty, never as an error.
+ */
+export function yjsBase64ToPlainText(content: string | null | undefined): string {
+  if (!content) return "";
+  let bytes: Uint8Array;
+  try {
+    const binary = atob(content);
+    bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  } catch {
+    return "";
+  }
+  const pieces: string[] = [];
+  const decoder = new TextDecoder();
+  let i = 0;
+  while (i < bytes.length) {
+    const length = readVarInt(bytes, i);
+    if (!length || length.value < 2 || length.value > 4000 || length.next + length.value > bytes.length) {
+      i++;
+      continue;
+    }
+    const slice = bytes.subarray(length.next, length.next + length.value);
+    let text = "";
+    try {
+      text = decoder.decode(slice);
+    } catch {
+      i++;
+      continue;
+    }
+    if (!PRINTABLE_RUN.test(text) || YJS_STRUCTURAL_TOKENS.has(text)) {
+      i++;
+      continue;
+    }
+    // Runs of binary metadata can alias as short printable strings; a run
+    // that is entirely enclosed by an already-kept piece adds nothing.
+    if (pieces.some((kept) => kept.includes(text))) {
+      i = length.next + length.value;
+      continue;
+    }
+    pieces.push(text);
+    i = length.next + length.value;
+  }
+  let out = "";
+  for (const piece of pieces) {
+    if (!out) {
+      out = piece;
+    } else if (/\s$/.test(out) || /^\s/.test(piece)) {
+      out += piece;
+    } else {
+      out += `\n${piece}`;
+    }
+  }
+  return out;
+}
+
 interface PostgrestOptions {
   method?: string;
   body?: unknown;
@@ -391,6 +522,369 @@ async function readSavedModel(
   return typeof model === "string" && model.trim() ? model.trim() : null;
 }
 
+export interface AssistantItemReference {
+  id: string;
+  includeGmParts: boolean;
+}
+
+export interface AssistantChannelReference {
+  id: string;
+  postCount: number;
+}
+
+export interface AssistantContextChoice {
+  includeOutline: boolean;
+  lore: AssistantItemReference[];
+  npcs: AssistantItemReference[];
+  locations: AssistantItemReference[];
+  notes: string[];
+  channels: AssistantChannelReference[];
+}
+
+export interface AssistantContextItem {
+  key: string;
+  label: string;
+  chars: number;
+  tokens: number;
+}
+
+export interface AssistantUnavailableReference {
+  key: string;
+  reason: string;
+}
+
+export interface BuiltAssistantContext {
+  /** Sections in checklist order, joined with blank lines for the model. */
+  text: string;
+  items: AssistantContextItem[];
+  totalChars: number;
+  totalTokens: number;
+  unavailable: AssistantUnavailableReference[];
+}
+
+function normalizeItemReference(entry: unknown): AssistantItemReference | null {
+  if (!entry || typeof entry !== "object") return null;
+  const { id, includeGmParts } = entry as Record<string, unknown>;
+  if (typeof id !== "string" || !UUID_PATTERN.test(id)) return null;
+  return { id, includeGmParts: includeGmParts === true };
+}
+
+function normalizeChannelReference(entry: unknown): AssistantChannelReference | null {
+  if (!entry || typeof entry !== "object") return null;
+  const { id, postCount } = entry as Record<string, unknown>;
+  if (typeof id !== "string" || !UUID_PATTERN.test(id)) return null;
+  const count = typeof postCount === "number" && Number.isFinite(postCount)
+    ? Math.trunc(postCount)
+    : 5;
+  return { id, postCount: Math.min(50, Math.max(1, count)) };
+}
+
+function normalizeContextChoice(raw: unknown): AssistantContextChoice {
+  const empty: AssistantContextChoice = {
+    includeOutline: false,
+    lore: [],
+    npcs: [],
+    locations: [],
+    notes: [],
+    channels: [],
+  };
+  if (!raw || typeof raw !== "object") return empty;
+  const record = raw as Record<string, unknown>;
+  const listOf = (value: unknown, normalize: (entry: unknown) => { id: string } | null) => {
+    if (!Array.isArray(value)) return [];
+    const seen = new Set<string>();
+    const out: Array<{ id: string }> = [];
+    for (const entry of value.slice(0, 100)) {
+      const normalized = normalize(entry);
+      if (normalized && !seen.has(normalized.id)) {
+        seen.add(normalized.id);
+        out.push(normalized as { id: string });
+      }
+    }
+    return out;
+  };
+  return {
+    includeOutline: record.includeOutline === true,
+    lore: listOf(record.lore, normalizeItemReference) as AssistantItemReference[],
+    npcs: listOf(record.npcs, normalizeItemReference) as AssistantItemReference[],
+    locations: listOf(record.locations, normalizeItemReference) as AssistantItemReference[],
+    notes: (Array.isArray(record.notes) ? record.notes : [])
+      .filter((id): id is string => typeof id === "string" && UUID_PATTERN.test(id))
+      .filter((id, index, all) => all.indexOf(id) === index)
+      .slice(0, 100),
+    channels: listOf(record.channels, normalizeChannelReference) as AssistantChannelReference[],
+  };
+}
+
+async function readSavedContext(
+  env: GmAssistantEnv,
+  callerToken: string,
+  userId: string,
+  campaignId: string,
+  fetchImpl: UpstreamFetch,
+): Promise<AssistantContextChoice> {
+  const { status, rows } = await postgrest(
+    env,
+    callerToken,
+    `assistant_settings?campaign_id=eq.${encodeURIComponent(campaignId)}&gm_id=eq.${encodeURIComponent(userId)}&select=context`,
+    fetchImpl,
+  );
+  if (status !== 200 || rows.length === 0) {
+    return normalizeContextChoice(null);
+  }
+  return normalizeContextChoice((rows[0] as { context?: unknown }).context);
+}
+
+function pushSection(
+  sections: Array<{ key: string; label: string; text: string }>,
+  key: string,
+  label: string,
+  lines: Array<string | null | undefined>,
+): void {
+  const text = lines.filter((line): line is string => typeof line === "string" && line.trim().length > 0).join("\n").trim();
+  if (!text) return;
+  sections.push({ key, label, text: `${label}\n${text}` });
+}
+
+function gmDetailLines(details: Record<string, unknown>, fields: Array<{ column: string; label: string }>): string[] {
+  const lines: string[] = [];
+  for (const { column, label } of fields) {
+    const value = details[column];
+    if (typeof value === "string" && value.trim()) {
+      lines.push(`${label}: ${value.trim()}`);
+    } else if (value && typeof value === "object" && Object.keys(value).length > 0) {
+      lines.push(`${label}: ${JSON.stringify(value)}`);
+    }
+  }
+  return lines;
+}
+
+/**
+ * Builds the assistant context text from the GM's saved references, every
+ * read through PostgREST with the caller's JWT so the access rules decide.
+ * A reference that reads back nothing (deleted, or a direct message the
+ * caller is not in) is skipped and reported in `unavailable`, never
+ * leaked; a GM-only part is read only when its toggle is on. World entries
+ * must belong to the campaign's world and channels to the campaign,
+ * otherwise they read as unavailable too.
+ */
+async function buildAssistantContext(
+  env: GmAssistantEnv,
+  callerToken: string,
+  userId: string,
+  campaignId: string,
+  choice: AssistantContextChoice,
+  fetchImpl: UpstreamFetch,
+): Promise<BuiltAssistantContext> {
+  void userId;
+  const sections: Array<{ key: string; label: string; text: string }> = [];
+  const unavailable: AssistantUnavailableReference[] = [];
+
+  const readRows = async (path: string): Promise<Array<Record<string, unknown>>> => {
+    const { status, rows } = await postgrest(env, callerToken, path, fetchImpl);
+    return status === 200 ? rows : [];
+  };
+
+  const readNoteText = async (contentsTable: string, noteId: string): Promise<string> => {
+    const rows = await readRows(
+      `${contentsTable}?note_id=eq.${encodeURIComponent(noteId)}&select=content`,
+    );
+    const content = (rows[0] as { content?: unknown } | undefined)?.content;
+    return yjsBase64ToPlainText(typeof content === "string" ? content : null);
+  };
+
+  const campaignRows = await readRows(
+    `campaigns?id=eq.${encodeURIComponent(campaignId)}&select=world_id`,
+  );
+  const worldId = (campaignRows[0] as { world_id?: unknown } | undefined)?.world_id;
+  const campaignWorldId = typeof worldId === "string" && UUID_PATTERN.test(worldId) ? worldId : null;
+
+  if (choice.includeOutline) {
+    const outlineRows = await readRows(
+      `campaign_notes?campaign_id=eq.${encodeURIComponent(campaignId)}&kind=eq.outline&select=id,title`,
+    );
+    const outline = outlineRows[0] as { id?: unknown; title?: unknown } | undefined;
+    if (outline && typeof outline.id === "string") {
+      const text = await readNoteText("campaign_note_contents", outline.id);
+      pushSection(sections, "outline", "Campaign outline", [text || null]);
+      if (sections.at(-1)?.key !== "outline") {
+        unavailable.push({ key: "outline", reason: "empty" });
+      }
+    } else {
+      unavailable.push({ key: "outline", reason: "not found" });
+    }
+  }
+
+  const readWorldItemNotes = async (
+    kind: "lore" | "npc" | "location",
+    itemId: string,
+    includeGmParts: boolean,
+  ): Promise<{ publicText: string; gmText: string }> => {
+    const column = kind === "lore" ? "lore_id" : kind === "npc" ? "npc_id" : "location_id";
+    const noteRows = await readRows(
+      `world_notes?${column}=eq.${encodeURIComponent(itemId)}&select=id,gm_only`,
+    );
+    let publicText = "";
+    let gmText = "";
+    for (const note of noteRows) {
+      if (typeof note.id !== "string") continue;
+      const text = await readNoteText("world_note_contents", note.id);
+      if (!text) continue;
+      if (note.gm_only === true) {
+        if (includeGmParts) gmText += (gmText ? "\n" : "") + text;
+      } else {
+        publicText += (publicText ? "\n" : "") + text;
+      }
+    }
+    return { publicText, gmText };
+  };
+
+  for (const ref of choice.lore) {
+    const rows = await readRows(
+      `world_lore?id=eq.${encodeURIComponent(ref.id)}&select=id,name,tags,world_id`,
+    );
+    const row = rows[0] as { id?: unknown; name?: unknown; tags?: unknown; world_id?: unknown } | undefined;
+    if (!row || typeof row.id !== "string" || (campaignWorldId && row.world_id !== campaignWorldId)) {
+      unavailable.push({ key: `lore:${ref.id}`, reason: "not found" });
+      continue;
+    }
+    const { publicText, gmText } = await readWorldItemNotes("lore", ref.id, ref.includeGmParts);
+    const tags = Array.isArray(row.tags) ? row.tags.filter((tag): tag is string => typeof tag === "string") : [];
+    pushSection(sections, `lore:${ref.id}`, `Lore: ${typeof row.name === "string" ? row.name : "Untitled"}`, [
+      tags.length > 0 ? `Tags: ${tags.join(", ")}` : null,
+      publicText || null,
+      gmText ? `GM-only:\n${gmText}` : null,
+    ]);
+    if (sections.at(-1)?.key !== `lore:${ref.id}`) {
+      unavailable.push({ key: `lore:${ref.id}`, reason: "empty" });
+    }
+  }
+
+  for (const ref of choice.npcs) {
+    const rows = await readRows(
+      `world_npcs?id=eq.${encodeURIComponent(ref.id)}&select=id,name,world_id`,
+    );
+    const row = rows[0] as { id?: unknown; name?: unknown; world_id?: unknown } | undefined;
+    if (!row || typeof row.id !== "string" || (campaignWorldId && row.world_id !== campaignWorldId)) {
+      unavailable.push({ key: `npc:${ref.id}`, reason: "not found" });
+      continue;
+    }
+    const details = ref.includeGmParts
+      ? ((await readRows(`world_npc_gm_details?npc_id=eq.${encodeURIComponent(ref.id)}&select=goal,role,descriptor,disposition,activity,first_look,revealed_aspect`))[0] as Record<string, unknown> | undefined)
+      : undefined;
+    const { publicText, gmText } = await readWorldItemNotes("npc", ref.id, ref.includeGmParts);
+    pushSection(sections, `npc:${ref.id}`, `NPC: ${typeof row.name === "string" ? row.name : "Untitled"}`, [
+      ...(details
+        ? gmDetailLines(details, [
+            { column: "role", label: "Role" },
+            { column: "descriptor", label: "Descriptor" },
+            { column: "goal", label: "Goal" },
+            { column: "disposition", label: "Disposition" },
+            { column: "activity", label: "Activity" },
+            { column: "first_look", label: "First look" },
+            { column: "revealed_aspect", label: "Revealed aspect" },
+          ])
+        : []),
+      publicText || null,
+      gmText ? `GM-only notes:\n${gmText}` : null,
+    ]);
+    if (sections.at(-1)?.key !== `npc:${ref.id}`) {
+      unavailable.push({ key: `npc:${ref.id}`, reason: "empty" });
+    }
+  }
+
+  for (const ref of choice.locations) {
+    const rows = await readRows(
+      `world_locations?id=eq.${encodeURIComponent(ref.id)}&select=id,name,world_id`,
+    );
+    const row = rows[0] as { id?: unknown; name?: unknown; world_id?: unknown } | undefined;
+    if (!row || typeof row.id !== "string" || (campaignWorldId && row.world_id !== campaignWorldId)) {
+      unavailable.push({ key: `location:${ref.id}`, reason: "not found" });
+      continue;
+    }
+    const details = ref.includeGmParts
+      ? ((await readRows(`world_location_gm_details?location_id=eq.${encodeURIComponent(ref.id)}&select=fields,descriptor,trouble,location_features`))[0] as Record<string, unknown> | undefined)
+      : undefined;
+    const { publicText, gmText } = await readWorldItemNotes("location", ref.id, ref.includeGmParts);
+    pushSection(sections, `location:${ref.id}`, `Location: ${typeof row.name === "string" ? row.name : "Untitled"}`, [
+      ...(details
+        ? gmDetailLines(details, [
+            { column: "descriptor", label: "Descriptor" },
+            { column: "trouble", label: "Trouble" },
+            { column: "location_features", label: "Features" },
+            { column: "fields", label: "Details" },
+          ])
+        : []),
+      publicText || null,
+      gmText ? `GM-only notes:\n${gmText}` : null,
+    ]);
+    if (sections.at(-1)?.key !== `location:${ref.id}`) {
+      unavailable.push({ key: `location:${ref.id}`, reason: "empty" });
+    }
+  }
+
+  for (const noteId of choice.notes) {
+    const rows = await readRows(
+      `campaign_notes?id=eq.${encodeURIComponent(noteId)}&select=id,title`,
+    );
+    const row = rows[0] as { id?: unknown; title?: unknown } | undefined;
+    if (!row || typeof row.id !== "string") {
+      unavailable.push({ key: `note:${noteId}`, reason: "not found" });
+      continue;
+    }
+    const text = await readNoteText("campaign_note_contents", noteId);
+    pushSection(sections, `note:${noteId}`, `Note: ${typeof row.title === "string" && row.title.trim() ? row.title.trim() : "Untitled"}`, [
+      text || null,
+    ]);
+    if (sections.at(-1)?.key !== `note:${noteId}`) {
+      unavailable.push({ key: `note:${noteId}`, reason: "empty" });
+    }
+  }
+
+  for (const ref of choice.channels) {
+    const rows = await readRows(
+      `chat_channels?id=eq.${encodeURIComponent(ref.id)}&select=id,name,campaign_id`,
+    );
+    const row = rows[0] as { id?: unknown; name?: unknown; campaign_id?: unknown } | undefined;
+    if (!row || typeof row.id !== "string" || row.campaign_id !== campaignId) {
+      unavailable.push({ key: `channel:${ref.id}`, reason: "not found" });
+      continue;
+    }
+    const posts = await readRows(
+      `chat_posts?channel_id=eq.${encodeURIComponent(ref.id)}&select=text,created_at&order=created_at.desc&limit=${ref.postCount}`,
+    );
+    const lines = posts
+      .filter((post) => typeof post.text === "string" && (post.text as string).trim().length > 0)
+      .map((post) => (post.text as string).trim())
+      .reverse();
+    if (lines.length === 0) {
+      unavailable.push({ key: `channel:${ref.id}`, reason: "empty" });
+      continue;
+    }
+    pushSection(
+      sections,
+      `channel:${ref.id}`,
+      `Channel: ${typeof row.name === "string" && row.name.trim() ? row.name.trim() : "Untitled"} (last ${lines.length})`,
+      lines,
+    );
+  }
+
+  const items: AssistantContextItem[] = sections.map((section) => ({
+    key: section.key,
+    label: section.label.split("\n")[0],
+    chars: section.text.length,
+    tokens: approximateTokensForChars(section.text.length),
+  }));
+  const totalChars = items.reduce((sum, item) => sum + item.chars, 0);
+  return {
+    text: sections.map((section) => section.text).join("\n\n"),
+    items,
+    totalChars,
+    totalTokens: approximateTokensForChars(totalChars),
+    unavailable,
+  };
+}
+
 async function saveMessage(
   env: GmAssistantEnv,
   callerToken: string,
@@ -484,6 +978,67 @@ async function handleModels(
     },
     { headers },
   );
+}
+
+async function handleContextSize(
+  req: Request,
+  env: GmAssistantEnv,
+  caller: VerifiedCaller,
+  callerToken: string,
+  fetchImpl: UpstreamFetch,
+): Promise<Response> {
+  const campaignId = new URL(req.url).searchParams.get("campaignId") ?? "";
+  if (!UUID_PATTERN.test(campaignId)) {
+    return errorResponse(
+      req,
+      env,
+      400,
+      "INVALID_REQUEST",
+      "That request was not valid.",
+      mintReference(),
+    );
+  }
+  let gm = false;
+  try {
+    gm = await isCampaignGm(env, callerToken, caller.sub, campaignId, fetchImpl);
+  } catch (error) {
+    const ref = mintReference();
+    return errorResponse(req, env, 502, "UPSTREAM_ERROR", "The assistant request failed.", ref, `gm check failed: ${error instanceof Error ? error.message : "unknown"}`);
+  }
+  if (!gm) {
+    return errorResponse(
+      req,
+      env,
+      403,
+      "FORBIDDEN",
+      "Only the campaign's GMs can use the assistant.",
+      mintReference(),
+    );
+  }
+  // The same code the chat path uses, so the sizes always match the text
+  // the model would receive. Every reference it cannot read is skipped and
+  // reported, never leaked.
+  try {
+    const choice = await readSavedContext(env, callerToken, caller.sub, campaignId, fetchImpl);
+    const built = await buildAssistantContext(env, callerToken, caller.sub, campaignId, choice, fetchImpl);
+    const instructionChars = systemPrompt(env.gameSystem).length;
+    const headers = corsHeaders(req, env);
+    headers.set("Content-Type", "application/json");
+    return Response.json(
+      {
+        items: built.items,
+        totalChars: built.totalChars,
+        totalTokens: built.totalTokens,
+        instructionChars,
+        instructionTokens: approximateTokensForChars(instructionChars),
+        unavailable: built.unavailable,
+      },
+      { headers },
+    );
+  } catch (error) {
+    const ref = mintReference();
+    return errorResponse(req, env, 502, "UPSTREAM_ERROR", "The assistant request failed.", ref, `context build failed: ${error instanceof Error ? error.message : "unknown"}`);
+  }
 }
 
 interface ChatRequestBody {
@@ -598,8 +1153,24 @@ async function handleChat(
     return errorResponse(req, env, 502, "UPSTREAM_ERROR", "The assistant request failed.", ref, "user message save failed");
   }
 
+  // The context is built here, on the server, from the GM's saved
+  // references at request time. The request body carries no context text:
+  // parseChatBody drops every other field, so anything context-like the
+  // browser sends never reaches the model.
+  let built: BuiltAssistantContext;
+  try {
+    const choice = await readSavedContext(env, callerToken, caller.sub, conversation.campaignId, fetchImpl);
+    built = await buildAssistantContext(env, callerToken, caller.sub, conversation.campaignId, choice, fetchImpl);
+  } catch (error) {
+    const ref = mintReference();
+    return errorResponse(req, env, 502, "UPSTREAM_ERROR", "The assistant request failed.", ref, `context build failed: ${error instanceof Error ? error.message : "unknown"}`);
+  }
+
   const outgoing = [
     { role: "system", content: systemPrompt(env.gameSystem) },
+    ...(built.text
+      ? [{ role: "system", content: `Campaign context chosen by the GM:\n\n${built.text}` }]
+      : []),
     ...history.map((turn) => ({ role: turn.role, content: turn.content })),
     { role: "user", content: chat.message },
   ];
@@ -809,7 +1380,7 @@ export function createGmAssistantHandler(
   return async (req: Request): Promise<Response> => {
     const url = new URL(req.url);
     if (req.method === "OPTIONS") {
-      if (url.pathname === "/gm-assistant/models" || url.pathname === "/gm-assistant/chat") {
+      if (url.pathname === "/gm-assistant/models" || url.pathname === "/gm-assistant/chat" || url.pathname === "/gm-assistant/context-size") {
         const headers = corsHeaders(req, env);
         headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         headers.set(
@@ -839,6 +1410,9 @@ export function createGmAssistantHandler(
     }
     if (req.method === "GET" && url.pathname === "/gm-assistant/models") {
       return handleModels(req, env, caller, callerToken, fetchImpl);
+    }
+    if (req.method === "GET" && url.pathname === "/gm-assistant/context-size") {
+      return handleContextSize(req, env, caller, callerToken, fetchImpl);
     }
     if (req.method === "POST" && url.pathname === "/gm-assistant/chat") {
       return handleChat(req, env, caller, callerToken, fetchImpl, options);

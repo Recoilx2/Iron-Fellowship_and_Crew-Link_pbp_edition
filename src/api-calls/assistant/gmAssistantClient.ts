@@ -15,6 +15,38 @@ export interface AssistantModelOption {
   contextTokens: number;
 }
 
+export interface AssistantContextSizeItem {
+  key: string;
+  label: string;
+  chars: number;
+  tokens: number;
+}
+
+export interface AssistantContextUnavailable {
+  key: string;
+  reason: string;
+}
+
+export interface AssistantContextSize {
+  items: AssistantContextSizeItem[];
+  totalChars: number;
+  totalTokens: number;
+  instructionChars: number;
+  instructionTokens: number;
+  unavailable: AssistantContextUnavailable[];
+}
+
+/**
+ * Approximate tokens for a character count: four characters per token,
+ * rounded up. Kept identical to the server function (handler.ts); exact
+ * per-model tokenising is not needed. The panel uses it for the
+ * conversation overhead beside the server-sized context and instructions.
+ */
+export function approximateTokensForChars(chars: number): number {
+  if (!Number.isFinite(chars) || chars <= 0) return 0;
+  return Math.ceil(chars / 4);
+}
+
 export interface AssistantStreamResult {
   text: string;
   /** True when the caller aborted before the reply finished. */
@@ -140,6 +172,79 @@ export async function fetchAssistantModels(
           ? Math.trunc(entry.context_tokens)
           : 8192,
     }));
+}
+
+/**
+ * Asks the server how big the GM's saved context is for a campaign:
+ * per-item sizes built by the same code the chat path uses, plus the
+ * instruction overhead and the saved references it had to skip. Throws
+ * AssistantRequestError with the server code otherwise.
+ */
+export async function fetchAssistantContextSize(
+  campaignId: string,
+  options?: { signal?: AbortSignal }
+): Promise<AssistantContextSize> {
+  let response: Response;
+  try {
+    const headers = await authHeaders();
+    response = await fetch(
+      `${functionsBaseUrl()}/gm-assistant/context-size?campaignId=${encodeURIComponent(campaignId)}`,
+      { headers, signal: options?.signal }
+    );
+  } catch (error) {
+    if (error instanceof AssistantRequestError) {
+      throw error;
+    }
+    throw new AssistantRequestError(
+      "NETWORK_ERROR",
+      "The assistant request failed.",
+      { status: 0, ref: mintErrorReference() }
+    );
+  }
+  if (!response.ok) {
+    await throwForStatus(response, "The assistant request failed.");
+  }
+  const parsed = (await response.json()) as {
+    items?: Array<{ key?: unknown; label?: unknown; chars?: unknown; tokens?: unknown }>;
+    totalChars?: unknown;
+    totalTokens?: unknown;
+    instructionChars?: unknown;
+    instructionTokens?: unknown;
+    unavailable?: Array<{ key?: unknown; reason?: unknown }>;
+  };
+  const items = Array.isArray(parsed.items)
+    ? parsed.items
+        .filter(
+          (entry) =>
+            typeof entry.key === "string" &&
+            typeof entry.label === "string" &&
+            typeof entry.chars === "number" &&
+            typeof entry.tokens === "number"
+        )
+        .map((entry) => ({
+          key: entry.key as string,
+          label: entry.label as string,
+          chars: entry.chars as number,
+          tokens: entry.tokens as number,
+        }))
+    : [];
+  const unavailable = Array.isArray(parsed.unavailable)
+    ? parsed.unavailable
+        .filter(
+          (entry) => typeof entry.key === "string" && typeof entry.reason === "string"
+        )
+        .map((entry) => ({ key: entry.key as string, reason: entry.reason as string }))
+    : [];
+  return {
+    items,
+    totalChars: typeof parsed.totalChars === "number" ? parsed.totalChars : 0,
+    totalTokens: typeof parsed.totalTokens === "number" ? parsed.totalTokens : 0,
+    instructionChars:
+      typeof parsed.instructionChars === "number" ? parsed.instructionChars : 0,
+    instructionTokens:
+      typeof parsed.instructionTokens === "number" ? parsed.instructionTokens : 0,
+    unavailable,
+  };
 }
 
 /**

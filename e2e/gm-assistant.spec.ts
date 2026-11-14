@@ -187,6 +187,48 @@ test.describe("gm assistant panel", () => {
     }
   });
 
+  test("a GM opens the Context tab, sees option groups and jumps there from the size bar", async ({
+    browser,
+  }) => {
+    const gmContext = await browser.newContext();
+    const gmPage = await gmContext.newPage();
+    try {
+      await signInAs(gmPage, config, gm, campaignUrl(campaignId));
+      await expect(gmPage.getByRole("tab", { name: "Chat" })).toBeVisible();
+
+      await gmPage
+        .getByRole("button", { name: "Assistant", exact: true })
+        .click();
+      await expect(gmPage.getByText("GM assistant")).toBeVisible();
+
+      // The size bar shows the approximate total against the fake chat
+      // model's context size, with an Edit link beside it.
+      await expect(gmPage.getByText(/\/ 4096 tokens/)).toBeVisible();
+
+      // Edit jumps to the Context tab, which lists every option group even
+      // with an empty campaign: the outline row plus world, note and
+      // channel groups.
+      await gmPage.getByRole("button", { name: "Edit context" }).click();
+      await expect(
+        gmPage.getByRole("tab", { name: "Context" })
+      ).toHaveAttribute("aria-selected", "true");
+      for (const heading of [
+        "Campaign outline",
+        "Lore",
+        "NPCs",
+        "Locations",
+        "Notes",
+        "Recent posts",
+      ]) {
+        await expect(
+          gmPage.getByText(heading, { exact: true })
+        ).toBeVisible();
+      }
+    } finally {
+      await gmContext.close().catch(() => undefined);
+    }
+  });
+
   test("a player in the same campaign sees no Assistant button", async ({
     browser,
   }) => {

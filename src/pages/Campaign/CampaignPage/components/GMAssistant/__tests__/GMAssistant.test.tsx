@@ -31,7 +31,10 @@ vi.mock("stores/store", () => ({
 
 vi.mock("api-calls/assistant/gmAssistantClient", () => ({
   fetchAssistantModels: vi.fn(),
+  fetchAssistantContextSize: vi.fn(),
   streamAssistantChat: vi.fn(),
+  approximateTokensForChars: (chars: number) =>
+    !Number.isFinite(chars) || chars <= 0 ? 0 : Math.ceil(chars / 4),
   AssistantRequestError: class extends Error {
     code: string;
     status: number;
@@ -66,7 +69,11 @@ vi.mock("api-calls/assistant/deleteConversation", () => ({
 }));
 
 import { GMAssistant } from "../GMAssistant";
-import { fetchAssistantModels } from "api-calls/assistant/gmAssistantClient";
+import {
+  fetchAssistantContextSize,
+  fetchAssistantModels,
+  type AssistantContextSize,
+} from "api-calls/assistant/gmAssistantClient";
 import {
   fetchAssistantSettings,
   saveAssistantSettings,
@@ -150,6 +157,14 @@ describe("GMAssistant model picker", () => {
     mockViewport(1400);
     state.auth.uid = "gm-1";
     state.campaigns.currentCampaign.currentCampaign = { gmIds: ["gm-1"] };
+    vi.mocked(fetchAssistantContextSize).mockResolvedValue({
+      items: [],
+      totalChars: 0,
+      totalTokens: 0,
+      instructionChars: 0,
+      instructionTokens: 0,
+      unavailable: [],
+    } as AssistantContextSize);
     vi.mocked(fetchAssistantModels).mockResolvedValue([
       { id: "m1", contextTokens: 4096 },
       { id: "m2", contextTokens: 16384 },
@@ -266,6 +281,14 @@ describe("GMAssistant gating", () => {
     mockViewport(1400);
     state.auth.uid = "gm-1";
     state.campaigns.currentCampaign.currentCampaign = { gmIds: ["gm-1"] };
+    vi.mocked(fetchAssistantContextSize).mockResolvedValue({
+      items: [],
+      totalChars: 0,
+      totalTokens: 0,
+      instructionChars: 0,
+      instructionTokens: 0,
+      unavailable: [],
+    } as AssistantContextSize);
     vi.mocked(fetchAssistantModels).mockResolvedValue([]);
     vi.mocked(fetchAssistantSettings).mockResolvedValue(null);
     vi.mocked(listenToConversations).mockImplementation(
@@ -354,7 +377,7 @@ describe("GMAssistant gating", () => {
     expect(close).toBeDefined();
   });
 
-  it("shows Chat and Outline tabs with Context disabled until its ticket", () => {
+  it("shows Chat, Context and Outline tabs with Context enabled", () => {
     const view = render();
     act(() => {
       view
@@ -371,7 +394,7 @@ describe("GMAssistant gating", () => {
     const disabled = Array.from(view.querySelectorAll('[role="tab"]')).filter(
       (tab) => tab.hasAttribute("disabled")
     );
-    expect(disabled.map((tab) => tab.textContent)).toEqual(["Context"]);
+    expect(disabled).toEqual([]);
   });
 });
 
@@ -425,6 +448,14 @@ describe("GMAssistant chat thread", () => {
     state.campaigns.currentCampaign.currentCampaign = { gmIds: ["gm-1"] };
     messagesById["c-a"] = threadMessages;
     messagesById["c-b"] = [];
+    vi.mocked(fetchAssistantContextSize).mockResolvedValue({
+      items: [],
+      totalChars: 0,
+      totalTokens: 0,
+      instructionChars: 0,
+      instructionTokens: 0,
+      unavailable: [],
+    } as AssistantContextSize);
     vi.mocked(fetchAssistantModels).mockResolvedValue([
       { id: "m1", contextTokens: 4096 },
     ]);
@@ -611,6 +642,14 @@ describe("GMAssistant streaming", () => {
     state.campaigns.currentCampaign.currentCampaign = { gmIds: ["gm-1"] };
     state.chat.openChannelId = "ic";
     state.chat.drafts = {};
+    vi.mocked(fetchAssistantContextSize).mockResolvedValue({
+      items: [],
+      totalChars: 0,
+      totalTokens: 0,
+      instructionChars: 0,
+      instructionTokens: 0,
+      unavailable: [],
+    } as AssistantContextSize);
     vi.mocked(fetchAssistantModels).mockResolvedValue([
       { id: "m1", contextTokens: 4096 },
     ]);

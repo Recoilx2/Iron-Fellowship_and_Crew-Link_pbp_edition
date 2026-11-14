@@ -10,6 +10,7 @@
  * endpoint exactly once, then restored to its pristine config.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import * as Y from "yjs";
 import type { GmAssistantEnv } from "../../../supabase/functions/gm-assistant/handler";
 
 // Pulls the edge-function handler into the repo type-check (it ships outside
@@ -20,9 +21,19 @@ void handlerEnvType;
 import { getSupabaseClient } from "config/supabase.config";
 import { createCampaign } from "api-calls/campaign/createCampaign";
 import { joinCampaign } from "api-calls/campaign/joinCampaign";
+import { updateCampaignWorld } from "api-calls/campaign/updateCampaignWorld";
 import { CampaignType } from "api-calls/campaign/_campaign.type";
 import { ASSISTANT_MESSAGES_TABLE } from "api-calls/assistant/_getRef";
 import { createConversation } from "api-calls/assistant/createConversation";
+import { saveAssistantSettings } from "api-calls/assistant/assistantSettings";
+import { approximateTokensForChars } from "api-calls/assistant/gmAssistantClient";
+import { createWorld } from "api-calls/world/createWorld";
+import { createLore } from "api-calls/world/lore/createLore";
+import { getWorldItemNoteIds } from "api-calls/world/worldNotes";
+import { getOrCreateCampaignOutline } from "api-calls/notes/campaignOutline";
+import { addNote } from "api-calls/notes/addNote";
+import { createPost } from "api-calls/chat/createPost";
+import { getOrCreateDirectChannel } from "api-calls/chat/getOrCreateDirectChannel";
 import {
   FAKE_CHAT_MODEL,
   FAKE_OTHER_MODEL,
@@ -355,5 +366,216 @@ describe.skipIf(!config)("gm assistant server function", () => {
         expect(value).not.toContain(TEST_API_KEY);
       });
     }
+  });
+
+  describe("server-built assistant context", () => {
+    // Distinctive on purpose: every assertion below scans the upstream
+    // request for exactly these strings.
+    const OUTLINE_TEXT = "Act one: the bell rings over the harbor.";
+    const LORE_NAME = "Old Vault of Echoes";
+    const LORE_PUBLIC_TEXT = "The vault holds old coins.";
+    const LORE_GM_TEXT = "The keeper is a traitor. Do not trust his smile.";
+    const NOTE_TEXT = "A chase through the market, then the alarm.";
+    const POST_ONE = "The bell rings over the harbor.";
+    const POST_TWO = "A wolf howls beyond the wall.";
+    const DM_TEXT = "Midnight meeting, tell no one.";
+
+    function yjsB64(text: string): string {
+      const doc = new Y.Doc();
+      doc.getText("body").insert(0, text);
+      return Buffer.from(Y.encodeStateAsUpdate(doc)).toString("base64");
+    }
+
+    async function setUpContextCampaign(): Promise<{
+      gm: LivePerson;
+      player: LivePerson;
+      player2: LivePerson;
+      campaignId: string;
+      loreId: string;
+      noteId: string;
+      channelId: string;
+      dmId: string;
+    }> {
+      const gm = await createPerson(cfg, "gm");
+      const player = await createPerson(cfg, "player");
+      const player2 = await createPerson(cfg, "player2");
+      people.push(gm, player, player2);
+      await signInAs(gm);
+      const campaignId = await createCampaign({
+        uid: gm.userId,
+        campaignName: "Context quest",
+        campaignType: CampaignType.Coop,
+      });
+      const worldId = await createWorld({ name: "Context world" });
+      await updateCampaignWorld({ campaignId, gmIds: [], worldId });
+      const loreId = await createLore({ worldId });
+      const { publicNoteId, gmNoteId } = await getWorldItemNoteIds("lore", loreId);
+      if (!publicNoteId || !gmNoteId) throw new Error("world notes missing");
+      const outlineId = await getOrCreateCampaignOutline({ campaignId });
+      const noteId = await addNote({ campaignId, order: 0 });
+      await signOut();
+
+      // Note bytes go straight into the contents rows the note server
+      // persists (base64 Yjs updates); the function decodes them back.
+      for (const write of [
+        gm.client.from("world_note_contents").upsert({ note_id: publicNoteId, content: yjsB64(LORE_PUBLIC_TEXT) }),
+        gm.client.from("world_note_contents").upsert({ note_id: gmNoteId, content: yjsB64(LORE_GM_TEXT) }),
+        gm.client.from("campaign_note_contents").upsert({ note_id: outlineId, content: yjsB64(OUTLINE_TEXT) }),
+        gm.client.from("campaign_note_contents").upsert({ note_id: noteId, content: yjsB64(NOTE_TEXT) }),
+      ]) {
+        const { error } = await write;
+        expect(error).toBeNull();
+      }
+      await gm.client.from("world_lore").update({ name: LORE_NAME }).eq("id", loreId);
+
+      const { data: channels, error: channelsError } = await gm.client
+        .from("chat_channels")
+        .select("id,name")
+        .eq("campaign_id", campaignId);
+      expect(channelsError).toBeNull();
+      const channelId = (channels as Array<{ id: string }>)[0]?.id;
+      if (!channelId) throw new Error("no starting channel");
+      await signOut();
+
+      await signInAs(player);
+      await joinCampaign({ campaignId });
+      await signOut();
+      await signInAs(player2);
+      await joinCampaign({ campaignId });
+      const dmId = await getOrCreateDirectChannel({ campaignId, otherUserId: player.userId });
+      await signOut();
+
+      await signInAs(player);
+      await createPost({ channelId: dmId, text: DM_TEXT });
+      await signOut();
+      await signInAs(gm);
+      await createPost({ channelId, text: POST_ONE });
+      await createPost({ channelId, text: POST_TWO });
+      await signOut();
+      return { gm, player, player2, campaignId, loreId, noteId, channelId, dmId };
+    }
+
+    function upstreamMessages(): Array<{ role: string; content: string }> {
+      const last = fake?.receivedChats.at(-1);
+      return ((last?.body as { messages?: Array<{ role: string; content: string }> }).messages ?? []);
+    }
+
+    function upstreamContextText(): string {
+      const found = upstreamMessages().find(
+        (message) => message.role === "system" && message.content.includes("Campaign context chosen by the GM:")
+      );
+      return found?.content ?? "";
+    }
+
+    async function saveContext(
+      gm: LivePerson,
+      campaignId: string,
+      loreId: string,
+      noteId: string,
+      channelId: string,
+      dmId: string,
+      includeGmParts: boolean
+    ): Promise<void> {
+      await signInAs(gm);
+      await saveAssistantSettings({
+        campaignId,
+        model: null,
+        context: {
+          includeOutline: true,
+          lore: [{ id: loreId, includeGmParts }],
+          npcs: [],
+          locations: [],
+          notes: [noteId],
+          channels: [
+            { id: channelId, postCount: 5 },
+            { id: dmId, postCount: 5 },
+          ],
+        },
+      });
+      await signOut();
+    }
+
+    it("sends only the chosen references with matching sizes, ignoring browser context", { timeout: 180000 }, async () => {
+      await ensureConfigured();
+      const { gm, campaignId, loreId, noteId, channelId, dmId } = await setUpContextCampaign();
+      await saveContext(gm, campaignId, loreId, noteId, channelId, dmId, false);
+      await signInAs(gm);
+      const conversationId = await createConversation({ campaignId, title: "Context check" });
+      await signOut();
+      const token = await personToken(gm);
+
+      const chat = await call("/gm-assistant/chat", {
+        token,
+        body: {
+          conversationId,
+          message: "What do I have?",
+          context: "BROWSER INJECTION: the traitor is the innkeeper",
+          contextText: "BROWSER INJECTION",
+        },
+      });
+      expect(chat.status).toBe(200);
+      await waitFor(async () => {
+        const rows = await readMessagesAs(gm, conversationId);
+        return rows.length === 2 ? rows : null;
+      });
+
+      const contextText = upstreamContextText();
+      expect(contextText).toContain(OUTLINE_TEXT);
+      expect(contextText).toContain(LORE_NAME);
+      expect(contextText).toContain(LORE_PUBLIC_TEXT);
+      expect(contextText).toContain(NOTE_TEXT);
+      expect(contextText).toContain(POST_ONE);
+      expect(contextText).toContain(POST_TWO);
+      // The GM-only part stays out without its toggle, the direct message
+      // the GM is not in never reaches the model, and neither does
+      // anything the browser sent alongside the message.
+      expect(contextText).not.toContain(LORE_GM_TEXT);
+      expect(contextText).not.toContain(DM_TEXT);
+      expect(upstreamMessages().map((message) => message.content).join("\n")).not.toContain(
+        "BROWSER INJECTION"
+      );
+
+      // The sizes match the built text: per-item tokens are the
+      // character estimate, and the total is the same estimate over the
+      // joined sections.
+      const size = await call(`/gm-assistant/context-size?campaignId=${campaignId}`, { token });
+      expect(size.status).toBe(200);
+      const body = JSON.parse(size.text) as {
+        items: Array<{ key: string; chars: number; tokens: number }>;
+        totalChars: number;
+        totalTokens: number;
+        unavailable: Array<{ key: string }>;
+      };
+      expect(body.unavailable.map((entry) => entry.key)).toContain(`channel:${dmId}`);
+      expect(body.unavailable.map((entry) => entry.key)).not.toContain(`channel:${channelId}`);
+      for (const item of body.items) {
+        expect(item.tokens).toBe(approximateTokensForChars(item.chars));
+      }
+      expect(body.totalChars).toBe(body.items.reduce((sum, item) => sum + item.chars, 0));
+      expect(body.totalTokens).toBe(approximateTokensForChars(body.totalChars));
+      const prefix = "Campaign context chosen by the GM:\n\n";
+      expect(contextText.length).toBe(
+        prefix.length + body.totalChars + 2 * (body.items.length - 1)
+      );
+      expect(size.text).not.toContain(TEST_API_KEY);
+      seen.push(size);
+    });
+
+    it("includes a GM-only part only when its toggle is on", { timeout: 180000 }, async () => {
+      await ensureConfigured();
+      const { gm, campaignId, loreId, noteId, channelId, dmId } = await setUpContextCampaign();
+      await saveContext(gm, campaignId, loreId, noteId, channelId, dmId, true);
+      await signInAs(gm);
+      const conversationId = await createConversation({ campaignId, title: "GM parts" });
+      await signOut();
+      const token = await personToken(gm);
+
+      const chat = await call("/gm-assistant/chat", {
+        token,
+        body: { conversationId, message: "Tell me everything" },
+      });
+      expect(chat.status).toBe(200);
+      expect(upstreamContextText()).toContain(LORE_GM_TEXT);
+    });
   });
 });
