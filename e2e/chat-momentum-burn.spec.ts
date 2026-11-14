@@ -165,9 +165,17 @@ test.describe("chat momentum burn on a posted roll", () => {
         })
       ).toBeVisible();
 
-      // Nobody else is offered the burn on the author's roll.
-      await otherOneLiner.click();
-      await expect(otherOneLiner).toHaveAttribute("aria-expanded", "true");
+      // Nobody else is offered the burn on the author's roll. The burn
+      // rewrote the one-liner (Miss became Weak Hit), so the pre-burn Miss
+      // locator above no longer matches; target the burned roll instead.
+      const otherBurnedOneLiner = otherPage.getByRole("button", {
+        name: /^Face Danger:.*Weak Hit.*2 vs 3, 8/,
+      });
+      await otherBurnedOneLiner.click();
+      await expect(otherBurnedOneLiner).toHaveAttribute(
+        "aria-expanded",
+        "true"
+      );
       await expect(
         otherPage.getByRole("button", { name: "Burn momentum" })
       ).toHaveCount(0);

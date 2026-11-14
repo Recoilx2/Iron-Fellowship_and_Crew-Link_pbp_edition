@@ -29,9 +29,11 @@ describe("chat momentum burn hardening migration (#125)", () => {
     );
     const stamp = hardeningFile().slice(0, 14);
     // The GM-only pin (20261119000000) lands after #125 hardening by
-    // design, so it is excluded here.
+    // design, so it is excluded here. The storage-privileges fix
+    // (20261120000000) lands later still.
     const landedLater = new Set([
       "20261119000000_chat_momentum_burn_gms_pin.sql",
+      "20261120000000_chat_storage_privileges.sql",
     ]);
     const others = readdirSync(dir).filter(
       (f) =>

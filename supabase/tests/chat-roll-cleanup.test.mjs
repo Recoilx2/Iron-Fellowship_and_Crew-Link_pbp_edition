@@ -31,13 +31,14 @@ describe("deleted-post cleanup and roll forgery migration (#120)", () => {
     // Migrations that landed after #120 (e.g. #125 momentum burn,
     // 20261116000000, and #118 image hardening, 20261117000000, and #125
     // burn hardening, 20261118000000, and its GM-only pin,
-    // 20261119000000) sort later by design, so they are
-    // excluded here.
+    // 20261119000000, and the storage-privileges fix, 20261120000000)
+    // sort later by design, so they are excluded here.
     const landedLater = new Set([
       "20261116000000_chat_momentum_burn.sql",
       "20261117000000_chat_image_hardening.sql",
       "20261118000000_chat_momentum_burn_hardening.sql",
       "20261119000000_chat_momentum_burn_gms_pin.sql",
+      "20261120000000_chat_storage_privileges.sql",
     ]);
     const others = readdirSync(dir).filter(
       (f) => /^\d{14}_/.test(f) && f !== cleanupFile() && !landedLater.has(f)
