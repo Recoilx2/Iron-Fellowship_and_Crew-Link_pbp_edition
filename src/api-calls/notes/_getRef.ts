@@ -75,13 +75,15 @@ export function characterNoteContentPayloadToChange(
 export const CAMPAIGN_NOTES_TABLE = "campaign_notes";
 export const CAMPAIGN_NOTE_CONTENTS_TABLE = "campaign_note_contents";
 
+export type CampaignNoteKind = "note" | "outline";
+
 export interface CampaignNoteRow {
   id: string;
   campaign_id: string;
   title: string;
   shared: boolean;
   /** `note` or `outline` (ticket #131): the one GM-only campaign outline. */
-  kind: string;
+  kind: CampaignNoteKind;
   sort_order: number;
   created_by: string | null;
   created_at: string;

@@ -15,5 +15,5 @@ export interface Note {
    * outline is edited in the assistant panel's Outline tab and never
    * appears in a notes list, so My notes drops it even for its author.
    */
-  kind?: string;
+  kind?: "note" | "outline";
 }

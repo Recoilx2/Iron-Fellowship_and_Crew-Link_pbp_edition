@@ -12,7 +12,7 @@ import { ASSISTANT_MESSAGES_TABLE } from "./_getRef";
  * convention, #69).
  */
 export const addAssistantMessage = createApiFunction<
-  { conversationId: string; role: AssistantMessageRole | string; content: string },
+  { conversationId: string; role: AssistantMessageRole; content: string },
   string
 >(async (params) => {
   const { conversationId, role, content } = params;

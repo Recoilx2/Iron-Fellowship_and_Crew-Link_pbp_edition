@@ -5,6 +5,7 @@ import { TiptapTransformer } from "@hocuspocus/transformer";
 import {
   applyOutlineRevision,
   listOutlineVersions,
+  MAX_KEPT_OUTLINE_VERSIONS,
   undoOutlineRevision,
 } from "./outlineVersions";
 import { ASSISTANT_OUTLINE_VERSIONS_TABLE } from "./_getRef";
@@ -228,5 +229,41 @@ describe("outline versions", () => {
     ]);
     expect(versions[0]).toMatchObject({ content: "Second plan." });
     expect(CAMPAIGN_NOTE_CONTENTS_TABLE).toBe("campaign_note_contents");
+  });
+
+  it("apply prunes kept versions past the retention cap, newest kept", async () => {
+    // Seam under test: the version history stays bounded per campaign.
+    // Keeping one more past the cap drops the oldest, so Undo still sees
+    // the newest rows.
+    const kept = MAX_KEPT_OUTLINE_VERSIONS;
+    const total = kept + 2;
+    state.versionRows = Array.from({ length: total }, (_, index) => {
+      // Newest first, as the prune query orders by created_at desc.
+      const n = total - index;
+      return versionRow(
+        `version-${n}`,
+        `Plan ${n}.`,
+        `2026-11-14T00:${String(n).padStart(2, "0")}:00Z`
+      );
+    });
+
+    await applyOutlineRevision({
+      campaignId: "campaign-1",
+      outlineId: "outline-1",
+      currentText: "Latest plan.",
+      proposedText: "Even later plan.",
+    });
+
+    expect(state.inserted).toHaveLength(1);
+    // Two rows past the cap are pruned oldest-first; the newest 20 stay.
+    expect(state.deleted).toHaveLength(2);
+    expect(state.deleted).toContainEqual({
+      column: "id",
+      value: "version-2",
+    });
+    expect(state.deleted).toContainEqual({
+      column: "id",
+      value: "version-1",
+    });
   });
 });

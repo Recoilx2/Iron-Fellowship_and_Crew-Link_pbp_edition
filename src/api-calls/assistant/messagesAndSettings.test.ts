@@ -95,7 +95,7 @@ describe("assistant messages and settings", () => {
     await expect(
       addAssistantMessage({
         conversationId: "conversation-1",
-        role: "villain",
+        role: "villain" as unknown as "user",
         content: "Hello",
       })
     ).rejects.toThrow(/role/i);
