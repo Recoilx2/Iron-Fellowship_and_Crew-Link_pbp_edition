@@ -29,6 +29,7 @@ ENV_FILE="${ENV_FILE:-$ROOT/.env.live}"
 
 get_var() { grep -E "^$2=" "$1" | cut -d= -f2- || true; }
 
+export ENV_FILE
 export SUPABASE_URL="http://localhost:$(get_var "$ENV_FILE" API_GW_HTTP_PORT)"
 export SUPABASE_ANON_KEY="$(get_var "$ENV_FILE" ANON_KEY)"
 export SUPABASE_SERVICE_ROLE_KEY="$(get_var "$ENV_FILE" SERVICE_ROLE_KEY)"
