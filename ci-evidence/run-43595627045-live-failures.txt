@@ -1,0 +1,15 @@
+2026-11-14T12:39:08.4533057Z   message: [32m'permission denied for schema private'[39m
+2026-11-14T12:39:15.0606685Z   message: [32m'permission denied for schema private'[39m
+2026-11-14T12:39:16.1862016Z   message: [32m'permission denied for schema private'[39m
+2026-11-14T12:40:38.6554476Z [31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 4 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+2026-11-14T12:40:38.6556678Z [41m[1m FAIL [22m[49m src/api-calls/chat/momentumBurn.live.test.ts[2m > [22mchat momentum burn end to end[2m > [22mlets the author burn once with the recalculated outcome and resets momentum
+2026-11-14T12:40:38.6559208Z [31m[1mUnknown Error[22m: permission denied for schema private[39m
+2026-11-14T12:40:38.6560700Z [41m[1m FAIL [22m[49m src/api-calls/chat/momentumBurn.live.test.ts[2m > [22mchat momentum burn end to end[2m > [22mrefuses tampered burns at the database and leaves the row unchanged
+2026-11-14T12:40:38.6561808Z [31m[1mAssertionError[22m: expected { code: '42501', details: null, …(2) } to be null[39m
+2026-11-14T12:40:38.6563538Z   "message": "permission denied for schema private",
+2026-11-14T12:40:38.6638086Z [2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m20 passed[39m[22m[90m (21)[39m
+2026-11-14T12:40:38.6638808Z [2m      Tests [22m [1m[31m4 failed[39m[22m[2m | [22m[1m[32m126 passed[39m[22m[90m (130)[39m
+2026-11-14T12:40:38.6658171Z [41m[1m FAIL [22m[49m src/api-calls/chat/momentumBurn.live.test.ts[2m > [22mchat momentum burn end to end[2m > [22mrefuses a burn on an inactive character's roll and allows it again when active
+2026-11-14T12:40:38.6659076Z [31m[1mUnknown Error[22m: permission denied for schema private[39m
+2026-11-14T12:40:38.6660409Z [41m[1m FAIL [22m[49m src/api-calls/chat/momentumBurn.live.test.ts[2m > [22mchat momentum burn end to end[2m > [22mkeeps a GM-only roll GM-only after a burn
+2026-11-14T12:40:38.6661178Z [31m[1mUnknown Error[22m: permission denied for schema private[39m
