@@ -82,6 +82,8 @@ interface FakeOptions {
   chatChunks?: string[];
   stallChat?: boolean;
   failChatAfterChunks?: boolean;
+  /** Artificial pause between streamed chunks, to let heartbeats fire. */
+  chatDelayBetweenChunksMs?: number;
 }
 
 function makeFake(options: FakeOptions = {}): {
@@ -179,7 +181,7 @@ function makeFake(options: FakeOptions = {}): {
       }
       const encoder = new TextEncoder();
       const stream = new ReadableStream<Uint8Array>({
-        start(controller) {
+        async start(controller) {
           for (const chunk of chunks) {
             controller.enqueue(
               encoder.encode(
@@ -189,6 +191,11 @@ function makeFake(options: FakeOptions = {}): {
             if (options.failChatAfterChunks) {
               controller.error(new Error("upstream mid-stream boom"));
               return;
+            }
+            if (options.chatDelayBetweenChunksMs) {
+              await new Promise((resolve) =>
+                setTimeout(resolve, options.chatDelayBetweenChunksMs),
+              );
             }
           }
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
@@ -642,6 +649,31 @@ describe("gm assistant chat endpoint", () => {
     expect(
       ((partial?.body as { content: string }).content ?? "").length,
     ).toBeGreaterThan(0);
+  });
+
+  it("sends SSE comment heartbeats while the upstream is slow", async () => {
+    // A stalled upstream sends nothing, so a hung-up browser is only noticed
+    // on the next write: the handler emits `: ping` comment heartbeats to
+    // keep the stream alive (and to defeat proxy idle timeouts). Parsers
+    // must skip them, so only real content reaches the reply.
+    const { fetchImpl } = makeFake({
+      chatChunks: ["Hello", " world"],
+      chatDelayBetweenChunksMs: 120,
+    });
+    const handle = createGmAssistantHandler(baseEnv(), fetchImpl, {
+      heartbeatMs: 30,
+    });
+    const res = await handle(
+      chatRequest({ conversationId: CONVERSATION_ID, message: "slow please" }),
+    );
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain(": ping");
+    expect(text).toContain("data: [DONE]");
+    expect(await readSseContents(new Response(text))).toEqual([
+      "Hello",
+      " world",
+    ]);
   });
 
   it("turns an upstream chat failure into a generic error", async () => {

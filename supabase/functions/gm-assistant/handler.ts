@@ -48,6 +48,19 @@ export type UpstreamFetch = (
   init?: RequestInit,
 ) => Promise<Response>;
 
+/** Handler options; `heartbeatMs` is a test seam, production uses the default. */
+export interface GmAssistantHandlerOptions {
+  /**
+   * Milliseconds between SSE comment heartbeats (`: ping`) while a reply
+   * streams. Heartbeats let the runtime notice a hung-up browser even when
+   * the upstream sends nothing, and they defeat proxy idle timeouts on slow
+   * models. Browsers and the repo's SSE parsers ignore comment lines.
+   */
+  heartbeatMs?: number;
+}
+
+const DEFAULT_HEARTBEAT_MS = 3000;
+
 const UUID_PATTERN =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
@@ -496,6 +509,7 @@ async function handleChat(
   caller: VerifiedCaller,
   callerToken: string,
   fetchImpl: UpstreamFetch,
+  options?: GmAssistantHandlerOptions,
 ): Promise<Response> {
   let parsed: unknown;
   try {
@@ -668,19 +682,57 @@ async function handleChat(
     );
   };
 
+  const rawHeartbeat = options?.heartbeatMs ?? DEFAULT_HEARTBEAT_MS;
+  const heartbeatMs =
+    Number.isFinite(rawHeartbeat) && rawHeartbeat > 0
+      ? rawHeartbeat
+      : DEFAULT_HEARTBEAT_MS;
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
+  const stopHeartbeat = (): void => {
+    if (heartbeat !== undefined) {
+      clearInterval(heartbeat);
+      heartbeat = undefined;
+    }
+  };
+  // Assigned when the stream starts; lets `cancel()` unblock a parked
+  // `reader.read()` even where aborting the upstream fetch is not enough.
+  let cancelReader: (() => void) | undefined;
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const encoder = new TextEncoder();
       const reader = upstream.body!.getReader();
+      cancelReader = (): void => {
+        reader.cancel().catch(() => undefined);
+      };
       const decoder = new TextDecoder();
       let buffer = "";
       let reply = "";
       let clientGone = false;
+      // The runtime only learns that the browser hung up when the function
+      // next writes, so a stalled upstream would leave this stream parked in
+      // `reader.read()` forever. Heartbeat comments force a write every few
+      // seconds: after a hang-up the write fails (or the runtime cancels the
+      // stream), `cancel()` aborts the upstream, and the partial reply is
+      // saved as stopped.
       const onAbort = (): void => {
         clientGone = true;
         upstreamAbort.abort();
+        stopHeartbeat();
+        cancelReader?.();
       };
       req.signal.addEventListener("abort", onAbort, { once: true });
+      heartbeat = setInterval(() => {
+        if (clientGone) return;
+        try {
+          controller.enqueue(encoder.encode(": ping\n\n"));
+        } catch {
+          onAbort();
+        }
+      }, heartbeatMs);
+      // Test runners (Node) hold the process for active intervals; the
+      // Edge Runtime has no `unref`, so this is a no-op there.
+      (heartbeat as unknown as { unref?: () => void }).unref?.();
       const enqueue = (text: string): void => {
         try {
           controller.enqueue(encoder.encode(text));
@@ -719,6 +771,8 @@ async function handleChat(
       } catch {
         clientGone = true;
       } finally {
+        stopHeartbeat();
+        cancelReader = undefined;
         req.signal.removeEventListener("abort", onAbort);
         try {
           if (!clientGone) enqueue("data: [DONE]\n\n");
@@ -730,7 +784,12 @@ async function handleChat(
       }
     },
     cancel() {
+      // Fires when the runtime drops the response stream (browser hang-up
+      // noticed on a heartbeat write). Abort the upstream so the fake (and
+      // the live test) observes the hang-up and the partial reply is kept.
+      stopHeartbeat();
       upstreamAbort.abort();
+      cancelReader?.();
     },
   });
 
@@ -745,6 +804,7 @@ async function handleChat(
 export function createGmAssistantHandler(
   env: GmAssistantEnv,
   fetchImpl: UpstreamFetch = fetch,
+  options?: GmAssistantHandlerOptions,
 ): (req: Request) => Promise<Response> {
   return async (req: Request): Promise<Response> => {
     const url = new URL(req.url);
@@ -781,7 +841,7 @@ export function createGmAssistantHandler(
       return handleModels(req, env, caller, callerToken, fetchImpl);
     }
     if (req.method === "POST" && url.pathname === "/gm-assistant/chat") {
-      return handleChat(req, env, caller, callerToken, fetchImpl);
+      return handleChat(req, env, caller, callerToken, fetchImpl, options);
     }
     const headers = corsHeaders(req, env);
     headers.set("Content-Type", "application/json");
