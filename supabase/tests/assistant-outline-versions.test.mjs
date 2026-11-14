@@ -87,4 +87,19 @@ describe("assistant outline versions migration (#133)", () => {
       "versions are not added to the realtime publication"
     );
   });
+
+  it("allows the versions live-update channel for signed-in listeners", () => {
+    const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "realtime-auth");
+    const files = readdirSync(dir)
+      .filter((f) => /^\d{14}_realtime_assistant.*\.sql$/.test(f))
+      .sort();
+    assert.ok(files.length > 0, "no realtime assistant allowlist file");
+    // The allowlist is replaced by the latest file in filename order, so
+    // the latest one must name the versions channel family.
+    const latest = readFileSync(join(dir, files.at(-1)), "utf8");
+    assert.ok(
+      /'assistant-outline-versions%'/.test(latest),
+      "the realtime allowlist does not name assistant-outline-versions"
+    );
+  });
 });
