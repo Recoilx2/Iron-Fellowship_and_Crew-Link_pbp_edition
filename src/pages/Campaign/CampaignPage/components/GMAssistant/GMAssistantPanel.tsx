@@ -23,8 +23,11 @@ import SendIcon from "@mui/icons-material/Send";
 import StopIcon from "@mui/icons-material/Stop";
 import ComposerIcon from "@mui/icons-material/Reply";
 import {
+  fetchAssistantContextSize,
+  approximateTokensForChars,
   fetchAssistantModels,
   streamAssistantChat,
+  type AssistantContextSize,
   type AssistantModelOption,
 } from "api-calls/assistant/gmAssistantClient";
 import {
@@ -35,6 +38,8 @@ import { listenToConversations } from "api-calls/assistant/listenToConversations
 import { listenToMessages } from "api-calls/assistant/listenToMessages";
 import { createConversation } from "api-calls/assistant/createConversation";
 import { deleteConversation } from "api-calls/assistant/deleteConversation";
+import { ContextSizeBar } from "./ContextSizeBar";
+import { ContextTab } from "./ContextTab";
 import { OutlineTab } from "./OutlineTab";
 import { useStore } from "stores/store";
 import type {
@@ -43,6 +48,7 @@ import type {
 } from "api-calls/assistant/_assistant.type";
 import {
   emptyAssistantContextChoice,
+  type AssistantContextChoice,
   type AssistantSettingsDocument,
 } from "api-calls/assistant/_assistant.type";
 
@@ -55,16 +61,19 @@ interface ModelsFailure {
 }
 
 /**
- * The GM assistant panel, variant A from #7 (tickets #130-#131): a header
- * with the title, the model picker and a close button, then Chat, Context
- * and Outline tabs. The Chat tab streams the assistant and the Outline tab
- * edits the campaign's one GM-only outline; Context stays a disabled
- * placeholder until its ticket lands.
+ * The GM assistant panel, variant A from #7 (tickets #130-#132): a header
+ * with the title, the model picker and a close button, a size bar showing
+ * the approximate total against the chosen model's context size, then Chat,
+ * Context and Outline tabs. The Chat tab streams the assistant, the
+ * Context tab holds the saved context choice, and the Outline tab edits
+ * the campaign's one GM-only outline.
  *
  * The model list comes from the server; the GM's choice is saved to
- * assistant_settings beside their saved context choice. When the server
- * has no model server the panel says so plainly, and every other failure
- * shows a short generic message with the reference code.
+ * assistant_settings beside their saved context choice. Sizes come from
+ * the server too (the same code the chat path builds text with), with the
+ * conversation overhead estimated beside it. When the server has no model
+ * server the panel says so plainly, and every other failure shows a short
+ * generic message with the reference code.
  */
 export function GMAssistantPanel(props: {
   campaignId: string;
@@ -76,6 +85,8 @@ export function GMAssistantPanel(props: {
   const [settings, setSettings] = useState<AssistantSettingsDocument | null>(
     null
   );
+  const [size, setSize] = useState<AssistantContextSize | null>(null);
+  const [conversationTokens, setConversationTokens] = useState(0);
   const [failure, setFailure] = useState<ModelsFailure | null>(null);
   const [reloads, setReloads] = useState(0);
 
@@ -124,6 +135,46 @@ export function GMAssistantPanel(props: {
     models?.find((model) => model.id === settings?.model)?.id ??
     models?.[0]?.id ??
     "";
+  const budgetTokens =
+    models?.find((model) => model.id === currentModel)?.contextTokens ?? null;
+  const totalTokens =
+    (size?.totalTokens ?? 0) +
+    (size?.instructionTokens ?? 0) +
+    conversationTokens;
+
+  // Sizes come from the server (the same code the chat path builds text
+  // with), refreshed whenever the saved choice changes. A failure leaves
+  // the last sizes up rather than hiding the bar.
+  useEffect(() => {
+    let cancelled = false;
+    fetchAssistantContextSize(campaignId)
+      .then((loaded) => {
+        if (!cancelled) setSize(loaded);
+      })
+      .catch(() => {
+        if (!cancelled) setSize(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId, settings?.context, tab]);
+
+  const saveContext = (context: AssistantContextChoice): void => {
+    const previous = settings;
+    const next: AssistantSettingsDocument = {
+      model: settings?.model ?? null,
+      context,
+      updatedAt: new Date().toISOString(),
+    };
+    setSettings(next);
+    saveAssistantSettings({
+      campaignId,
+      model: next.model,
+      context: next.context,
+    }).catch(() => {
+      setSettings(previous);
+    });
+  };
 
   const pickModel = (id: string): void => {
     const previous = settings;
@@ -181,6 +232,11 @@ export function GMAssistantPanel(props: {
           <CloseIcon />
         </IconButton>
       </Stack>
+      <ContextSizeBar
+        totalTokens={totalTokens}
+        budgetTokens={budgetTokens}
+        onEdit={() => setTab("context")}
+      />
       <Tabs
         value={tab}
         onChange={(_, next: AssistantTab) => setTab(next)}
@@ -189,13 +245,7 @@ export function GMAssistantPanel(props: {
         sx={{ minHeight: 40 }}
       >
         <Tab value={"chat"} label={"Chat"} sx={{ minHeight: 40 }} />
-        <Tab
-          value={"context"}
-          label={"Context"}
-          disabled
-          title={"Coming in a later ticket"}
-          sx={{ minHeight: 40 }}
-        />
+        <Tab value={"context"} label={"Context"} sx={{ minHeight: 40 }} />
         <Tab
           value={"outline"}
           label={"Outline"}
@@ -218,11 +268,21 @@ export function GMAssistantPanel(props: {
             models={models}
             failure={failure}
             currentModel={currentModel}
+            onTokenEstimate={setConversationTokens}
             onRetry={() => {
               setFailure(null);
               setModels(null);
               setReloads((count) => count + 1);
             }}
+          />
+        )}
+        {tab === "context" && (
+          <ContextTab
+            campaignId={campaignId}
+            context={settings?.context ?? emptyAssistantContextChoice()}
+            size={size}
+            conversationTokens={conversationTokens}
+            onSave={saveContext}
           />
         )}
         {tab === "outline" && <OutlineTab campaignId={campaignId} />}
@@ -236,9 +296,10 @@ function ChatTab(props: {
   models: AssistantModelOption[] | null;
   failure: ModelsFailure | null;
   currentModel: string;
+  onTokenEstimate: (tokens: number) => void;
   onRetry: () => void;
 }) {
-  const { campaignId, models, failure, currentModel, onRetry } = props;
+  const { campaignId, models, failure, currentModel, onTokenEstimate, onRetry } = props;
   if (failure?.code === "NOT_SET_UP") {
     return (
       <Box sx={{ p: 2 }}>
@@ -273,11 +334,11 @@ function ChatTab(props: {
       </Box>
     );
   }
-  return <ConversationThread campaignId={campaignId} currentModel={currentModel} />;
+  return <ConversationThread campaignId={campaignId} currentModel={currentModel} onTokenEstimate={onTokenEstimate} />;
 }
 
-function ConversationThread(props: { campaignId: string; currentModel: string }) {
-  const { campaignId, currentModel } = props;
+function ConversationThread(props: { campaignId: string; currentModel: string; onTokenEstimate?: (tokens: number) => void }) {
+  const { campaignId, currentModel, onTokenEstimate } = props;
   const [conversations, setConversations] = useState<
     AssistantConversationWithId[]
   >([]);
@@ -294,6 +355,16 @@ function ConversationThread(props: { campaignId: string; currentModel: string })
 
   const openChannelId = useStore((store) => store.chat.openChannelId);
   const setDraft = useStore((store) => store.chat.setDraft);
+
+  // The size bar counts the open conversation beside the server-sized
+  // context and instructions, with the same character-to-token estimate.
+  useEffect(() => {
+    if (!onTokenEstimate) return;
+    const chars =
+      messages.reduce((sum, message) => sum + message.content.length, 0) +
+      (streamingText?.length ?? 0);
+    onTokenEstimate(approximateTokensForChars(chars));
+  }, [messages, streamingText, onTokenEstimate]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ block: "end" });
