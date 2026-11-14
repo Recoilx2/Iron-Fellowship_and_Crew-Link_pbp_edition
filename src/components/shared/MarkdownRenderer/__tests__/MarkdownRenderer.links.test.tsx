@@ -43,6 +43,31 @@ describe("MarkdownRenderer blocks unsafe link schemes (ticket #119)", () => {
   });
 });
 
+describe("MarkdownRenderer blocks encoded scheme variants (ticket #119 hardening)", () => {
+  it.each([
+    ["&colon; entity", "[click me](javascript&colon;alert(1))"],
+    ["numeric entity", "[click me](&#106;avascript:alert(1))"],
+    ["percent-encoded scheme", "[click me](%6Aavascript:alert(1))"],
+    ["leading control character", "[click me](<\u0001javascript:alert(1)>)"],
+    ["whitespace inside scheme", "[click me](<java\tscript:alert(1)>)"],
+    [
+      "percent-encoded whitespace inside scheme",
+      "[click me](java%09script:alert(1))",
+    ],
+  ])("%s renders with no clickable href", (_label, markdown) => {
+    const rendered = html(markdown);
+    // The link text survives, but no anchor carries the payload.
+    expect(rendered).toContain("click me");
+    expect(rendered).not.toMatch(/<a\b/i);
+  });
+
+  it("javascript autolink renders as plain text", () => {
+    const rendered = html("<javascript:foo>");
+    expect(rendered).toContain("javascript:foo");
+    expect(rendered).not.toMatch(/<a\b/i);
+  });
+});
+
 describe("MarkdownRenderer keeps safe links clickable (ticket #119)", () => {
   it.each([
     ["https:", "[site](https://example.com/map)"],

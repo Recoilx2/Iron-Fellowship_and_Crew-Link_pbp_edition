@@ -25,16 +25,102 @@ export interface MarkdownRendererProps {
 
 const SAFE_LINK_SCHEMES = new Set(["http", "https", "mailto", "datasworn"]);
 
+// Named HTML entities that can hide a link scheme. Numeric entities
+// (&#106;, &#x6A;, ...) are decoded by the patterns below.
+const NAMED_LINK_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  colon: ":",
+  Colon: ":",
+  Tab: "\t",
+  NewLine: "\n",
+  nbsp: "\u00a0",
+};
+
+/** Decode HTML entities so `javascript&colon;...` cannot hide its scheme. */
+function decodeLinkEntities(value: string): string {
+  return value
+    .replace(/&#([0-9]+);?/g, (match, digits: string) => {
+      const code = Number.parseInt(digits, 10);
+      if (!Number.isFinite(code) || code < 0 || code > 0x10ffff) {
+        return match;
+      }
+      try {
+        return String.fromCodePoint(code);
+      } catch {
+        return match;
+      }
+    })
+    .replace(/&#[xX]([0-9a-fA-F]+);?/g, (match, digits: string) => {
+      const code = Number.parseInt(digits, 16);
+      if (!Number.isFinite(code) || code < 0 || code > 0x10ffff) {
+        return match;
+      }
+      try {
+        return String.fromCodePoint(code);
+      } catch {
+        return match;
+      }
+    })
+    .replace(
+      /&([a-zA-Z]+);?/g,
+      (match, name: string) => NAMED_LINK_ENTITIES[name] ?? match,
+    );
+}
+
+/** Decode `%XX` escapes so `%6Aavascript:` cannot hide its scheme. */
+function decodeLinkPercents(value: string): string {
+  return value.replace(/%([0-9a-fA-F]{2})/g, (_match, hex: string) =>
+    String.fromCharCode(Number.parseInt(hex, 16)),
+  );
+}
+
+/**
+ * Strip characters browsers ignore inside URLs (ASCII whitespace, C0
+ * controls, DEL) so they cannot hide a scheme such as `java\tscript:`.
+ */
+function stripIgnoredLinkChars(value: string): string {
+  let out = "";
+  for (const char of value) {
+    const code = char.codePointAt(0) ?? 0;
+    if (code <= 0x1f || code === 0x7f || /\s/.test(char)) {
+      continue;
+    }
+    out += char;
+  }
+  return out;
+}
+
 /**
  * Lowercased scheme of a link target, or null when the target is relative.
- * All whitespace is stripped before the check because browsers drop
- * tab and newline characters from URLs, which would otherwise hide a scheme
- * such as `java\tscript:` from a plain prefix test.
+ * Any colon that comes before the first `/`, `?` or `#` starts a scheme,
+ * and only schemes on the allow-list are safe. Entities and percent-escapes
+ * are decoded first and whitespace/control characters are stripped because
+ * browsers ignore them, which would otherwise hide schemes such as
+ * `%6Aavascript:`, `java%09script:` or a leading control character.
  */
 function linkScheme(href: string): string | null {
-  const compact = href.replace(/\s+/g, "");
-  const match = compact.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);
-  return match ? match[1].toLowerCase() : null;
+  let compact = href;
+  for (let i = 0; i < 5; i += 1) {
+    const next = decodeLinkPercents(decodeLinkEntities(compact));
+    if (next === compact) {
+      break;
+    }
+    compact = next;
+  }
+  compact = stripIgnoredLinkChars(compact);
+  const colon = compact.indexOf(":");
+  if (colon === -1) {
+    return null;
+  }
+  const delimiter = compact.search(/[/?#]/);
+  if (delimiter !== -1 && delimiter < colon) {
+    return null;
+  }
+  return compact.slice(0, colon).toLowerCase();
 }
 
 /**
