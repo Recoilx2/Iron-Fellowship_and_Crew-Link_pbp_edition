@@ -37,6 +37,29 @@ type ContentsClient = Pick<
 >;
 
 /**
+ * Reads the outline's raw note-server bytes, or null when no row is
+ * stored yet. The Outline tab uses it for a fresh "current" text at
+ * revision-request time, instead of trusting the live subscription's
+ * timing.
+ */
+export async function fetchOutlineContentBytes(
+  outlineId: string
+): Promise<Uint8Array | null> {
+  const { data, error } = await getSupabaseClient()
+    .from(CAMPAIGN_NOTE_CONTENTS_TABLE)
+    .select("content")
+    .eq("note_id", outlineId);
+  if (error) {
+    throw error;
+  }
+  const stored = (data?.[0] as { content?: unknown } | undefined)?.content;
+  if (typeof stored !== "string" || !stored) {
+    return null;
+  }
+  return decodeNoteContent(stored);
+}
+
+/**
  * Replaces the outline's body text in the note-server bytes, leaving every
  * other document root untouched. The surgery runs on the stored bytes (a
  * second collaborator replacing text, in Yjs terms), so an open editor
@@ -56,16 +79,8 @@ async function replaceOutlineContents(
     throw readError;
   }
   const stored = (data?.[0] as { content?: unknown } | undefined)?.content;
-  const storedBytes = (() => {
-    if (typeof stored === "string" && stored) {
-      try {
-        return decodeNoteContent(stored);
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  })();
+  const storedBytes =
+    typeof stored === "string" && stored ? decodeNoteContent(stored) : null;
   const { error: writeError } = await client
     .from(CAMPAIGN_NOTE_CONTENTS_TABLE)
     .upsert({

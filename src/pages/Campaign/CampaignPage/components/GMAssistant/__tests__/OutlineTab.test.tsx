@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ThemeProvider, createTheme } from "@mui/material";
+import * as Y from "yjs";
 
 vi.mock("api-calls/notes/campaignOutline", () => ({
   getOrCreateCampaignOutline: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock("api-calls/assistant/listenToOutlineVersions", () => ({
 }));
 vi.mock("api-calls/assistant/outlineVersions", () => ({
   applyOutlineRevision: vi.fn(),
+  fetchOutlineContentBytes: vi.fn(),
   undoOutlineRevision: vi.fn(),
 }));
 vi.mock("api-calls/assistant/gmAssistantClient", () => ({
@@ -77,6 +79,7 @@ import { listenToNoteContent } from "api-calls/notes/listenToNoteContent";
 import { listenToOutlineVersions } from "api-calls/assistant/listenToOutlineVersions";
 import {
   applyOutlineRevision,
+  fetchOutlineContentBytes,
   undoOutlineRevision,
 } from "api-calls/assistant/outlineVersions";
 import { createConversation } from "api-calls/assistant/createConversation";
@@ -130,6 +133,11 @@ describe("OutlineTab", () => {
       text: "<<<OUTLINE-BEGIN>>>\nAct one revised.\n<<<OUTLINE-END>>>",
       aborted: false,
     });
+    const currentDoc = new Y.Doc();
+    currentDoc.getText("body").insert(0, "Act one: the bell rings.");
+    vi.mocked(fetchOutlineContentBytes).mockResolvedValue(
+      Y.encodeStateAsUpdate(currentDoc)
+    );
     vi.mocked(applyOutlineRevision).mockResolvedValue("version-1");
     vi.mocked(undoOutlineRevision).mockResolvedValue("Act one: the bell rings.");
   });
@@ -256,9 +264,11 @@ describe("OutlineTab", () => {
         mode: "outline-revision",
       })
     );
-    // The reply previews current and proposed side by side.
+    // The reply previews current and proposed side by side; the
+    // current side is read fresh from the note server.
     expect(view.textContent).toContain("Current outline");
     expect(view.textContent).toContain("Proposed outline");
+    expect(view.textContent).toContain("Act one: the bell rings.");
     expect(view.textContent).toContain("Act one revised.");
 
     // Applying from the preview keeps the replaced text and replaces the
@@ -279,7 +289,7 @@ describe("OutlineTab", () => {
     expect(applyOutlineRevision).toHaveBeenCalledWith({
       campaignId: "campaign-1",
       outlineId: "outline-1",
-      currentText: "",
+      currentText: "Act one: the bell rings.",
       proposedText: "Act one revised.",
     });
   });

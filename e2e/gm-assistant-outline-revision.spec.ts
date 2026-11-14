@@ -52,12 +52,6 @@ function resolveEnvFile(value: string): string {
   return resolve(dirname(__dirname), "supabase", basename(value));
 }
 
-function yjsB64(text: string): string {
-  const doc = new Y.Doc();
-  doc.getText("body").insert(0, text);
-  return Buffer.from(Y.encodeStateAsUpdate(doc)).toString("base64");
-}
-
 function yjsToText(content: string): string {
   const doc = new Y.Doc();
   Y.applyUpdate(doc, new Uint8Array(Buffer.from(content, "base64")));
@@ -178,19 +172,21 @@ test.describe("outline revisions", () => {
       await expect(gmPage.getByRole("tab", { name: "Chat" })).toBeVisible();
       await openOutlineTab(gmPage);
 
-      // Seed the outline through the data layer, then reopen so the
-      // editor reads it fresh.
-      const id = await outlineId();
-      const { error: seedError } = await gm.client
-        .from("campaign_note_contents")
-        .upsert({ note_id: id, content: yjsB64(ORIGINAL) });
-      expect(seedError).toBeNull();
-      await gmPage.reload();
-      await expect(gmPage.getByRole("tab", { name: "Chat" })).toBeVisible();
-      await openOutlineTab(gmPage);
-      await expect(
-        gmPage.getByRole("textbox", { name: "Note text" })
-      ).toContainText(ORIGINAL);
+      // Seed the outline by typing into the editor: the text travels
+      // through the note server (the only writer its persisted store
+      // trusts), unlike a direct row upsert, which the server's next
+      // store would clobber with the empty document it already holds.
+      const editor = gmPage.getByRole("textbox", { name: "Note text" });
+      await expect(editor).toBeVisible();
+      await editor.click();
+      await gmPage.keyboard.type(ORIGINAL);
+      await expect(editor).toContainText(ORIGINAL);
+
+      // Wait until the typed text reaches the contents row before
+      // revising, so the preview's "current" side is exact.
+      await expect
+        .poll(() => outlineContents(), { timeout: 30000 })
+        .toBe(ORIGINAL);
 
       // An explicit revision action sends the instruction in
       // outline-revision mode; the reply previews both versions.
@@ -212,7 +208,8 @@ test.describe("outline revisions", () => {
       ).toContainText(PROPOSED);
 
       // Apply needs confirmation; only confirming replaces the outline
-      // and keeps the previous version.
+      // and keeps the previous version. The open editor moves onto the
+      // replacement at once.
       await gmPage.getByRole("button", { name: "Apply to outline" }).click();
       await expect(
         gmPage.getByText("Replace the outline?")
@@ -221,6 +218,9 @@ test.describe("outline revisions", () => {
       await gmPage.getByRole("button", { name: "Confirm replace" }).click();
       await expect(gmPage.getByText("Applied.")).toBeVisible();
       expect(await outlineContents()).toBe(PROPOSED);
+      await expect(
+        gmPage.getByRole("textbox", { name: "Note text" })
+      ).toContainText(PROPOSED);
       const { data: versions, error: versionsError } = await gm.client
         .from("assistant_outline_versions")
         .select("content")
@@ -232,9 +232,13 @@ test.describe("outline revisions", () => {
         )
       ).toEqual([ORIGINAL]);
 
-      // The Outline tab's Undo restores the previous version.
+      // The Outline tab's Undo restores the previous version, and the
+      // editor moves back onto it at once.
       await gmPage.getByRole("button", { name: "Undo outline revision" }).click();
       expect(await outlineContents()).toBe(ORIGINAL);
+      await expect(
+        gmPage.getByRole("textbox", { name: "Note text" })
+      ).toContainText(ORIGINAL);
       const { data: kept, error: keptError } = await gm.client
         .from("assistant_outline_versions")
         .select("id")

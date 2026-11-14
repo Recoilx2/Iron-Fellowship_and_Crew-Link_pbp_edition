@@ -11,12 +11,16 @@ import {
 import { updateNote } from "api-calls/notes/updateNote";
 import { getCampaignNoteDocumentName } from "config/hocuspocus.config";
 import { RtcRichTextEditor } from "components/shared/RichTextEditor/RtcRichTextEditor";
+import { decodeOutlineBytes } from "api-calls/assistant/outlineText";
 import { createConversation } from "api-calls/assistant/createConversation";
 import {
   extractOutlineProposal,
   streamAssistantChat,
 } from "api-calls/assistant/gmAssistantClient";
-import { undoOutlineRevision } from "api-calls/assistant/outlineVersions";
+import {
+  fetchOutlineContentBytes,
+  undoOutlineRevision,
+} from "api-calls/assistant/outlineVersions";
 import { listenToOutlineVersions } from "api-calls/assistant/listenToOutlineVersions";
 import { useOutlineDocument } from "./useOutlineDocument";
 import { OutlineRevision } from "./OutlineRevision";
@@ -41,11 +45,12 @@ import { OutlineRevision } from "./OutlineRevision";
  */
 export function OutlineTab(props: { campaignId: string }) {
   const { campaignId } = props;
-  const { outlineId, bytes, text, loaded, failed, reload } =
+  const { outlineId, bytes, text, loaded, failed, reload, overrideBytes } =
     useOutlineDocument(campaignId);
   const [versions, setVersions] = useState(0);
   const [undoing, setUndoing] = useState(false);
   const [undoError, setUndoError] = useState<string | null>(null);
+  const [editorEpoch, setEditorEpoch] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [requesting, setRequesting] = useState(false);
@@ -96,10 +101,13 @@ export function OutlineTab(props: { campaignId: string }) {
     if (!trimmed || requesting || !outlineId) {
       return;
     }
-    const current = text;
     setRequesting(true);
     setRevisionError(null);
     try {
+      // The "current" side is read fresh from the note server, so the
+      // preview never shows a stale subscription value.
+      const stored = await fetchOutlineContentBytes(outlineId).catch(() => null);
+      const current = stored ? decodeOutlineBytes(stored) : text;
       const conversationId = await createConversation({ campaignId });
       const result = await streamAssistantChat({
         conversationId,
@@ -125,6 +133,23 @@ export function OutlineTab(props: { campaignId: string }) {
     }
   };
 
+  // Moves the open editor onto replaced text at once (after the GM's
+  // Apply or Undo): the bytes are re-read from the row the data layer
+  // just wrote -- never recomputed from possibly stale subscription
+  // bytes, which would merge as duplicated text -- and the remounted
+  // provider syncs them to the note server, so its next persisted store
+  // keeps the replacement instead of resurrecting what it held before.
+  const moveEditorTo = async (): Promise<void> => {
+    const fresh = await fetchOutlineContentBytes(outlineId ?? "").catch(
+      () => null
+    );
+    if (fresh) {
+      overrideBytes(fresh);
+    }
+    setEditorEpoch((epoch) => epoch + 1);
+    reload();
+  };
+
   const undo = async (): Promise<void> => {
     if (undoing || !outlineId) {
       return;
@@ -133,7 +158,7 @@ export function OutlineTab(props: { campaignId: string }) {
     setUndoError(null);
     try {
       await undoOutlineRevision({ campaignId, outlineId });
-      reload();
+      await moveEditorTo();
     } catch {
       setUndoError("The revision couldn't be undone. Nothing was changed.");
     } finally {
@@ -265,11 +290,13 @@ export function OutlineTab(props: { campaignId: string }) {
             current={preview.current}
             proposed={preview.proposed}
             onDiscard={() => setPreview(null)}
+            onReplaced={() => void moveEditorTo()}
           />
         </Box>
       )}
       <Box sx={{ flexGrow: 1, minHeight: 0, display: "flex" }}>
         <RtcRichTextEditor
+          key={`${outlineId}:${editorEpoch}`}
           id={outlineId}
           documentName={getCampaignNoteDocumentName(outlineId)}
           initialValue={bytes ?? undefined}

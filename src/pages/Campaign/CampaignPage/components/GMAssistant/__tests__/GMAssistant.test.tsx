@@ -184,6 +184,7 @@ describe("GMAssistant model picker", () => {
       loaded: true,
       failed: false,
       reload: () => {},
+      overrideBytes: () => {},
     });
     mockViewport(1400);
     state.auth.uid = "gm-1";
@@ -316,6 +317,7 @@ describe("GMAssistant gating", () => {
       loaded: true,
       failed: false,
       reload: () => {},
+      overrideBytes: () => {},
     });
     mockViewport(1400);
     state.auth.uid = "gm-1";
@@ -489,6 +491,7 @@ describe("GMAssistant chat thread", () => {
       loaded: true,
       failed: false,
       reload: () => {},
+      overrideBytes: () => {},
     });
     mockViewport(1400);
     state.auth.uid = "gm-1";
@@ -691,6 +694,7 @@ describe("GMAssistant streaming", () => {
       loaded: true,
       failed: false,
       reload: () => {},
+      overrideBytes: () => {},
     });
     mockViewport(1400);
     state.auth.uid = "gm-1";
@@ -922,6 +926,7 @@ describe("GMAssistant outline revisions", () => {
       loaded: true,
       failed: false,
       reload: () => {},
+      overrideBytes: () => {},
     });
     mockViewport(1400);
     state.auth.uid = "gm-1";

@@ -59,5 +59,11 @@ export function useOutlineDocument(campaignId: string) {
     loaded: outlineId !== null && bytes !== undefined,
     failed,
     reload: () => setReloads((n) => n + 1),
+    /**
+     * Replaces the known bytes without a round trip (after the GM's Apply
+     * or Undo already wrote them): the editor remounts onto the new text
+     * at once, and the note server converges through the usual sync.
+     */
+    overrideBytes: (next: Uint8Array) => setBytes(next),
   };
 }
