@@ -31,7 +31,7 @@ describe("chat momentum burn hardening migration (#125)", () => {
     // The GM-only pin (20261119000000) lands after #125 hardening by
     // design, so it is excluded here. The storage-privileges fix
     // (20261120000000) lands later still, as does the #128 assistant-tables
-    // migration (20261121000004).
+    // migration (20261121000004), and the #131 campaign outline (20261121000005).
     const landedLater = new Set([
       "20261119000000_chat_momentum_burn_gms_pin.sql",
       "20261120000000_chat_storage_privileges.sql",
@@ -40,6 +40,7 @@ describe("chat momentum burn hardening migration (#125)", () => {
       "20261121000002_campaign_swap_owner_guard.sql",
       "20261121000003_campaign_burn_campaign_match.sql",
       "20261121000004_assistant_conversations.sql",
+      "20261121000005_campaign_outline.sql",
     ]);
     const others = readdirSync(dir).filter(
       (f) =>

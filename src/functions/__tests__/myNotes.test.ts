@@ -81,6 +81,19 @@ describe("isMyNote", () => {
     ).toBe(false);
   });
 
+  it("drops the campaign outline even for the GM who authored it (#131)", () => {
+    // The outline lives in the assistant panel's Outline tab, never in a
+    // notes list: even its author (the GM who first opened it) must not
+    // see it under My notes.
+    expect(
+      isMyNote(
+        NoteSource.Campaign,
+        note({ shared: false, authorId: "gm-1", kind: "outline" }),
+        { uid: "gm-1" }
+      )
+    ).toBe(false);
+  });
+
   it("keeps nothing when nobody is signed in", () => {
     expect(
       isMyNote(NoteSource.Character, note({ shared: false }), {

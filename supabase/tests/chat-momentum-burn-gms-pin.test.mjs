@@ -30,7 +30,7 @@ describe("chat momentum burn GM-only pin (#125 follow-up)", () => {
       "GM-only pin must sort later than the 20261118000000 hardening"
     );
     // Migrations that landed after the pin (the 20261120000000
-    // storage-privileges fix, and the #128 assistant tables) sort later by
+    // storage-privileges fix, the #128 assistant tables, and the #131 campaign outline) sort later by
     // design, so they are excluded here.
     const landedLater = new Set([
       "20261120000000_chat_storage_privileges.sql",
@@ -39,6 +39,7 @@ describe("chat momentum burn GM-only pin (#125 follow-up)", () => {
       "20261121000002_campaign_swap_owner_guard.sql",
       "20261121000003_campaign_burn_campaign_match.sql",
       "20261121000004_assistant_conversations.sql",
+      "20261121000005_campaign_outline.sql",
     ]);
     const others = readdirSync(dir).filter(
       (f) =>

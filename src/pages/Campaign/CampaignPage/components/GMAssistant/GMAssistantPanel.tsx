@@ -35,6 +35,7 @@ import { listenToConversations } from "api-calls/assistant/listenToConversations
 import { listenToMessages } from "api-calls/assistant/listenToMessages";
 import { createConversation } from "api-calls/assistant/createConversation";
 import { deleteConversation } from "api-calls/assistant/deleteConversation";
+import { OutlineTab } from "./OutlineTab";
 import { useStore } from "stores/store";
 import type {
   AssistantConversationWithId,
@@ -54,10 +55,11 @@ interface ModelsFailure {
 }
 
 /**
- * The GM assistant panel, variant A from #7 (ticket #130): a header with
- * the title, the model picker and a close button, then Chat, Context and
- * Outline tabs. Only the Chat tab works in this ticket; Context and
- * Outline stay disabled placeholders until their tickets land.
+ * The GM assistant panel, variant A from #7 (tickets #130-#131): a header
+ * with the title, the model picker and a close button, then Chat, Context
+ * and Outline tabs. The Chat tab streams the assistant and the Outline tab
+ * edits the campaign's one GM-only outline; Context stays a disabled
+ * placeholder until its ticket lands.
  *
  * The model list comes from the server; the GM's choice is saved to
  * assistant_settings beside their saved context choice. When the server
@@ -197,8 +199,6 @@ export function GMAssistantPanel(props: {
         <Tab
           value={"outline"}
           label={"Outline"}
-          disabled
-          title={"Coming in a later ticket"}
           sx={{ minHeight: 40 }}
         />
       </Tabs>
@@ -225,6 +225,7 @@ export function GMAssistantPanel(props: {
             }}
           />
         )}
+        {tab === "outline" && <OutlineTab campaignId={campaignId} />}
       </Box>
     </Box>
   );

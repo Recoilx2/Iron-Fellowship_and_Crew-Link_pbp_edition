@@ -80,6 +80,8 @@ export interface CampaignNoteRow {
   campaign_id: string;
   title: string;
   shared: boolean;
+  /** `note` or `outline` (ticket #131): the one GM-only campaign outline. */
+  kind: string;
   sort_order: number;
   created_by: string | null;
   created_at: string;
