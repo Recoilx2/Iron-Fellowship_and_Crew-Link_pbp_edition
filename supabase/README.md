@@ -86,6 +86,44 @@ checked against that note; unsharing (or deleting) a note closes the
 connections of everyone who just lost access. See `hocuspocus/README.md`.
 Memory is capped with `HOCUSPOCUS_MEMORY_LIMIT` (default 256m).
 
+## GM assistant model proxy
+
+The GM assistant (spec #10) reaches the model through the `gm-assistant`
+server function, which proxies to one operator-configured OpenAI-compatible
+endpoint and streams the reply back. Browsers never see the key: the function
+holds it server-side, talks to the database only with the caller's own
+access token, and every failure the browser sees is a generic message plus a
+reference code (the detail stays in the function logs, never with the key).
+CORS answers only the copy's own `SITE_URL` origin, and the system prompt
+names the copy's `GAME_SYSTEM`.
+
+Configure it in the copy's env file (all four live beside the other
+assistant settings in `.env.example`):
+
+| Variable | What it is |
+|---|---|
+| `GM_ASSISTANT_ENDPOINT` | Base URL of the chat-completions API, e.g. `https://api.openai.com/v1`. Blank (the default) disables the assistant: it reports "not set up on this server". |
+| `GM_ASSISTANT_API_KEY` | Server-side key, sent only to the endpoint. Never commit it, never log it. |
+| `GM_ASSISTANT_ALLOWED_MODELS` | Optional comma-separated allow-list of model ids; blank means every model the endpoint lists. |
+| `GM_ASSISTANT_CONTEXT_TOKENS` | Fallback context size for models whose listing reports none (OpenRouter reports `context_length` per model); blank means 8192. The settings screen uses these sizes for its too-big warning. |
+
+After changing any of these, restart the copy (`up -d`) so the functions
+container picks them up.
+
+Examples:
+
+- **OpenAI:** endpoint `https://api.openai.com/v1`, key `sk-...`, allow-list
+  e.g. `gpt-4o-mini`.
+- **OpenRouter:** endpoint `https://openrouter.ai/api/v1`, key `sk-or-v1-...`.
+  Model ids are the OpenRouter slugs, and each model reports its own context
+  size.
+- **Local Ollama:** run `ollama serve` on the host and pull a model
+  (`ollama pull llama3.1`), then set the endpoint to
+  `http://host.docker.internal:11434/v1`; no key is needed (the proxy sends
+  no credentials when the key is blank). Model ids are the Ollama names
+  (`llama3.1`), and they use the fallback context size above because
+  Ollama's model list reports none.
+
 ## Backup and restore
 
 Back up one copy at a time (example: Ironsworn):

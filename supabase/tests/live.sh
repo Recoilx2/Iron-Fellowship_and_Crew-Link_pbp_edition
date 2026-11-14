@@ -31,6 +31,12 @@ export SUPABASE_SERVICE_ROLE_KEY="$(get_var "$ENV_FILE" SERVICE_ROLE_KEY)"
 # The data-layer singleton reads its own variables.
 export VITE_SUPABASE_URL="$SUPABASE_URL"
 export VITE_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+# Function tests (the GM assistant proxy) need the copy's env file and site
+# URL: the env file locates the compose project for container updates, and
+# the site URL is the only origin the function answers CORS for.
+export LIVE_ENV_FILE="$(cd "$(dirname "$ENV_FILE")" && pwd)/$(basename "$ENV_FILE")"
+export LIVE_SITE_URL="$(get_var "$ENV_FILE" SITE_URL)"
+export LIVE_GAME_SYSTEM="$(get_var "$ENV_FILE" GAME_SYSTEM)"
 
 [ -n "$SUPABASE_ANON_KEY" ] && [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] \
   || { echo "live: ANON_KEY and SERVICE_ROLE_KEY must be set in $ENV_FILE" >&2; exit 1; }
