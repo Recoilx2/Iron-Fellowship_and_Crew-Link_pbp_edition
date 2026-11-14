@@ -31,7 +31,17 @@ ENV VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
 ENV VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
 ENV VITE_CHAT_IMAGE_MAX_MB=${VITE_CHAT_IMAGE_MAX_MB}
 RUN npm run build
+# Record the baked client cap for the start-time agreement check: the site
+# entrypoint compares this against the runtime CHAT_IMAGE_MAX_MB (which the
+# bucket follows) and fails the start when they disagree.
+RUN echo -n "${VITE_CHAT_IMAGE_MAX_MB:-10}" > ./dist/chat-image-max-mb.txt
 
 FROM nginx:1.27-alpine
 COPY supabase/site/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
+# Fail the container start when the built client's cap disagrees with the
+# deployment setting the bucket follows (ticket #118).
+COPY supabase/site/check-image-cap.sh /check-image-cap.sh
+RUN chmod +x /check-image-cap.sh
+ENTRYPOINT ["/check-image-cap.sh"]
+CMD ["nginx", "-g", "daemon off;"]

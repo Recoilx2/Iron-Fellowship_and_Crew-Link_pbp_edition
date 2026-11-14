@@ -30,12 +30,14 @@ describe("chat image access rules (#118)", () => {
     // Migrations that landed after #118 (e.g. #120 roll cleanup,
     // 20261115000000, #125 momentum burn, 20261116000000, and #118 image
     // hardening, 20261117000000) sort later by design, so they are
-    // excluded here.
+    // excluded here. The #125 burn hardening (20261118000000) and its
+    // GM-only pin (20261119000000) land later still.
     const landedLater = new Set([
       "20261115000000_chat_roll_cleanup.sql",
       "20261116000000_chat_momentum_burn.sql",
       "20261117000000_chat_image_hardening.sql",
       "20261118000000_chat_momentum_burn_hardening.sql",
+      "20261119000000_chat_momentum_burn_gms_pin.sql",
     ]);
     const others = readdirSync(migrationsDir).filter(
       (f) => /^\d{14}_/.test(f) && f !== accessFile() && !landedLater.has(f)

@@ -28,10 +28,16 @@ describe("chat momentum burn hardening migration (#125)", () => {
       /^\d{14}_chat_momentum_burn_hardening\.sql$/
     );
     const stamp = hardeningFile().slice(0, 14);
-    // Hardening lands after the base burn migration, so every other
-    // migration sorts earlier.
+    // The GM-only pin (20261119000000) lands after #125 hardening by
+    // design, so it is excluded here.
+    const landedLater = new Set([
+      "20261119000000_chat_momentum_burn_gms_pin.sql",
+    ]);
     const others = readdirSync(dir).filter(
-      (f) => /^\d{14}_/.test(f) && f !== hardeningFile()
+      (f) =>
+        /^\d{14}_/.test(f) &&
+        f !== hardeningFile() &&
+        !landedLater.has(f)
     );
     for (const other of others) {
       assert.ok(
