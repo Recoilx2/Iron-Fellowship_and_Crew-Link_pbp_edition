@@ -120,6 +120,13 @@ describe("assistant refs", () => {
     });
   });
 
+  it("refuses an unknown message role instead of defaulting to user", () => {
+    const bad = messageRow({
+      role: "villain" as unknown as "user",
+    });
+    expect(() => messageRowToDocument(bad)).toThrow(/role/i);
+  });
+
   it("reads a settings row with its model and context choice", () => {
     expect(settingsRowToDocument(settingsRow())).toEqual({
       model: "test-model",

@@ -43,12 +43,29 @@ assistant_messages             one row per turn in a conversation (user or
 assistant_settings             one row per (campaign, GM) holding the GM's
                              model choice and saved context choice
                              (references only, never text)
+assistant_outline_versions     one row per kept outline text for Undo
+                             (campaign, keeping GM, text); shared by the
+                             campaign's GMs like the outline; Apply keeps
+                             one, Undo drops the newest; pruned to the
+                             last 20 per campaign
 worlds                       one row per world (+ locations, lore, npcs,
                              notes, images metadata; no sectors: Starforged
                              locations replaced them, see ticket #21)
 homebrew_collections         one row per collection (+ stats, moves, oracles,
                              assets, editors, viewers, invite keys)
 ```
+
+Campaign notes carry `kind` (`note` or `outline`, ticket #131): at most
+one `outline` row per campaign (partial unique index), shared by the
+campaign's GMs and never shared with players. Ordinary notes are `note`.
+The outline is edited in the assistant panel's Outline tab; its replaced
+texts are kept in `assistant_outline_versions` for Undo (last 20 per
+campaign, best-effort prune on Apply).
+
+Assistant conversation rename (`renameConversation`) stays data-layer only
+with its unit test: the panel's history menu switches, creates and
+deletes conversations (ticket #128), and rename is available through the
+same data layer for a later UI pass.
 
 Images live in the private `chat-images` storage bucket, one folder per
 campaign and post (`chat-images/<campaignId>/<postId>/<filename>`); posts
@@ -81,6 +98,7 @@ Signed links stay short-lived on the client (minutes, re-signed when shown, see
 | AssistantConversationDocument | [\_assistant.type](./assistant/_assistant.type.ts)                                                      |
 | AssistantMessageDocument      | [\_assistant.type](./assistant/_assistant.type.ts)                                                      |
 | AssistantSettingsDocument     | [\_assistant.type](./assistant/_assistant.type.ts)                                                      |
+| AssistantOutlineVersion       | [\_getRef](./assistant/_getRef.ts)                                                                    |
 | SettingsDocument             | [\_character-campaign-settings.type](./character-campaign-settings/_character-campaign-settings.type.ts) |
 | **Worlds**                   |                                                                                                          |
 | WorldDocument                | [\_world.type](./world/_world.type.ts)                                                                   |

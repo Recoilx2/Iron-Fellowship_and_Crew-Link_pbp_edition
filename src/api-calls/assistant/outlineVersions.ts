@@ -21,6 +21,15 @@ import { replaceOutlineContent } from "./outlineText";
 
 const LIST_LIMIT = 25;
 
+/**
+ * How many replaced outline texts to keep per campaign. Every Apply keeps
+ * one version and every Undo drops one, so without a cap a long session
+ * grows the table without bound; the spec only needs the previous version
+ * to stay available. Keeping the last 20 still offers ample Undo while
+ * bounding growth. Pruning is best-effort and never fails an Apply.
+ */
+export const MAX_KEPT_OUTLINE_VERSIONS = 20;
+
 async function signedInGmId(): Promise<string> {
   const { data: sessionData, error: sessionError } =
     await getSupabaseClient().auth.getSession();
@@ -120,12 +129,58 @@ export const listOutlineVersions = createApiFunction<
 }, "Failed to read outline versions.");
 
 /**
+ * Drops kept versions past the retention cap, oldest first. Best-effort:
+ * pruning never fails an Apply; Undo still works because the newest rows
+ * (including the one just kept) are always retained.
+ */
+async function pruneOldOutlineVersions(
+  client: ContentsClient,
+  campaignId: string
+): Promise<void> {
+  try {
+    const { data, error } = await client
+      .from(ASSISTANT_OUTLINE_VERSIONS_TABLE)
+      .select("id,created_at")
+      .eq("campaign_id", campaignId)
+      .order("created_at", { ascending: false })
+      .limit(MAX_KEPT_OUTLINE_VERSIONS + 10);
+    if (error || !data) {
+      return;
+    }
+    const rows = data as unknown as Array<{ id: string }>;
+    if (rows.length <= MAX_KEPT_OUTLINE_VERSIONS) {
+      return;
+    }
+    const extra = rows.slice(MAX_KEPT_OUTLINE_VERSIONS);
+    for (const old of extra) {
+      if (!old || typeof old.id !== "string") {
+        continue;
+      }
+      try {
+        await client
+          .from(ASSISTANT_OUTLINE_VERSIONS_TABLE)
+          .delete()
+          .eq("id", old.id)
+          .eq("campaign_id", campaignId)
+          .select("id");
+      } catch {
+        // One prune delete failing must not fail the Apply.
+      }
+    }
+  } catch {
+    // Pruning is best-effort; the Apply already succeeded.
+  }
+}
+
+/**
  * Applies a proposed outline revision: keeps the replaced text as a
  * version (unless the outline is currently blank, when there is nothing
  * worth keeping), then replaces the outline contents with the proposed
  * text. Returns the kept version's id, or null when nothing was kept.
  * The proposal must be non-blank; a blank outline and a blank proposal
- * both refuse before anything is written.
+ * both refuse before anything is written. Kept versions are capped to
+ * the last MAX_KEPT_OUTLINE_VERSIONS per campaign (best-effort prune),
+ * so Undo stays available without unbounded growth.
  */
 export const applyOutlineRevision = createApiFunction<
   {
@@ -166,6 +221,9 @@ export const applyOutlineRevision = createApiFunction<
   }
 
   await replaceOutlineContents(client, outlineId, proposedText.trim());
+  if (versionId !== null) {
+    await pruneOldOutlineVersions(client, campaignId);
+  }
   return versionId;
 }, "Failed to apply the outline revision.");
 

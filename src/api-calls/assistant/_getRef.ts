@@ -26,6 +26,45 @@ export const ASSISTANT_MESSAGES_TABLE = "assistant_messages";
 export const ASSISTANT_SETTINGS_TABLE = "assistant_settings";
 export const ASSISTANT_OUTLINE_VERSIONS_TABLE = "assistant_outline_versions";
 
+/**
+ * One shared shape behind the four channel/filter pairs below: every
+ * assistant live-update channel is `<prefix>:<id>` with a matching
+ * `<column>=eq.<id>` row filter. The named wrappers keep the per-table
+ * prefix and column beside their table; the bodies share this helper so
+ * the shape cannot drift between families. No behavior change.
+ */
+function assistantChannelName(prefix: string, id: string): string {
+  return `${prefix}:${id}`;
+}
+
+function assistantChannelFilter(column: string, id: string): string {
+  return `${column}=eq.${id}`;
+}
+
+/**
+ * One shared shape behind the four payload mappers below: deletes map to
+ * a removal keyed by the row's key, anything else maps to an upsert when
+ * the key is present. The per-table wrappers only supply how to read the
+ * key; the branching stays here. No behavior change.
+ */
+function rowPayloadToChange<Row>(
+  payload: PostgresChangePayload<Row>,
+  getKey: (partial: Partial<Row>) => string | null
+): RowChange<Row> | null {
+  if (payload.eventType === "DELETE") {
+    const key = getKey((payload.old ?? {}) as Partial<Row>);
+    return key !== null ? { kind: "remove", key } : null;
+  }
+  const key = getKey(payload.new as Partial<Row>);
+  return key !== null
+    ? { kind: "upsert", row: payload.new as Row }
+    : null;
+}
+
+function idKey(partial: { id?: unknown }): string | null {
+  return typeof partial.id === "string" ? partial.id : null;
+}
+
 export interface AssistantOutlineVersionRow {
   id: string;
   campaign_id: string;
@@ -57,28 +96,19 @@ export function outlineVersionRowToDocument(
 export function constructAssistantOutlineVersionsChannelName(
   campaignId: string
 ): string {
-  return `assistant-outline-versions:${campaignId}`;
+  return assistantChannelName("assistant-outline-versions", campaignId);
 }
 
 export function constructAssistantOutlineVersionsFilter(
   campaignId: string
 ): string {
-  return `campaign_id=eq.${campaignId}`;
+  return assistantChannelFilter("campaign_id", campaignId);
 }
 
 export function assistantOutlineVersionPayloadToChange(
   payload: PostgresChangePayload<AssistantOutlineVersionRow>
 ): RowChange<AssistantOutlineVersionRow> | null {
-  if (payload.eventType === "DELETE") {
-    const old = payload.old as Partial<AssistantOutlineVersionRow>;
-    return typeof old.id === "string"
-      ? { kind: "remove", key: old.id }
-      : null;
-  }
-  const row = payload.new as Partial<AssistantOutlineVersionRow>;
-  return row && typeof row.id === "string"
-    ? { kind: "upsert", row: row as AssistantOutlineVersionRow }
-    : null;
+  return rowPayloadToChange(payload, idKey);
 }
 
 export interface AssistantConversationRow {
@@ -93,7 +123,7 @@ export interface AssistantConversationRow {
 export interface AssistantMessageRow {
   id: string;
   conversation_id: string;
-  role: string;
+  role: AssistantMessageRole;
   content: string;
   stopped_partway: boolean;
   created_at: string;
@@ -112,35 +142,35 @@ export interface AssistantSettingsRow {
 export function constructAssistantConversationsChannelName(
   campaignId: string
 ): string {
-  return `assistant-conversations:${campaignId}`;
+  return assistantChannelName("assistant-conversations", campaignId);
 }
 
 export function constructAssistantConversationsFilter(
   campaignId: string
 ): string {
-  return `campaign_id=eq.${campaignId}`;
+  return assistantChannelFilter("campaign_id", campaignId);
 }
 
 export function constructAssistantMessagesChannelName(
   conversationId: string
 ): string {
-  return `assistant-messages:${conversationId}`;
+  return assistantChannelName("assistant-messages", conversationId);
 }
 
 export function constructAssistantMessagesFilter(
   conversationId: string
 ): string {
-  return `conversation_id=eq.${conversationId}`;
+  return assistantChannelFilter("conversation_id", conversationId);
 }
 
 export function constructAssistantSettingsChannelName(
   campaignId: string
 ): string {
-  return `assistant-settings:${campaignId}`;
+  return assistantChannelName("assistant-settings", campaignId);
 }
 
 export function constructAssistantSettingsFilter(campaignId: string): string {
-  return `campaign_id=eq.${campaignId}`;
+  return assistantChannelFilter("campaign_id", campaignId);
 }
 
 export function conversationRowToDocument(
@@ -154,7 +184,17 @@ export function conversationRowToDocument(
 }
 
 function roleOf(row: AssistantMessageRow): AssistantMessageRole {
-  return row.role === "assistant" ? "assistant" : "user";
+  if (row.role === "assistant") {
+    return "assistant";
+  }
+  if (row.role === "user") {
+    return "user";
+  }
+  throw new Error(
+    `Unknown assistant message role: ${String(
+      (row as { role?: unknown }).role
+    )}`
+  );
 }
 
 export function messageRowToDocument(
@@ -193,47 +233,24 @@ export function settingsDocumentToColumns(params: {
 export function assistantConversationPayloadToChange(
   payload: PostgresChangePayload<AssistantConversationRow>
 ): RowChange<AssistantConversationRow> | null {
-  if (payload.eventType === "DELETE") {
-    const old = payload.old as Partial<AssistantConversationRow>;
-    return typeof old.id === "string"
-      ? { kind: "remove", key: old.id }
-      : null;
-  }
-  const row = payload.new as Partial<AssistantConversationRow>;
-  return row && typeof row.id === "string"
-    ? { kind: "upsert", row: row as AssistantConversationRow }
-    : null;
+  return rowPayloadToChange(payload, idKey);
 }
 
 export function assistantMessagePayloadToChange(
   payload: PostgresChangePayload<AssistantMessageRow>
 ): RowChange<AssistantMessageRow> | null {
-  if (payload.eventType === "DELETE") {
-    const old = payload.old as Partial<AssistantMessageRow>;
-    return typeof old.id === "string"
-      ? { kind: "remove", key: old.id }
-      : null;
-  }
-  const row = payload.new as Partial<AssistantMessageRow>;
-  return row && typeof row.id === "string"
-    ? { kind: "upsert", row: row as AssistantMessageRow }
-    : null;
+  return rowPayloadToChange(payload, idKey);
 }
 
 export function assistantSettingsPayloadToChange(
   payload: PostgresChangePayload<AssistantSettingsRow>
 ): RowChange<AssistantSettingsRow> | null {
-  if (payload.eventType === "DELETE") {
-    const old = payload.old as Partial<AssistantSettingsRow>;
-    return typeof old.campaign_id === "string" &&
-      typeof old.gm_id === "string"
-      ? { kind: "remove", key: `${old.campaign_id}:${old.gm_id}` }
-      : null;
-  }
-  const row = payload.new as Partial<AssistantSettingsRow>;
-  return row &&
-    typeof row.campaign_id === "string" &&
-    typeof row.gm_id === "string"
-    ? { kind: "upsert", row: row as AssistantSettingsRow }
-    : null;
+  return rowPayloadToChange(
+    payload,
+    (partial) =>
+      typeof partial.campaign_id === "string" &&
+      typeof partial.gm_id === "string"
+        ? `${partial.campaign_id}:${partial.gm_id}`
+        : null
+  );
 }
