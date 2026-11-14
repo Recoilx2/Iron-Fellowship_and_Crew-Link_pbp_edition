@@ -16,7 +16,10 @@
  *   it may not read.
  * - `POST /gm-assistant/chat` takes `{ conversationId, message }`, saves the
  *   GM's message and the streamed reply to `assistant_messages`, and streams
- *   the reply back as server-sent events.
+ *   the reply back as server-sent events. An optional
+ *   `mode: "outline-revision"` always includes the current outline and asks
+ *   for a complete replacement between `<<<OUTLINE-BEGIN>>>` and
+ *   `<<<OUTLINE-END>>>` markers, so the client can preview it side by side.
  *
  * Assistant context (ticket #132): the GM picks references (the outline,
  * world entries with an optional GM-only part, notes, channels with a post
@@ -224,6 +227,47 @@ export function systemPrompt(gameSystem: string): string {
     `You only draft: suggest scenes, dialogue and ideas the GM may use, ` +
     `change or discard. You never post, change or decide anything yourself; ` +
     `the GM decides what to use.`
+  );
+}
+
+/**
+ * Markers wrapping a complete replacement outline in an outline-revision
+ * reply (ticket #133). The server asks the model to put the replacement
+ * between these markers on their own lines with nothing else outside, so
+ * the client can pull it out reliably; `extractOutlineProposal` does the
+ * pulling on both sides of the wire (the browser client duplicates it,
+ * like the token estimate).
+ */
+export const OUTLINE_PROPOSAL_BEGIN = "<<<OUTLINE-BEGIN>>>";
+export const OUTLINE_PROPOSAL_END = "<<<OUTLINE-END>>>";
+
+/**
+ * Pulls the proposed outline from an assistant reply: the text between
+ * the first begin marker and the last end marker, trimmed. Null when the
+ * reply carries no complete proposal (a marker missing or nothing
+ * between them).
+ */
+export function extractOutlineProposal(reply: string): string | null {
+  const start = reply.indexOf(OUTLINE_PROPOSAL_BEGIN);
+  const end = reply.lastIndexOf(OUTLINE_PROPOSAL_END);
+  if (start < 0 || end < 0 || end <= start + OUTLINE_PROPOSAL_BEGIN.length) {
+    return null;
+  }
+  const proposed = reply
+    .slice(start + OUTLINE_PROPOSAL_BEGIN.length, end)
+    .trim();
+  return proposed.length > 0 ? proposed : null;
+}
+
+/** What the GM asked for: a normal chat turn or a dedicated outline revision. */
+export type AssistantRequestMode = "chat" | "outline-revision";
+
+export function outlineRevisionInstruction(): string {
+  return (
+    `The GM asked to revise the campaign outline. Return the complete ` +
+    `replacement outline wrapped between ${OUTLINE_PROPOSAL_BEGIN} and ` +
+    `${OUTLINE_PROPOSAL_END} on their own lines, with nothing else outside ` +
+    `the markers.`
   );
 }
 
@@ -1044,18 +1088,26 @@ async function handleContextSize(
 interface ChatRequestBody {
   conversationId: string;
   message: string;
+  mode: AssistantRequestMode;
 }
 
 function parseChatBody(body: unknown): ChatRequestBody | null {
   if (!body || typeof body !== "object") return null;
-  const { conversationId, message } = body as Record<string, unknown>;
+  const { conversationId, message, mode } = body as Record<string, unknown>;
   if (typeof conversationId !== "string" || !UUID_PATTERN.test(conversationId)) {
     return null;
   }
   if (typeof message !== "string") return null;
   const trimmed = message.trim();
   if (!trimmed || trimmed.length > 20000) return null;
-  return { conversationId, message: trimmed };
+  if (mode !== undefined && mode !== "chat" && mode !== "outline-revision") {
+    return null;
+  }
+  return {
+    conversationId,
+    message: trimmed,
+    mode: mode === "outline-revision" ? "outline-revision" : "chat",
+  };
 }
 
 async function handleChat(
@@ -1156,10 +1208,15 @@ async function handleChat(
   // The context is built here, on the server, from the GM's saved
   // references at request time. The request body carries no context text:
   // parseChatBody drops every other field, so anything context-like the
-  // browser sends never reaches the model.
+  // browser sends never reaches the model. An outline revision always
+  // includes the current outline, whatever the saved choice says: the
+  // server reads it and asks for a complete marked replacement.
   let built: BuiltAssistantContext;
   try {
     const choice = await readSavedContext(env, callerToken, caller.sub, conversation.campaignId, fetchImpl);
+    if (chat.mode === "outline-revision") {
+      choice.includeOutline = true;
+    }
     built = await buildAssistantContext(env, callerToken, caller.sub, conversation.campaignId, choice, fetchImpl);
   } catch (error) {
     const ref = mintReference();
@@ -1170,6 +1227,9 @@ async function handleChat(
     { role: "system", content: systemPrompt(env.gameSystem) },
     ...(built.text
       ? [{ role: "system", content: `Campaign context chosen by the GM:\n\n${built.text}` }]
+      : []),
+    ...(chat.mode === "outline-revision"
+      ? [{ role: "system", content: outlineRevisionInstruction() }]
       : []),
     ...history.map((turn) => ({ role: turn.role, content: turn.content })),
     { role: "user", content: chat.message },

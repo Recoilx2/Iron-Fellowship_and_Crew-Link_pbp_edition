@@ -25,6 +25,7 @@ import ComposerIcon from "@mui/icons-material/Reply";
 import {
   fetchAssistantContextSize,
   approximateTokensForChars,
+  extractOutlineProposal,
   fetchAssistantModels,
   streamAssistantChat,
   type AssistantContextSize,
@@ -41,6 +42,8 @@ import { deleteConversation } from "api-calls/assistant/deleteConversation";
 import { ContextSizeBar } from "./ContextSizeBar";
 import { ContextTab } from "./ContextTab";
 import { OutlineTab } from "./OutlineTab";
+import { OutlineRevision } from "./OutlineRevision";
+import { useOutlineDocument } from "./useOutlineDocument";
 import { useStore } from "stores/store";
 import type {
   AssistantConversationWithId,
@@ -350,6 +353,15 @@ function ConversationThread(props: { campaignId: string; currentModel: string; o
   const [input, setInput] = useState("");
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [sendError, setSendError] = useState<ModelsFailure | null>(null);
+  // Dedicated outline-revision mode for the next message: the server
+  // includes the current outline and asks for a marked complete
+  // replacement, which previews side by side below. Never guessed from
+  // the wording -- the GM arms it explicitly for one send.
+  const [revisionMode, setRevisionMode] = useState(false);
+  const [dismissedRevisions, setDismissedRevisions] = useState<
+    Record<string, boolean>
+  >({});
+  const { outlineId, text: outlineText } = useOutlineDocument(campaignId);
   const abortRef = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
 
@@ -471,6 +483,7 @@ function ConversationThread(props: { campaignId: string; currentModel: string; o
       await streamAssistantChat({
         conversationId: targetId,
         message: trimmed,
+        ...(revisionMode ? { mode: "outline-revision" as const } : {}),
         signal: controller.signal,
         onChunk: (chunk) =>
           setStreamingText((previous) => (previous ?? "") + chunk),
@@ -495,6 +508,7 @@ function ConversationThread(props: { campaignId: string; currentModel: string; o
     } finally {
       abortRef.current = null;
       setStreamingText(null);
+      setRevisionMode(false);
     }
   };
 
@@ -643,6 +657,29 @@ function ConversationThread(props: { campaignId: string; currentModel: string; o
                   </Tooltip>
                 </Stack>
               )}
+              {message.role === "assistant" &&
+                message.content &&
+                !dismissedRevisions[message.id] &&
+                (() => {
+                  const proposed = extractOutlineProposal(message.content);
+                  if (!proposed || !outlineId) {
+                    return null;
+                  }
+                  return (
+                    <OutlineRevision
+                      campaignId={campaignId}
+                      outlineId={outlineId}
+                      current={outlineText}
+                      proposed={proposed}
+                      onDiscard={() =>
+                        setDismissedRevisions((dismissed) => ({
+                          ...dismissed,
+                          [message.id]: true,
+                        }))
+                      }
+                    />
+                  );
+                })()}
             </Box>
           ))}
           {streamingText !== null && (
@@ -683,7 +720,11 @@ function ConversationThread(props: { campaignId: string; currentModel: string; o
             maxRows={6}
             fullWidth
             size={"small"}
-            placeholder={"Ask the assistant…"}
+            placeholder={
+              revisionMode
+                ? "How should the outline change?"
+                : "Ask the assistant…"
+            }
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => {
@@ -693,6 +734,26 @@ function ConversationThread(props: { campaignId: string; currentModel: string; o
               }
             }}
           />
+          <Tooltip
+            title={
+              revisionMode
+                ? "Revision mode on: the next send asks for an outline revision"
+                : "Send the next message as an outline revision"
+            }
+          >
+            <span>
+              <Button
+                size={"small"}
+                variant={revisionMode ? "contained" : "outlined"}
+                disabled={streamingText !== null}
+                onClick={() => setRevisionMode((on) => !on)}
+                aria-label={"Revise outline"}
+                aria-pressed={revisionMode}
+              >
+                Revise outline
+              </Button>
+            </span>
+          </Tooltip>
           {streamingText !== null ? (
             <IconButton color={"error"} onClick={stop} aria-label={"Stop reply"}>
               <StopIcon />

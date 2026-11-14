@@ -37,6 +37,36 @@ export interface AssistantContextSize {
 }
 
 /**
+ * Markers wrapping a complete replacement outline in an outline-revision
+ * reply (ticket #133). Kept identical to the server function's markers in
+ * `supabase/functions/gm-assistant/handler.ts`; the server asks the model
+ * to put the replacement between them, and `extractOutlineProposal` pulls
+ * it out for the side-by-side preview.
+ */
+export const OUTLINE_PROPOSAL_BEGIN = "<<<OUTLINE-BEGIN>>>";
+export const OUTLINE_PROPOSAL_END = "<<<OUTLINE-END>>>";
+
+/**
+ * Pulls the proposed outline from an assistant reply: the text between
+ * the first begin marker and the last end marker, trimmed. Null when the
+ * reply carries no complete proposal.
+ */
+export function extractOutlineProposal(reply: string): string | null {
+  const start = reply.indexOf(OUTLINE_PROPOSAL_BEGIN);
+  const end = reply.lastIndexOf(OUTLINE_PROPOSAL_END);
+  if (start < 0 || end < 0 || end <= start + OUTLINE_PROPOSAL_BEGIN.length) {
+    return null;
+  }
+  const proposed = reply
+    .slice(start + OUTLINE_PROPOSAL_BEGIN.length, end)
+    .trim();
+  return proposed.length > 0 ? proposed : null;
+}
+
+/** What the GM asked for: a normal chat turn or a dedicated outline revision. */
+export type AssistantRequestMode = "chat" | "outline-revision";
+
+/**
  * Approximate tokens for a character count: four characters per token,
  * rounded up. Kept identical to the server function (handler.ts); exact
  * per-model tokenising is not needed. The panel uses it for the
@@ -256,10 +286,13 @@ export async function fetchAssistantContextSize(
 export async function streamAssistantChat(args: {
   conversationId: string;
   message: string;
+  /** Dedicated outline-revision mode: the server includes the current
+   * outline and asks for a marked complete replacement. Defaults to chat. */
+  mode?: AssistantRequestMode;
   signal: AbortSignal;
   onChunk: (content: string) => void;
 }): Promise<AssistantStreamResult> {
-  const { conversationId, message, signal, onChunk } = args;
+  const { conversationId, message, mode, signal, onChunk } = args;
   let response: Response;
   try {
     const headers = await authHeaders();
@@ -267,7 +300,11 @@ export async function streamAssistantChat(args: {
     response = await fetch(`${functionsBaseUrl()}/gm-assistant/chat`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ conversationId, message }),
+      body: JSON.stringify({
+        conversationId,
+        message,
+        ...(mode === "outline-revision" ? { mode } : {}),
+      }),
       signal,
     });
   } catch (error) {

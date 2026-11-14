@@ -3,8 +3,11 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import {
   AssistantRequestError,
   approximateTokensForChars,
+  extractOutlineProposal,
   fetchAssistantContextSize,
   fetchAssistantModels,
+  OUTLINE_PROPOSAL_BEGIN,
+  OUTLINE_PROPOSAL_END,
   streamAssistantChat,
 } from "./gmAssistantClient";
 
@@ -247,5 +250,77 @@ describe("fetchAssistantContextSize", () => {
     expect(failure).toBeInstanceOf(AssistantRequestError);
     expect((failure as AssistantRequestError).code).toBe("FORBIDDEN");
     expect((failure as AssistantRequestError).ref).toBe("QQ1Q22");
+  });
+});
+
+// Seam under test: the outline-revision request mode. A revision sends in
+// a dedicated mode (never guessed from the wording) so the server
+// includes the current outline and asks for a marked complete
+// replacement; the client pulls the proposal from between the markers.
+describe("gmAssistantClient outline revisions", () => {
+  beforeEach(() => {
+    vi.stubEnv("VITE_SUPABASE_URL", "https://stack.example");
+    vi.stubEnv("VITE_SUPABASE_ANON_KEY", "anon-key");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.clearAllMocks();
+  });
+
+  function revisionSseResponse(chunks: string[]): Response {
+    const encoder = new TextEncoder();
+    const lines = chunks.map(
+      (content) => `data: ${JSON.stringify({ content })}\n\n`
+    );
+    return new Response(encoder.encode(lines.join("") + "data: [DONE]\n\n"), {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+    });
+  }
+
+  it("pulls the proposed outline from between the markers", () => {
+    expect(
+      extractOutlineProposal(
+        `Intro\n${OUTLINE_PROPOSAL_BEGIN}\nAct one revised.\n${OUTLINE_PROPOSAL_END}\nOutro`
+      )
+    ).toBe("Act one revised.");
+    expect(extractOutlineProposal("Just chat, no proposal.")).toBeNull();
+    expect(extractOutlineProposal(`${OUTLINE_PROPOSAL_BEGIN}\nHalf.`)).toBeNull();
+  });
+
+  it("sends a revision in outline-revision mode", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(revisionSseResponse(["ok"]));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await streamAssistantChat({
+      conversationId: "convo-1",
+      message: "Add a betrayal.",
+      mode: "outline-revision",
+      signal: new AbortController().signal,
+      onChunk: () => {},
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      conversationId: "convo-1",
+      message: "Add a betrayal.",
+      mode: "outline-revision",
+    });
+  });
+
+  it("sends ordinary chat without a mode", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(revisionSseResponse(["ok"]));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await streamAssistantChat({
+      conversationId: "convo-1",
+      message: "What happens next?",
+      signal: new AbortController().signal,
+      onChunk: () => {},
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).not.toHaveProperty("mode");
   });
 });
