@@ -51,8 +51,9 @@ One ladder per failure. Run it in order, then stop.
 
 1. **Evidence first.** Commit the logs, artifacts and rejected drafts on the
    ticket branch before diagnosing. Uncommitted `/tmp` evidence has been lost
-   before. Delete it in the fix commit, so it stays in history but never
-   reaches an integration branch.
+   before. Before the ticket's PR merges, delete the evidence in its own
+   commit, so it stays in the branch history but never in an integration
+   branch's tree.
 2. **Diagnose.** Dispatch a subagent with the `diagnosing-bugs` skill. The
    diagnosis must check whether the failing rule matches the spec or ADR it
    comes from. If the rule itself is wrong, stop and report; don't fix code
