@@ -262,6 +262,7 @@ describe.skipIf(!config)("assistant outline versions end to end (#133)", () => {
         await applyOutlineRevision({
           campaignId,
           outlineId,
+          currentText: "Original plan.",
           proposedText: "Revised plan.",
         });
 
@@ -317,6 +318,7 @@ describe.skipIf(!config)("assistant outline versions end to end (#133)", () => {
       await applyOutlineRevision({
         campaignId,
         outlineId,
+        currentText: "Original plan.",
         proposedText: "Revised plan.",
       });
       await storedOutlineBecomes(gm, outlineId, "Revised plan.");

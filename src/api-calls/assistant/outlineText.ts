@@ -68,6 +68,15 @@ export function encodeOutlineText(text: string): string {
   return encodeNoteContent(Y.encodeStateAsUpdate(doc));
 }
 
+/** The outline text held by a (possibly live) document. */
+export function readOutlineFromDoc(doc: Y.Doc): string {
+  const tipTap = tipTapText(TiptapTransformer.fromYdoc(doc, "default"));
+  if (tipTap.trim().length > 0) {
+    return tipTap;
+  }
+  return doc.getText("body").toString();
+}
+
 export function decodeOutlineBytes(bytes: Uint8Array): string {
   if (!bytes || bytes.length === 0) {
     return "";
@@ -75,11 +84,7 @@ export function decodeOutlineBytes(bytes: Uint8Array): string {
   try {
     const doc = new Y.Doc();
     Y.applyUpdate(doc, bytes);
-    const tipTap = tipTapText(TiptapTransformer.fromYdoc(doc, "default"));
-    if (tipTap.trim().length > 0) {
-      return tipTap;
-    }
-    return doc.getText("body").toString();
+    return readOutlineFromDoc(doc);
   } catch {
     return "";
   }
@@ -116,6 +121,15 @@ export function replaceOutlineContent(
       // Undecodable bytes read as empty; the replacement still lands.
     }
   }
+  replaceOutlineInDoc(doc, text);
+  return Y.encodeStateAsUpdate(doc);
+}
+
+/**
+ * Replaces the outline text inside a document in one transaction, so a
+ * live document (synced with the note server) sends it as one update.
+ */
+export function replaceOutlineInDoc(doc: Y.Doc, text: string): void {
   const built = TiptapTransformer.toYdoc(tipTapDocument(text), "default");
   const fresh = built.getXmlFragment("default").toArray();
   doc.transact(() => {
@@ -129,5 +143,4 @@ export function replaceOutlineContent(
       ]);
     }
   });
-  return Y.encodeStateAsUpdate(doc);
 }
