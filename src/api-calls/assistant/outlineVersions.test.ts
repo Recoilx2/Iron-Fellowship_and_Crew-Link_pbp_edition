@@ -6,6 +6,7 @@ import {
   applyOutlineRevision,
   listOutlineVersions,
   MAX_KEPT_OUTLINE_VERSIONS,
+  OutlineVersionGoneError,
   undoOutlineRevision,
 } from "./outlineVersions";
 import { ASSISTANT_OUTLINE_VERSIONS_TABLE } from "./_getRef";
@@ -143,6 +144,7 @@ const state = {
   deleteResult: [{ id: "version-1" }] as Array<{ id: string }>,
   versionRows: [] as Array<Record<string, unknown>>,
   contentRows: [] as Array<Record<string, unknown>>,
+  lookups: [] as Array<Array<{ column: string; value: unknown }>>,
 };
 
 function versionRow(id: string, content: string, createdAt: string) {
@@ -162,6 +164,7 @@ beforeEach(() => {
   state.deleteResult = [{ id: "version-1" }];
   state.versionRows = [];
   state.contentRows = [];
+  state.lookups = [];
   server.docs.clear();
   server.opened = [];
   server.destroyed = 0;
@@ -185,14 +188,36 @@ beforeEach(() => {
             state.inserted.push(row);
             return { data: null, error: null };
           },
-          select: () => ({
-            eq: () => ({
+          select: () => {
+            // One chain serves both reads: the newest-first list
+            // (.eq().order().limit()) and the by-id lookup (.eq().eq()).
+            const filters: Array<{ column: string; value: unknown }> = [];
+            const chain = {
+              eq: (column: string, value: unknown) => {
+                filters.push({ column, value });
+                return chain;
+              },
               order: () => ({
                 limit: async () =>
                   Promise.resolve({ data: state.versionRows, error: null }),
               }),
-            }),
-          }),
+              then: (
+                resolve: (value: unknown) => unknown,
+                reject?: (reason: unknown) => unknown
+              ) => {
+                state.lookups.push(filters);
+                const id = filters.find((f) => f.column === "id")?.value;
+                const rows = state.versionRows.filter(
+                  (row) => id === undefined || row.id === id
+                );
+                return Promise.resolve({ data: rows, error: null }).then(
+                  resolve,
+                  reject
+                );
+              },
+            };
+            return chain;
+          },
           delete: () => ({
             eq: (column: string, value: unknown) => {
               state.deleted.push({ column, value });
@@ -396,32 +421,71 @@ describe("outline versions", () => {
     expect(state.upsertedContents).toHaveLength(0);
   });
 
-  it("undo restores the latest kept text and drops that version", async () => {
+  it("undo restores the named version, not the newest, and drops only it", async () => {
+    // A later Apply (by a co-GM, say) kept version-2; the reply being undone
+    // saved version-1.
     state.versionRows = [
       versionRow("version-2", "Second plan.", "2026-11-14T00:02:00Z"),
       versionRow("version-1", "First plan.", "2026-11-14T00:01:00Z"),
     ];
-    state.deleteResult = [{ id: "version-2" }];
+    state.deleteResult = [{ id: "version-1" }];
     seedServer("campaign-notes/outline-1", "Third plan, live.");
 
     const restored = await undoOutlineRevision({
       campaignId: "campaign-1",
       outlineId: "outline-1",
+      versionId: "version-1",
     });
 
-    expect(restored).toBe("Second plan.");
+    expect(restored).toBe("First plan.");
     expect(state.upsertedContents).toHaveLength(0);
-    expect(serverText("campaign-notes/outline-1")).toBe("Second plan.");
-    expect(state.deleted).toContainEqual({ column: "id", value: "version-2" });
+    expect(serverText("campaign-notes/outline-1")).toBe("First plan.");
+    expect(state.deleted).toEqual([{ column: "id", value: "version-1" }]);
   });
 
-  it("undo with no kept versions throws without writing", async () => {
-    state.versionRows = [];
-    await expect(
-      undoOutlineRevision({ campaignId: "campaign-1", outlineId: "outline-1" })
-    ).rejects.toThrow(/nothing to undo/i);
-    expect(state.upsertedContents).toHaveLength(0);
+  it("undo of a version already pruned or undone changes nothing", async () => {
+    state.versionRows = [
+      versionRow("version-2", "Second plan.", "2026-11-14T00:02:00Z"),
+    ];
+    seedServer("campaign-notes/outline-1", "Third plan, live.");
+
+    const attempt = undoOutlineRevision({
+      campaignId: "campaign-1",
+      outlineId: "outline-1",
+      versionId: "version-1",
+    });
+
+    await expect(attempt).rejects.toBeInstanceOf(OutlineVersionGoneError);
+    expect(serverText("campaign-notes/outline-1")).toBe("Third plan, live.");
     expect(state.deleted).toHaveLength(0);
+    expect(server.opened).toHaveLength(0);
+  });
+
+  it("undo fails when someone else changed the outline during the restore", async () => {
+    state.versionRows = [
+      versionRow("version-1", "First plan.", "2026-11-14T00:01:00Z"),
+    ];
+    seedServer("campaign-notes/outline-1", "Third plan, live.");
+    server.interfere = "A co-GM's edit.";
+
+    await expect(
+      undoOutlineRevision({
+        campaignId: "campaign-1",
+        outlineId: "outline-1",
+        versionId: "version-1",
+      })
+    ).rejects.toThrow(/changed while/i);
+    expect(state.deleted).toHaveLength(0);
+  });
+
+  it("undo requires a version id", async () => {
+    await expect(
+      undoOutlineRevision({
+        campaignId: "campaign-1",
+        outlineId: "outline-1",
+        versionId: " ",
+      })
+    ).rejects.toThrow(/version is required/i);
     expect(server.opened).toHaveLength(0);
   });
 

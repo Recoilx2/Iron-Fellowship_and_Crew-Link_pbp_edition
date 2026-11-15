@@ -17,8 +17,13 @@ import { ASSISTANT_OUTLINE_VERSIONS_TABLE } from "api-calls/assistant/_getRef";
 import {
   applyOutlineRevision,
   listOutlineVersions,
+  OutlineVersionGoneError,
   undoOutlineRevision,
 } from "api-calls/assistant/outlineVersions";
+import { createConversation } from "api-calls/assistant/createConversation";
+import { addAssistantMessage } from "api-calls/assistant/addAssistantMessage";
+import { saveProposalState } from "api-calls/assistant/saveProposalState";
+import { ASSISTANT_MESSAGES_TABLE } from "api-calls/assistant/_getRef";
 import {
   createPerson,
   deletePerson,
@@ -145,7 +150,11 @@ describe.skipIf(!config)("assistant outline versions end to end (#133)", () => {
     ]);
     await storedOutlineBecomes(gm, outlineId, "Revised plan.");
 
-    const restored = await undoOutlineRevision({ campaignId, outlineId });
+    const restored = await undoOutlineRevision({
+      campaignId,
+      outlineId,
+      versionId: versionId as string,
+    });
     expect(restored).toBe("Original plan.");
     await storedOutlineBecomes(gm, outlineId, "Original plan.");
     expect(await listOutlineVersions({ campaignId })).toEqual([]);
@@ -170,21 +179,25 @@ describe.skipIf(!config)("assistant outline versions end to end (#133)", () => {
     ]);
     // The co-GM undoes the other GM's apply: versions are shared, like
     // the outline itself.
-    expect(await undoOutlineRevision({ campaignId, outlineId })).toBe(
-      "Original plan."
-    );
+    expect(
+      await undoOutlineRevision({
+        campaignId,
+        outlineId,
+        versionId: versions[0].id,
+      })
+    ).toBe("Original plan.");
     await signOut();
   });
 
   it("keeps versions from players and outsiders everywhere", { timeout: 120000 }, async () => {
     const { gm, player, outsider, campaignId, outlineId } = await setUpCampaign();
     await signInAs(gm);
-    await applyOutlineRevision({
+    const keptId = (await applyOutlineRevision({
       campaignId,
       outlineId,
       currentText: "Original plan.",
       proposedText: "Revised plan.",
-    });
+    })) as string;
     await signOut();
 
     for (const person of [player, outsider]) {
@@ -199,7 +212,7 @@ describe.skipIf(!config)("assistant outline versions end to end (#133)", () => {
         })
       ).rejects.toBeTruthy();
       await expect(
-        undoOutlineRevision({ campaignId, outlineId })
+        undoOutlineRevision({ campaignId, outlineId, versionId: keptId })
       ).rejects.toBeTruthy();
       const direct = await person.client
         .from(ASSISTANT_OUTLINE_VERSIONS_TABLE)
@@ -322,11 +335,11 @@ describe.skipIf(!config)("assistant outline versions end to end (#133)", () => {
     async () => {
       const { gm, coGm, campaignId, outlineId } = await setUpCampaign();
       await signInAs(gm);
-      await applyOutlineRevision({
+      const keptId = (await applyOutlineRevision({
         campaignId,
         outlineId,
         proposedText: "Revised plan.",
-      });
+      })) as string;
       await storedOutlineBecomes(gm, outlineId, "Revised plan.");
 
       const open = new Y.Doc();
@@ -342,7 +355,11 @@ describe.skipIf(!config)("assistant outline versions end to end (#133)", () => {
       });
       try {
         await waitFor(() => (synced ? true : null), 30000);
-        await undoOutlineRevision({ campaignId, outlineId });
+        await undoOutlineRevision({
+          campaignId,
+          outlineId,
+          versionId: keptId,
+        });
         await waitFor(
           () => (readOutlineFromDoc(open) === "Original plan." ? true : null),
           30000
@@ -352,6 +369,104 @@ describe.skipIf(!config)("assistant outline versions end to end (#133)", () => {
       } finally {
         provider.destroy();
       }
+      await signOut();
+    }
+  );
+
+  // Ticket #148: Undo names its version. Two Applies kept two versions; the
+  // older reply's Undo restores what its own Apply replaced and leaves the
+  // later version alone, and undoing the same version twice changes nothing.
+  it(
+    "undoes the named version when two applies happened",
+    { timeout: 180000 },
+    async () => {
+      const { gm, coGm, campaignId, outlineId } = await setUpCampaign();
+      await signInAs(gm);
+      const first = (await applyOutlineRevision({
+        campaignId,
+        outlineId,
+        proposedText: "Plan B.",
+      })) as string;
+      await storedOutlineBecomes(gm, outlineId, "Plan B.");
+      await signOut();
+
+      // A co-GM applies later, keeping "Plan B." as the newest version.
+      await signInAs(coGm);
+      const second = (await applyOutlineRevision({
+        campaignId,
+        outlineId,
+        proposedText: "Plan C.",
+      })) as string;
+      await storedOutlineBecomes(coGm, outlineId, "Plan C.");
+      await signOut();
+
+      await signInAs(gm);
+      const restored = await undoOutlineRevision({
+        campaignId,
+        outlineId,
+        versionId: first,
+      });
+      expect(restored).toBe("Original plan.");
+      await storedOutlineBecomes(gm, outlineId, "Original plan.");
+      const left = await listOutlineVersions({ campaignId });
+      expect(left.map((version) => version.id)).toEqual([second]);
+      expect(left[0].content).toBe("Plan B.");
+
+      // The same version again: gone, and nothing changes.
+      await expect(
+        undoOutlineRevision({ campaignId, outlineId, versionId: first })
+      ).rejects.toBeInstanceOf(OutlineVersionGoneError);
+      await storedOutlineBecomes(gm, outlineId, "Original plan.");
+      expect(
+        (await listOutlineVersions({ campaignId })).map((version) => version.id)
+      ).toEqual([second]);
+      await signOut();
+    }
+  );
+
+  // Ticket #148: the reply's saved state clears its version when that
+  // version row goes away, so a reload never offers an Undo that can't work.
+  it(
+    "clears a reply's applied version when its version is undone",
+    { timeout: 180000 },
+    async () => {
+      const { gm, campaignId, outlineId } = await setUpCampaign();
+      await signInAs(gm);
+      const conversationId = await createConversation({ campaignId });
+      const messageId = await addAssistantMessage({
+        conversationId,
+        role: "assistant",
+        content: "Here is a plan.",
+      });
+      const versionId = (await applyOutlineRevision({
+        campaignId,
+        outlineId,
+        proposedText: "Plan B.",
+      })) as string;
+      await saveProposalState({
+        messageId,
+        state: "applied",
+        appliedVersionId: versionId,
+      });
+      const read = async () => {
+        const { data, error } = await gm.client
+          .from(ASSISTANT_MESSAGES_TABLE)
+          .select("proposal_state,applied_version_id")
+          .eq("id", messageId);
+        expect(error).toBeNull();
+        return data?.[0];
+      };
+      expect(await read()).toEqual({
+        proposal_state: "applied",
+        applied_version_id: versionId,
+      });
+
+      await undoOutlineRevision({ campaignId, outlineId, versionId });
+
+      expect(await read()).toEqual({
+        proposal_state: "applied",
+        applied_version_id: null,
+      });
       await signOut();
     }
   );

@@ -55,7 +55,8 @@ export function OutlineTab(props: { campaignId: string }) {
     () => (failed ? mintErrorReference() : null),
     [failed]
   );
-  const [versions, setVersions] = useState(0);
+  // The newest kept version: the Outline tab's Undo restores exactly this one.
+  const [newestVersionId, setNewestVersionId] = useState<string | null>(null);
   const [undoing, setUndoing] = useState(false);
   const [undoError, setUndoError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -72,7 +73,14 @@ export function OutlineTab(props: { campaignId: string }) {
       listenToOutlineVersions(
         campaignId,
         {
-          onVersions: (rows) => setVersions(rows.length),
+          onVersions: (rows) =>
+            setNewestVersionId(
+              rows.reduce<(typeof rows)[number] | null>(
+                (newest, row) =>
+                  !newest || row.createdAt > newest.createdAt ? row : newest,
+                null
+              )?.id ?? null
+            ),
           onLoaded: () => {},
         },
         () => {}
@@ -149,13 +157,17 @@ export function OutlineTab(props: { campaignId: string }) {
   };
 
   const undo = async (): Promise<void> => {
-    if (undoing || !outlineId) {
+    if (undoing || !outlineId || !newestVersionId) {
       return;
     }
     setUndoing(true);
     setUndoError(null);
     try {
-      await undoOutlineRevision({ campaignId, outlineId });
+      await undoOutlineRevision({
+        campaignId,
+        outlineId,
+        versionId: newestVersionId,
+      });
     } catch (error) {
       setUndoError(
         withReference(
@@ -221,11 +233,11 @@ export function OutlineTab(props: { campaignId: string }) {
         </Button>
         <Button
           size={"small"}
-          disabled={versions === 0 || undoing}
+          disabled={newestVersionId === null || undoing}
           onClick={() => void undo()}
           aria-label={"Undo outline revision"}
           title={
-            versions === 0
+            newestVersionId === null
               ? "No kept version to restore"
               : "Restore the previous outline version"
           }

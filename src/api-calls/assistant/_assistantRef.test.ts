@@ -48,6 +48,8 @@ function messageRow(
     role: "user",
     content: "What happens next?",
     stopped_partway: false,
+    proposal_state: null,
+    applied_version_id: null,
     created_at: "2026-11-14T12:00:00.000Z",
     updated_at: "2026-11-14T12:00:00.000Z",
     ...overrides,
@@ -116,6 +118,8 @@ describe("assistant refs", () => {
       role: "user",
       content: "What happens next?",
       stoppedPartway: false,
+      proposalState: null,
+      appliedVersionId: null,
       createdAt: "2026-11-14T12:00:00.000Z",
     });
   });

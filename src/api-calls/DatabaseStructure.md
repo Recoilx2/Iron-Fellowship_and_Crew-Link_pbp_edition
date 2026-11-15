@@ -38,7 +38,9 @@ assistant_conversations        one row per GM-started assistant thread
                              (campaign, owning GM, title); only the owning
                              GM reads or writes it while still a GM
 assistant_messages             one row per turn in a conversation (user or
-                             assistant, text, stopped-partway flag);
+                             assistant, text, stopped-partway flag, and for
+                             an outline proposal its outcome: proposal_state
+                             applied/dismissed plus applied_version_id);
                              deleting the conversation removes its messages
 assistant_settings             one row per (campaign, GM) holding the GM's
                              model choice and saved context choice
@@ -46,7 +48,7 @@ assistant_settings             one row per (campaign, GM) holding the GM's
 assistant_outline_versions     one row per kept outline text for Undo
                              (campaign, keeping GM, text); shared by the
                              campaign's GMs like the outline; Apply keeps
-                             one, Undo drops the newest; pruned to the
+                             one, Undo drops the one it restores (by id); pruned to the
                              last 20 per campaign
 worlds                       one row per world (+ locations, lore, npcs,
                              notes, images metadata; no sectors: Starforged

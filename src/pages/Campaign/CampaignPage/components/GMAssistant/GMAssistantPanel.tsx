@@ -43,6 +43,7 @@ import { toAssistantFailure } from "./assistantFailure";
 import { ContextSizeBar } from "./ContextSizeBar";
 import { ContextTab } from "./ContextTab";
 import { OutlineTab } from "./OutlineTab";
+import { saveProposalState } from "api-calls/assistant/saveProposalState";
 import { OutlineRevision } from "./OutlineRevision";
 import { useOutlineDocument } from "./useOutlineDocument";
 import { useStore } from "stores/store";
@@ -350,6 +351,8 @@ function ConversationThread(props: { campaignId: string; currentModel: string; e
   // replacement, which previews side by side below. Never guessed from
   // the wording -- the GM arms it explicitly for one send.
   const [revisionMode, setRevisionMode] = useState(false);
+  // Dismissals are saved on the reply (ticket #148); this only covers the
+  // moment before the saved state arrives, or a save that failed.
   const [dismissedRevisions, setDismissedRevisions] = useState<
     Record<string, boolean>
   >({});
@@ -638,11 +641,25 @@ function ConversationThread(props: { campaignId: string; currentModel: string; e
               )}
               {message.role === "assistant" &&
                 message.content &&
-                !dismissedRevisions[message.id] &&
                 (() => {
                   const proposed = extractOutlineProposal(message.content);
                   if (!proposed || !outlineId) {
                     return null;
+                  }
+                  if (
+                    message.proposalState === "dismissed" ||
+                    dismissedRevisions[message.id]
+                  ) {
+                    return (
+                      <Typography
+                        variant={"caption"}
+                        color={"text.secondary"}
+                        display={"block"}
+                        sx={{ mt: 0.5 }}
+                      >
+                        Outline revision dismissed.
+                      </Typography>
+                    );
                   }
                   return (
                     <OutlineRevision
@@ -650,6 +667,16 @@ function ConversationThread(props: { campaignId: string; currentModel: string; e
                       outlineId={outlineId}
                       current={outlineText}
                       proposed={proposed}
+                      proposal={{
+                        state: message.proposalState,
+                        appliedVersionId: message.appliedVersionId,
+                      }}
+                      onProposalChange={(outcome) =>
+                        saveProposalState({
+                          messageId: message.id,
+                          ...outcome,
+                        })
+                      }
                       onDiscard={() =>
                         setDismissedRevisions((dismissed) => ({
                           ...dismissed,
