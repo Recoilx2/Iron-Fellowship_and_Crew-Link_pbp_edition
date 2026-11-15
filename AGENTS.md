@@ -29,7 +29,7 @@ Browser tests (Playwright, spec #9) run against one running copy plus the site c
 A PR merges when, on its final commit, CI is green (including the `live` and `e2e` jobs) and a **reviewer** has passed it, with every finding fixed or answered on the PR. The reviewer is a fresh agent that did not write the code, given the diff, the ticket and its parent spec. After fixes, the reviewer re-checks the changed lines.
 
 - **Ticket PR into an `integration/*` branch:** the agent merges it, deletes the ticket branch, removes `needs-review` and closes the ticket (merges into `integration/*` don't auto-close issues).
-- **Integration branch into `prod`:** the agent opens the PR, gets it green and passed, then hands off to the human, who merges it.
+- **Integration branch into `prod`:** the agent opens the PR, gets it green and passed, and merges it. The human is the architect: they rule on `ready-for-human` and `wayfinder:*` tickets but take no part in merging.
 
 ## Agent skills
 
