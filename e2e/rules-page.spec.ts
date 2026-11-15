@@ -59,6 +59,11 @@ test.describe("rules page", () => {
 
   const button = (page: Page, name: string) =>
     page.getByRole("button", { name, exact: true });
+  // Move rows and category headers carry aria-controls; a link inside a
+  // move's text (Face Danger ends with "Pay the Price") is a button too, but
+  // does not.
+  const row = (page: Page, name: string) =>
+    button(page, name).and(page.locator("[aria-controls]"));
 
   async function readTheRules(page: Page) {
     await expect(page).toHaveURL(/\/rules$/);
@@ -67,8 +72,8 @@ test.describe("rules page", () => {
     ).toBeVisible();
 
     // A move opens in place to its text.
-    await openAndSettle(button(page, "Adventure Moves"));
-    const faceDanger = button(page, "Face Danger");
+    await openAndSettle(row(page, "Adventure Moves"));
+    const faceDanger = row(page, "Face Danger");
     await expect(faceDanger).toHaveAttribute("aria-expanded", "false");
     await openAndSettle(faceDanger);
     await expect(faceDanger).toHaveAttribute("aria-expanded", "true");
@@ -112,11 +117,15 @@ test.describe("rules page", () => {
   async function nothingRolls(page: Page) {
     // Pay the Price places a rollable table inline. Elsewhere its roll
     // button sits above the table; here the table is read only.
-    await openAndSettle(button(page, "Fate Moves"));
-    const payThePrice = button(page, "Pay the Price");
+    await openAndSettle(row(page, "Fate Moves"));
+    const payThePrice = row(page, "Pay the Price");
     await openAndSettle(payThePrice);
     await expect(
-      page.getByRole("table").first()
+      payThePrice
+        .locator(
+          "xpath=../following-sibling::*[contains(@class,'MuiCollapse-root')][1]"
+        )
+        .getByRole("table")
     ).toBeVisible();
 
     await expect(rollButtons(page)).toHaveCount(0);
@@ -127,7 +136,7 @@ test.describe("rules page", () => {
     ).toHaveCount(0);
 
     // An oracle opens to read, with nothing to pin and nothing to roll.
-    await openAndSettle(button(page, "Action and Theme Oracles"));
+    await openAndSettle(row(page, "Action and Theme Oracles"));
     await clickCentered(button(page, "Action"));
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();

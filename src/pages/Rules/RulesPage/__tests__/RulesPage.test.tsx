@@ -112,6 +112,10 @@ vi.stubGlobal(
   }
 );
 
+// Rendering the whole move and oracle lists of a real ruleset is slow when the
+// full suite runs in parallel.
+vi.setConfig({ testTimeout: 30000 });
+
 describe("RulesPage", () => {
   let root: Root | undefined;
   let container: HTMLDivElement | undefined;

@@ -29,6 +29,8 @@ const rolls = vi.hoisted(() => ({
   togglePinnedOracle: vi.fn(() => Promise.resolve()),
 }));
 vi.mock("stores/appState/useRoller", () => ({ useRoller: () => rolls }));
+const mobile = vi.hoisted(() => ({ isMobile: false }));
+vi.mock("hooks/useIsMobile", () => ({ useIsMobile: () => mobile.isMobile }));
 vi.mock("hooks/useSystemOracle", () => ({
   useSystemOracles: () => ({
     askTheOracle: new Proxy({}, { get: () => "oracle_rollable:x/y" }),
@@ -413,6 +415,21 @@ describe("reference mode", () => {
         ).toBe("true");
       }
     );
+
+    it("is a named dialog on phones too, not an unnamed drawer", () => {
+      mobile.isMobile = true;
+      try {
+        render(<LinkedDialog />, "/rules");
+        const dialog = document.body.querySelector("[role='dialog']");
+        expect(dialog?.getAttribute("aria-modal")).toBe("true");
+        expect(dialog?.getAttribute("aria-labelledby")).toBeTruthy();
+        expect(
+          document.body.querySelector("[data-testid='mode']")?.textContent
+        ).toBe("true");
+      } finally {
+        mobile.isMobile = false;
+      }
+    });
 
     it("rolls as before when opened from any other page", () => {
       render(<LinkedDialog />, "/characters/abc");

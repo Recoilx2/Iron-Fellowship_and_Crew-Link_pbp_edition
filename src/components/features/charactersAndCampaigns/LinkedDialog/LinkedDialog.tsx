@@ -1,4 +1,6 @@
 import { Dialog, SwipeableDrawer } from "@mui/material";
+import DialogContext from "@mui/material/Dialog/DialogContext";
+import { useId } from "react";
 import { useStore } from "stores/store";
 import { LinkedDialogContent } from "./LinkedDialogContent";
 import { useIsMobile } from "hooks/useIsMobile";
@@ -15,6 +17,10 @@ export function LinkedDialog() {
   const handleClose = useStore((store) => store.appState.closeDialog);
 
   const isMobile = useIsMobile();
+  // The phone drawer is a dialog to screen readers, like the desktop Dialog,
+  // named by the same heading (DialogTitleWithCloseButton reads the id from
+  // DialogContext).
+  const titleId = useId();
   // The dialog sits outside the page, so it follows the page it opened from:
   // moves and oracles opened from the Rules page are for reading only.
   const isRulesPage = !!useMatch({
@@ -40,6 +46,9 @@ export function LinkedDialog() {
           onClose={handleClose}
           sx={{ pt: 1 }}
           PaperProps={{
+            role: "dialog",
+            "aria-modal": true,
+            "aria-labelledby": titleId,
             sx: (theme) => ({
               top: theme.spacing(2),
               borderTopLeftRadius: theme.shape.borderRadius,
@@ -47,12 +56,14 @@ export function LinkedDialog() {
             }),
           }}
         >
-          <LinkedDialogContent
-            id={newId}
-            isLastItem={previousIds.length === 0}
-            handleBack={handleBack}
-            handleClose={handleClose}
-          />
+          <DialogContext.Provider value={{ titleId }}>
+            <LinkedDialogContent
+              id={newId}
+              isLastItem={previousIds.length === 0}
+              handleBack={handleBack}
+              handleClose={handleClose}
+            />
+          </DialogContext.Provider>
         </SwipeableDrawer>
       </ReferenceModeContext.Provider>
     );
