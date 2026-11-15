@@ -18,11 +18,18 @@ Create every worktree or scratch copy of the repo under `.opencode/worktrees/` i
 
 ## Testing
 
-The agent sandbox has no Docker. Run the plain tests (`npm test`), lint and the type-check locally. Tests that need the local Supabase stack run in GitHub Actions on every pull request: push your branch, open the PR, and check its CI result before handing off. Don't try to install or start Docker in the sandbox.
+The agent sandbox has no Docker. Run the plain tests (`npm test`), lint and the type-check locally. Tests that need the local Supabase stack run in GitHub Actions on every pull request: push your branch, open the PR, and check its CI result before merging or handing off (see **Merging**). Don't try to install or start Docker in the sandbox.
 
 The stack tests (`src/**/*.live.test.ts`) skip without a stack, so plain `npm test` stays green. Against one local copy they run via `supabase/tests/live.sh` (see its header; it fails the run when any test is skipped). In CI the `live` job in `.github/workflows/supabase-smoke.yml` starts one copy from the template and runs that script on every pull request.
 
 Browser tests (Playwright, spec #9) run against one running copy plus the site container it serves. Start the copy from `supabase/` (generate the env first with `python3 bin/gen-env.py --copy ironsworn --port 8000 --out .env.live`, then `ENV_FILE=.env.live docker compose -p live --env-file .env.live -f docker-compose.yml up -d --build`), then run `npm run test:e2e` from the repo root (it fails the run when any browser test is skipped). The first run on a machine also needs `npx playwright install chromium`. In CI the `e2e` job in `.github/workflows/supabase-smoke.yml` does all of this on every pull request and keeps traces and screenshots as CI artifacts on failure. UI tickets add a browser test for their main flow under `e2e/`.
+
+## Merging
+
+A PR merges when, on its final commit, CI is green (including the `live` and `e2e` jobs) and a **reviewer** has passed it, with every finding fixed or answered on the PR. The reviewer is a fresh agent that did not write the code, given the diff, the ticket and its parent spec. After fixes, the reviewer re-checks the changed lines.
+
+- **Ticket PR into an `integration/*` branch:** the agent merges it, deletes the ticket branch, removes `needs-review` and closes the ticket (merges into `integration/*` don't auto-close issues).
+- **Integration branch into `prod`:** the agent opens the PR, gets it green and passed, then hands off to the human, who merges it.
 
 ## Agent skills
 
@@ -44,13 +51,15 @@ One ladder per failure. Run it in order, then stop.
 
 1. **Evidence first.** Commit the logs, artifacts and rejected drafts on the
    ticket branch before diagnosing. Uncommitted `/tmp` evidence has been lost
-   before.
+   before. Before the ticket's PR merges, delete the evidence in its own
+   commit, so it stays in the branch history but never in an integration
+   branch's tree.
 2. **Diagnose.** Dispatch a subagent with the `diagnosing-bugs` skill. The
    diagnosis must check whether the failing rule matches the spec or ADR it
    comes from. If the rule itself is wrong, stop and report; don't fix code
    around it.
-3. **Fix** through the normal flow: ticket, PR, review by another harness,
-   merge per **Merging**. Zero-paid probes are the "try".
+3. **Fix** through the normal flow: a ticket, then a PR merged per
+   **Merging**. Zero-paid probes are the "try".
 4. **Still failing?** Run the `moa` skill (mixture of agents: independent
    agents propose a fix) once, and take its fix through the same flow.
 5. **Any second failure, of any kind:** stop and post a handoff (`stuck` →

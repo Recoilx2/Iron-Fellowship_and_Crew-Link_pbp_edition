@@ -18,6 +18,13 @@ export function isMyNote(
   note: Note,
   owner: MyNotesOwner
 ): boolean {
+  // The campaign outline is edited in the assistant panel's Outline tab,
+  // never in a notes list: not even its author sees it under My notes.
+  // (Players cannot read the outline at all: the access rules hide it, so
+  // it never reaches this filter for them.)
+  if (note.kind === "outline") {
+    return false;
+  }
   if (!owner.uid) {
     return false;
   }

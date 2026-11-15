@@ -10,4 +10,10 @@ export interface Note {
    * owner is the character's owner.
    */
   authorId?: string | null;
+  /**
+   * The row's kind (`note` or `outline`, ticket #131). The campaign
+   * outline is edited in the assistant panel's Outline tab and never
+   * appears in a notes list, so My notes drops it even for its author.
+   */
+  kind?: "note" | "outline";
 }

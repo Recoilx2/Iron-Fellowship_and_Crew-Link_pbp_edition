@@ -31,8 +31,9 @@ describe("deleted-post cleanup and roll forgery migration (#120)", () => {
     // Migrations that landed after #120 (e.g. #125 momentum burn,
     // 20261116000000, and #118 image hardening, 20261117000000, and #125
     // burn hardening, 20261118000000, and its GM-only pin,
-    // 20261119000000, and the storage-privileges fix, 20261120000000)
-    // sort later by design, so they are excluded here.
+    // 20261119000000, the storage-privileges fix, 20261120000000, and the
+    // #128 assistant tables, 20261121000004, and the #131 campaign outline, 20261121000005) sort later by design, so they
+    // are excluded here.
     const landedLater = new Set([
       "20261116000000_chat_momentum_burn.sql",
       "20261117000000_chat_image_hardening.sql",
@@ -43,6 +44,9 @@ describe("deleted-post cleanup and roll forgery migration (#120)", () => {
       "20261121000001_chat_roll_lock_definer.sql",
       "20261121000002_campaign_swap_owner_guard.sql",
       "20261121000003_campaign_burn_campaign_match.sql",
+      "20261121000004_assistant_conversations.sql",
+      "20261121000005_campaign_outline.sql",
+      "20261121000006_assistant_outline_versions.sql",
     ]);
     const others = readdirSync(dir).filter(
       (f) => /^\d{14}_/.test(f) && f !== cleanupFile() && !landedLater.has(f)

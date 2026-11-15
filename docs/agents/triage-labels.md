@@ -19,7 +19,7 @@ Implementation issues carry exactly one status label. Beyond the roles above, th
 | Label         | Meaning                                                |
 | ------------- | ------------------------------------------------------ |
 | `in-progress` | Claimed by an agent                                    |
-| `needs-review`| PR open; a different harness reviews it                |
+| `needs-review`| PR open; a reviewer checks it (see **Merging** in `AGENTS.md`) |
 | `spec`        | Parent issue: never claim, implement or close it; its children are its sub-issues |
 
 Wayfinder map and ticket issues carry only `wayfinder:` labels, never these.
