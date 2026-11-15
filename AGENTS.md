@@ -18,7 +18,7 @@ Create every worktree or scratch copy of the repo under `.opencode/worktrees/` i
 
 ## Testing
 
-The agent sandbox has no Docker. Run the plain tests (`npm test`), lint and the type-check locally. Tests that need the local Supabase stack run in GitHub Actions on every pull request: push your branch, open the PR, and check its CI result before merging or handing off (see **Merging**). Don't try to install or start Docker in the sandbox.
+The agent sandbox has no Docker. Run the plain tests (`npm test`), lint and the type-check locally. Tests that need the local Supabase stack run in GitHub Actions on every pull request: push your branch, open the PR, and check its CI result before merging (see **Merging**). Don't try to install or start Docker in the sandbox.
 
 The stack tests (`src/**/*.live.test.ts`) skip without a stack, so plain `npm test` stays green. Against one local copy they run via `supabase/tests/live.sh` (see its header; it fails the run when any test is skipped). In CI the `live` job in `.github/workflows/supabase-smoke.yml` starts one copy from the template and runs that script on every pull request.
 
@@ -29,7 +29,7 @@ Browser tests (Playwright, spec #9) run against one running copy plus the site c
 A PR merges when, on its final commit, CI is green (including the `live` and `e2e` jobs) and a **reviewer** has passed it, with every finding fixed or answered on the PR. The reviewer is a fresh agent that did not write the code, given the diff, the ticket and its parent spec. After fixes, the reviewer re-checks the changed lines.
 
 - **Ticket PR into an `integration/*` branch:** the agent merges it, deletes the ticket branch, removes `needs-review` and closes the ticket (merges into `integration/*` don't auto-close issues).
-- **Integration branch into `prod`:** the agent opens the PR, gets it green and passed, then hands off to the human, who merges it.
+- **Integration branch into `prod`:** the agent opens the PR, gets it green and passed, and merges it. The human is the architect: they rule on `ready-for-human` and `wayfinder:*` tickets and answer `needs-info` handoffs, but take no part in merging.
 
 ## Agent skills
 
