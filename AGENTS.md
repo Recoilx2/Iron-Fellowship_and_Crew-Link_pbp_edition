@@ -18,7 +18,7 @@ Create every worktree or scratch copy of the repo under `.opencode/worktrees/` i
 
 ## Testing
 
-The agent sandbox has no Docker. Run the plain tests (`npm test`), lint and the type-check locally. Tests that need the local Supabase stack run in GitHub Actions on every pull request: push your branch, open the PR, and check its CI result before handing off. Don't try to install or start Docker in the sandbox.
+The agent sandbox has no Docker. Run the plain tests (`npm test`), lint and the type-check locally. Tests that need the local Supabase stack run in GitHub Actions on every pull request: push your branch, open the PR, and check its CI result before merging or handing off (see **Merging**). Don't try to install or start Docker in the sandbox.
 
 The stack tests (`src/**/*.live.test.ts`) skip without a stack, so plain `npm test` stays green. Against one local copy they run via `supabase/tests/live.sh` (see its header; it fails the run when any test is skipped). In CI the `live` job in `.github/workflows/supabase-smoke.yml` starts one copy from the template and runs that script on every pull request.
 
@@ -26,10 +26,10 @@ Browser tests (Playwright, spec #9) run against one running copy plus the site c
 
 ## Merging
 
-A PR merges when its CI is green (including the `live` and `e2e` jobs), a **reviewer** has passed it, and every review finding is fixed or answered on the PR. The reviewer is a fresh agent that did not write the code, given the diff, the ticket and its parent spec.
+A PR merges when, on its final commit, CI is green (including the `live` and `e2e` jobs) and a **reviewer** has passed it, with every finding fixed or answered on the PR. The reviewer is a fresh agent that did not write the code, given the diff, the ticket and its parent spec. After fixes, the reviewer re-checks the changed lines.
 
-- **Ticket PR into an `integration/*` branch:** the agent merges it and deletes the ticket branch.
-- **Integration branch into `prod`:** the agent opens the PR and gets it green and reviewed; the human merges it.
+- **Ticket PR into an `integration/*` branch:** the agent merges it, deletes the ticket branch, removes `needs-review` and closes the ticket (merges into `integration/*` don't auto-close issues).
+- **Integration branch into `prod`:** the agent opens the PR, gets it green and passed, then hands off to the human, who merges it.
 
 ## Agent skills
 
@@ -56,7 +56,8 @@ One ladder per failure. Run it in order, then stop.
    diagnosis must check whether the failing rule matches the spec or ADR it
    comes from. If the rule itself is wrong, stop and report; don't fix code
    around it.
-3. **Fix** through the normal flow: ticket, PR, review, merge per **Merging**. Zero-paid probes are the "try".
+3. **Fix** through the normal flow: a ticket, then a PR merged per
+   **Merging**. Zero-paid probes are the "try".
 4. **Still failing?** Run the `moa` skill (mixture of agents: independent
    agents propose a fix) once, and take its fix through the same flow.
 5. **Any second failure, of any kind:** stop and post a handoff (`stuck` →
