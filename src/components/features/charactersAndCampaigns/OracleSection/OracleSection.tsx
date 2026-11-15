@@ -4,6 +4,7 @@ import { useFilterOracles } from "./useFilterOracles";
 import { EmptyState } from "components/shared/EmptyState";
 import { OracleCollection } from "./OracleCollection";
 import { AskTheOracleButtons } from "./AskTheOracleButtons";
+import { useReferenceMode } from "hooks/useReferenceMode";
 
 export interface OraclesSectionProps {
   actionIsHide?: boolean
@@ -11,6 +12,7 @@ export interface OraclesSectionProps {
 
 export function OracleSection(props: OraclesSectionProps) {
   const { actionIsHide = false } = props;
+  const isReferenceMode = useReferenceMode();
 
   const {
     oracleCollections,
@@ -32,21 +34,23 @@ export function OracleSection(props: OraclesSectionProps) {
           bgcolor={(theme) => theme.palette.darkGrey.dark}
           borderBottom={(theme) => `1px solid ${theme.palette.darkGrey.dark}`}
         >
-          <Box
-            color={(theme) => theme.palette.darkGrey.contrastText}
-            bgcolor={(theme) => theme.palette.darkGrey.dark}
-            borderBottom={(theme) => `1px solid ${theme.palette.darkGrey.dark}`}
-          >
-            <Typography
-              variant={"body2"}
-              component={"div"}
-              textAlign={"center"}
-              fontFamily={(theme) => theme.fontFamilyTitle}
+          {!isReferenceMode && (
+            <Box
+              color={(theme) => theme.palette.darkGrey.contrastText}
+              bgcolor={(theme) => theme.palette.darkGrey.dark}
+              borderBottom={(theme) => `1px solid ${theme.palette.darkGrey.dark}`}
             >
-              Ask the Oracle
-            </Typography>
-            <AskTheOracleButtons />
-          </Box>
+              <Typography
+                variant={"body2"}
+                component={"div"}
+                textAlign={"center"}
+                fontFamily={(theme) => theme.fontFamilyTitle}
+              >
+                Ask the Oracle
+              </Typography>
+              <AskTheOracleButtons />
+            </Box>
+          )}
           <Input
             fullWidth
             startAdornment={

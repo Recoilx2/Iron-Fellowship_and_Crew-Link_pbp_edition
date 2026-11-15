@@ -3,6 +3,7 @@ import { Chip, Stack } from "@mui/material";
 import { AssetDocument } from "api-calls/assets/_asset.type";
 import { StatComponent } from "components/features/characters/StatComponent";
 import { useStore } from "stores/store";
+import { useReferenceMode } from "hooks/useReferenceMode";
 
 export interface MoveAssetControlProps {
   move: Datasworn.Move;
@@ -12,8 +13,10 @@ export interface MoveAssetControlProps {
 export function MoveAssetControl(props: MoveAssetControlProps) {
   const { control, move } = props;
 
+  const isReferenceMode = useReferenceMode();
   const isInCharacterSheet = useStore(
-    (store) => store.characters.currentCharacter.currentCharacterId
+    (store) =>
+      !isReferenceMode && store.characters.currentCharacter.currentCharacterId
   );
 
   const characterAssets = useStore(

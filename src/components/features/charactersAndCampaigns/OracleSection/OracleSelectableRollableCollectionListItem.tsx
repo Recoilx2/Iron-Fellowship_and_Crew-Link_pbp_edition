@@ -6,6 +6,7 @@ import { OracleListItemActionOpenDialogButton } from "./OracleListItemActionOpen
 import { ListItemButtonWithSecondaryAction } from "./ListItemButtonWithSecondaryAction";
 import { ToggleVisibilityButton } from "components/shared/ToggleVisibilityButton";
 import { useStore } from "stores/store";
+import { useReferenceMode } from "hooks/useReferenceMode";
 
 export interface OracleSelectableRollableCollectionListItemProps {
   collection:
@@ -22,6 +23,8 @@ export function OracleSelectableRollableCollectionListItem(
 ) {
   const { collection, disabled, actionIsHide, hidden } = props;
   const { rollOracleTable } = useRoller();
+  const isReferenceMode = useReferenceMode();
+  const openDialog = useStore((store) => store.appState.openDialog);
 
   const options = collection.contents ?? {};
   const keys = Object.keys(options);
@@ -52,11 +55,17 @@ export function OracleSelectableRollableCollectionListItem(
 
   return (
     <ListItemButtonWithSecondaryAction
-      disabled={disabled || !selectedOptionId}
-      onClick={!actionIsHide ? () => rollOracleTable(selectedOptionId, true) : undefined}
+      disabled={disabled || (!isReferenceMode && !selectedOptionId)}
+      onClick={
+        isReferenceMode
+          ? () => openDialog(collection._id)
+          : !actionIsHide
+            ? () => rollOracleTable(selectedOptionId, true)
+            : undefined
+      }
       secondaryAction={
         <Box display={"flex"} alignItems={"center"}>
-          {keys.length > 0 && !actionIsHide && (
+          {keys.length > 0 && !actionIsHide && !isReferenceMode && (
             <TextField
               inputProps={{ "aria-label": `${collection.name} Option` }}
               size={"small"}

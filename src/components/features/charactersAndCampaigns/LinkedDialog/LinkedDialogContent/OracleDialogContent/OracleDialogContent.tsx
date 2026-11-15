@@ -9,6 +9,7 @@ import { OracleTableSharedResults } from "./OracleTableSharedResults";
 import { OracleCollection } from "./OracleCollection";
 import { OracleRollableColumn } from "./OracleRollableColumn";
 import { OracleButton } from "components/features/charactersAndCampaigns/OracleSection/OracleButton";
+import { useReferenceMode } from "hooks/useReferenceMode";
 
 export interface OracleDialogContentProps {
   id: string;
@@ -25,6 +26,7 @@ type TempType = {
 
 export function OracleDialogContent(props: OracleDialogContentProps) {
   const { id, handleBack, handleClose, isLastItem } = props;
+  const isReferenceMode = useReferenceMode();
 
   const oracles = useStore((store) => store.rules.oracleMaps.allOraclesMap);
   const oracle = oracles[id];
@@ -60,14 +62,16 @@ export function OracleDialogContent(props: OracleDialogContentProps) {
         handleClose={handleClose}
         isLastItem={isLastItem}
         actions={
-          <Tooltip title={pinned ? "Unpin Oracle" : "Pin Oracle"}>
-            <IconButton
-              color={pinned ? "primary" : "default"}
-              onClick={() => updatePinnedOracles(id, !pinned).catch(() => {})}
-            >
-              <PinnedIcon />
-            </IconButton>
-          </Tooltip>
+          isReferenceMode ? undefined : (
+            <Tooltip title={pinned ? "Unpin Oracle" : "Pin Oracle"}>
+              <IconButton
+                color={pinned ? "primary" : "default"}
+                onClick={() => updatePinnedOracles(id, !pinned).catch(() => {})}
+              >
+                <PinnedIcon />
+              </IconButton>
+            </Tooltip>
+          )
         }
       >
         {oracle.name}
