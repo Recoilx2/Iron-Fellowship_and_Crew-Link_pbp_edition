@@ -63,14 +63,14 @@ export function OracleDialogContent(props: OracleDialogContentProps) {
         isLastItem={isLastItem}
         actions={
           isReferenceMode ? undefined : (
-          <Tooltip title={pinned ? "Unpin Oracle" : "Pin Oracle"}>
-            <IconButton
-              color={pinned ? "primary" : "default"}
-              onClick={() => updatePinnedOracles(id, !pinned).catch(() => {})}
-            >
-              <PinnedIcon />
-            </IconButton>
-          </Tooltip>
+            <Tooltip title={pinned ? "Unpin Oracle" : "Pin Oracle"}>
+              <IconButton
+                color={pinned ? "primary" : "default"}
+                onClick={() => updatePinnedOracles(id, !pinned).catch(() => {})}
+              >
+                <PinnedIcon />
+              </IconButton>
+            </Tooltip>
           )
         }
       >

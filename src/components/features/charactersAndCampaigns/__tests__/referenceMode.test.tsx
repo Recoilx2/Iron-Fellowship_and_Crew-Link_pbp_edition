@@ -22,9 +22,32 @@ const rulesetsMock = vi.hoisted(() => ({
 }));
 vi.mock("hooks/useGameSystem", () => ({ getSystem: () => "ironsworn" }));
 vi.mock("data/rulesets", () => rulesetsMock);
-vi.mock("stores/appState/useRoller", () => ({
-  useRoller: () => ({ rollStat: vi.fn(), rollOracleTable: vi.fn() }),
+const rolls = vi.hoisted(() => ({
+  rollStat: vi.fn(),
+  rollOracleTable: vi.fn(),
+  openDialog: vi.fn(),
+  togglePinnedOracle: vi.fn(() => Promise.resolve()),
 }));
+vi.mock("stores/appState/useRoller", () => ({ useRoller: () => rolls }));
+vi.mock("hooks/useSystemOracle", () => ({
+  useSystemOracles: () => ({
+    askTheOracle: new Proxy({}, { get: () => "oracle_rollable:x/y" }),
+  }),
+}));
+vi.mock(
+  "components/features/charactersAndCampaigns/LinkedDialog/LinkedDialogContent/LinkedDialogContentTitle",
+  () => ({
+    LinkedDialogContentTitle: (props: {
+      actions?: React.ReactNode;
+      children?: React.ReactNode;
+    }) => (
+      <div>
+        {props.children}
+        {props.actions}
+      </div>
+    ),
+  })
+);
 vi.mock("@datasworn-community/core", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@datasworn-community/core")>()),
   IdParser: {
@@ -63,13 +86,28 @@ state.rules = createRulesSlice(
 state.rules.setBaseRuleset(classic);
 state.rules.expansionIds = [];
 state.rules.rebuildRules();
+state.settings = {
+  pinnedOraclesIds: {},
+  togglePinnedOracle: rolls.togglePinnedOracle,
+};
+(
+  state.rules.assetMaps.assetMap as Record<string, unknown>
+)["asset:x/mule"] = {
+  name: "Mule",
+  controls: { load: { field_type: "condition_meter", value: 2 } },
+};
 state.appState = {
+  openDialog: rolls.openDialog,
   openDialogState: { isOpen: true, previousIds: [], openId: "move:x" },
   prevDialog: vi.fn(),
   closeDialog: vi.fn(),
 };
 state.campaigns = {
-  currentCampaign: { currentCampaign: undefined, assets: { assets: {} } },
+  currentCampaign: {
+    currentCampaign: undefined,
+    assets: { assets: {} },
+    updateHiddenOracles: vi.fn(),
+  },
 };
 state.characters = {
   currentCharacter: {
@@ -81,7 +119,9 @@ state.characters = {
       conditionMeters: { health: 5, spirit: 5, supply: 5 },
     },
     updateCurrentCharacter: vi.fn(),
-    assets: { assets: {} },
+    assets: {
+      assets: { a1: { id: "asset:x/mule", controlValues: { load: 3 } } },
+    },
   },
 };
 
@@ -92,6 +132,13 @@ vi.mock("stores/store", () => ({
 import { MoveRollers } from "../LinkedDialog/LinkedDialogContent/MoveDialogContent/MoveRollers";
 import { OracleButton } from "../OracleSection/OracleButton";
 import { LinkedDialog } from "../LinkedDialog";
+import { MoveAssetControl } from "../LinkedDialog/LinkedDialogContent/MoveDialogContent/MoveAssetControl";
+import { OracleDialogContent } from "../LinkedDialog/LinkedDialogContent/OracleDialogContent";
+import { OracleListItem } from "../OracleSection/OracleListItem";
+import { OracleSelectableRollableCollectionListItem } from "../OracleSection/OracleSelectableRollableCollectionListItem";
+import { OracleSection } from "../OracleSection";
+import { CATEGORY_VISIBILITY } from "../OracleSection/useFilterOracles";
+import { Datasworn } from "@datasworn-community/core";
 
 const theme = createTheme({
   palette: {
@@ -103,6 +150,22 @@ const theme = createTheme({
 (
   globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
+// jsdom has no ResizeObserver; oracle rows measure themselves with one.
+vi.stubGlobal(
+  "ResizeObserver",
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+);
+
+function inReferenceMode(node: React.ReactNode, on: boolean) {
+  return (
+    <ReferenceModeContext.Provider value={on}>{node}</ReferenceModeContext.Provider>
+  );
+}
 
 describe("reference mode", () => {
   let root: Root | undefined;
@@ -166,6 +229,155 @@ describe("reference mode", () => {
       expect(view.textContent).toBe("edgeheartironshadowwits");
       expect(view.textContent).not.toContain("Adds");
     });
+
+    it("still offers the character's Adds outside reference mode", () => {
+      const view = render(<MoveRollers move={faceDanger} />);
+      expect(view.textContent).toContain("Adds");
+    });
+  });
+
+  describe("a move's asset control", () => {
+    it("is the character's asset, rolling, outside reference mode", () => {
+      const view = render(
+        <MoveAssetControl move={faceDanger} control={"load"} />
+      );
+      expect(rollButtons(view)).toEqual(["Roll Mule +3"]);
+    });
+
+    it("is a name chip in reference mode", () => {
+      const view = render(
+        inReferenceMode(
+          <MoveAssetControl move={faceDanger} control={"load"} />,
+          true
+        )
+      );
+      expect(rollButtons(view)).toEqual([]);
+      expect(view.textContent).toBe("load");
+    });
+  });
+
+  const actionOracleId = "oracle_rollable:classic/action_and_theme/action";
+  const oracles = state.rules.oracleMaps.oracleRollableMap;
+
+  describe("an oracle row", () => {
+    function row(on: boolean) {
+      return render(
+        inReferenceMode(
+          <OracleListItem
+            oracleId={actionOracleId}
+            oracles={oracles}
+            visibleOracles={{}}
+            collectionVisibility={CATEGORY_VISIBILITY.ALL}
+          />,
+          on
+        )
+      );
+    }
+
+    it("rolls the oracle when clicked outside reference mode", () => {
+      const view = row(false);
+      act(() => view.querySelector<HTMLElement>("[role='button']")?.click());
+      expect(rolls.rollOracleTable).toHaveBeenCalledTimes(1);
+      expect(rolls.openDialog).not.toHaveBeenCalled();
+    });
+
+    it("opens the table to read, without rolling, in reference mode", () => {
+      const view = row(true);
+      act(() => view.querySelector<HTMLElement>("[role='button']")?.click());
+      expect(rolls.openDialog).toHaveBeenCalledWith(actionOracleId);
+      expect(rolls.rollOracleTable).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("a shared-text oracle row", () => {
+    const collection = {
+      _id: "oracle_collection:x/shared",
+      name: "Shared",
+      oracle_type: "table_shared_text",
+      contents: { a: { _id: "oracle_rollable:x/shared.a", name: "A" } },
+    } as unknown as Datasworn.OracleTableSharedText;
+
+    function row(on: boolean) {
+      return render(
+        inReferenceMode(
+          <OracleSelectableRollableCollectionListItem collection={collection} />,
+          on
+        )
+      );
+    }
+
+    it("rolls the chosen option outside reference mode, with its picker", () => {
+      const view = row(false);
+      expect(
+        view.querySelector("[aria-label='Shared Option']")
+      ).not.toBeNull();
+      act(() => view.querySelector<HTMLElement>("[role='button']")?.click());
+      expect(rolls.rollOracleTable).toHaveBeenCalledWith(
+        "oracle_rollable:x/shared.a",
+        true
+      );
+    });
+
+    it("opens the table, with no picker and no roll, in reference mode", () => {
+      const view = row(true);
+      expect(view.querySelector("[aria-label='Shared Option']")).toBeNull();
+      act(() => view.querySelector<HTMLElement>("[role='button']")?.click());
+      expect(rolls.openDialog).toHaveBeenCalledWith(collection._id);
+      expect(rolls.rollOracleTable).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("the oracle list header", () => {
+    const askButtons = (view: HTMLElement) =>
+      Array.from(view.querySelectorAll("button")).filter((button) =>
+        ["Small Chance", "Unlikely", "50/50", "Likely", "Almost Certain"].includes(
+          button.textContent ?? ""
+        )
+      );
+
+    it("has the Ask the Oracle buttons outside reference mode", () => {
+      expect(askButtons(render(<OracleSection />))).toHaveLength(5);
+    });
+
+    it("has none in reference mode, but keeps the filter", () => {
+      const view = render(inReferenceMode(<OracleSection />, true));
+      expect(askButtons(view)).toHaveLength(0);
+      expect(view.querySelector("input[aria-label='Filter Oracles']")).not.toBeNull();
+    });
+  });
+
+  describe("an oracle's dialog", () => {
+    // The oracle's roll button is labelled with the oracle's name.
+    const oracleRollButtons = (view: HTMLElement) =>
+      Array.from(view.querySelectorAll("button"))
+        .map((button) => button.textContent)
+        .filter((name) => name === "Action");
+
+    function dialog(on: boolean) {
+      return render(
+        inReferenceMode(
+          <OracleDialogContent
+            id={actionOracleId}
+            handleBack={vi.fn()}
+            handleClose={vi.fn()}
+            isLastItem
+          />,
+          on
+        )
+      );
+    }
+
+    it("can pin the oracle, and roll it, outside reference mode", () => {
+      const view = dialog(false);
+      expect(view.querySelector("[aria-label='Pin Oracle']")).not.toBeNull();
+      expect(oracleRollButtons(view)).toEqual(["Action"]);
+    });
+
+    it("has no Pin button and no roll button in reference mode", () => {
+      const view = dialog(true);
+      expect(view.querySelector("[aria-label='Pin Oracle']")).toBeNull();
+      expect(oracleRollButtons(view)).toEqual([]);
+    });
   });
 
   describe("an oracle's roll button", () => {
@@ -191,6 +403,16 @@ describe("reference mode", () => {
         "true"
       );
     });
+
+    it.each(["/rules/", "/rules/anything"])(
+      "is also for reading only on %s",
+      (path) => {
+        render(<LinkedDialog />, path);
+        expect(
+          document.body.querySelector("[data-testid='mode']")?.textContent
+        ).toBe("true");
+      }
+    );
 
     it("rolls as before when opened from any other page", () => {
       render(<LinkedDialog />, "/characters/abc");

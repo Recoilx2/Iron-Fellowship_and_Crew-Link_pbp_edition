@@ -17,54 +17,57 @@ export function LinkedDialog() {
   const isMobile = useIsMobile();
   // The dialog sits outside the page, so it follows the page it opened from:
   // moves and oracles opened from the Rules page are for reading only.
-  const isRulesPage = !!useMatch(basePaths[BASE_ROUTES.RULES]);
+  const isRulesPage = !!useMatch({
+    path: basePaths[BASE_ROUTES.RULES],
+    end: false,
+  });
 
   const newId = openId ? idMap[openId] ?? openId : undefined;
 
   if (isMobile) {
     return (
       <ReferenceModeContext.Provider value={isRulesPage}>
-      <SwipeableDrawer
-        anchor={"bottom"}
-        open={isOpen}
-        onOpen={() => {}}
-        disableSwipeToOpen
-        disableDiscovery
-        variant="temporary"
-        ModalProps={{
-          keepMounted: false,
-        }}
-        onClose={handleClose}
-        sx={{ pt: 1 }}
-        PaperProps={{
-          sx: (theme) => ({
-            top: theme.spacing(2),
-            borderTopLeftRadius: theme.shape.borderRadius,
-            borderTopRightRadius: theme.shape.borderRadius,
-          }),
-        }}
-      >
-        <LinkedDialogContent
-          id={newId}
-          isLastItem={previousIds.length === 0}
-          handleBack={handleBack}
-          handleClose={handleClose}
-        />
-      </SwipeableDrawer>
+        <SwipeableDrawer
+          anchor={"bottom"}
+          open={isOpen}
+          onOpen={() => {}}
+          disableSwipeToOpen
+          disableDiscovery
+          variant="temporary"
+          ModalProps={{
+            keepMounted: false,
+          }}
+          onClose={handleClose}
+          sx={{ pt: 1 }}
+          PaperProps={{
+            sx: (theme) => ({
+              top: theme.spacing(2),
+              borderTopLeftRadius: theme.shape.borderRadius,
+              borderTopRightRadius: theme.shape.borderRadius,
+            }),
+          }}
+        >
+          <LinkedDialogContent
+            id={newId}
+            isLastItem={previousIds.length === 0}
+            handleBack={handleBack}
+            handleClose={handleClose}
+          />
+        </SwipeableDrawer>
       </ReferenceModeContext.Provider>
     );
   }
 
   return (
     <ReferenceModeContext.Provider value={isRulesPage}>
-    <Dialog open={isOpen} onClose={handleClose}>
-      <LinkedDialogContent
-        id={newId}
-        isLastItem={previousIds.length === 0}
-        handleBack={handleBack}
-        handleClose={handleClose}
-      />
-    </Dialog>
+      <Dialog open={isOpen} onClose={handleClose}>
+        <LinkedDialogContent
+          id={newId}
+          isLastItem={previousIds.length === 0}
+          handleBack={handleBack}
+          handleClose={handleClose}
+        />
+      </Dialog>
     </ReferenceModeContext.Provider>
   );
 }
