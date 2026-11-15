@@ -151,9 +151,6 @@ test.describe("chat momentum burn on a posted roll", () => {
       // The author expands the roll and burns momentum on it.
       await playerOneLiner.click();
       await expect(playerOneLiner).toHaveAttribute("aria-expanded", "true");
-      const burnButton = playerPage.getByRole("button", {
-        name: "Burn momentum",
-      });
       // The Collapse must finish opening first: a click on the moving
       // button is lost (#141).
       await expectCollapseOpenAfter(playerOneLiner);
