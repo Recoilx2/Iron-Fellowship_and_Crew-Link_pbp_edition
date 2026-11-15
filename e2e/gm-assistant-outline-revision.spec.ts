@@ -247,8 +247,8 @@ test.describe("outline revisions", () => {
       ).toContainText(PROPOSED);
 
       // Apply needs confirmation; only confirming replaces the outline
-      // and keeps the previous version. The open editor moves onto the
-      // replacement at once.
+      // and keeps the previous version. The open editor shows the
+      // replacement live.
       await gmPage.getByRole("button", { name: "Apply to outline" }).click();
       await expect(
         gmPage.getByText("Replace the outline?")
@@ -256,8 +256,8 @@ test.describe("outline revisions", () => {
       expect(await outlineContents()).toBe(ORIGINAL);
       await gmPage.getByRole("button", { name: "Confirm replace" }).click();
       await expect(gmPage.getByText("Applied.")).toBeVisible();
-      // The row settles once the remounted editor's sync reaches the
-      // server: a stale persisted store can briefly flip it back first.
+      // The Apply goes through the note server, so the open editor shows
+      // it live and the row follows once the server persists it.
       await expect
         .poll(() => outlineContents(), { timeout: 30000 })
         .toBe(PROPOSED);
@@ -276,7 +276,7 @@ test.describe("outline revisions", () => {
       ).toEqual([ORIGINAL]);
 
       // The Outline tab's Undo restores the previous version, and the
-      // editor moves back onto it at once. Scope to the tab header's
+      // editor shows it live. Scope to the tab header's
       // button: the applied preview carries its own Undo.
       await gmPage
         .getByRole("button", {
@@ -287,8 +287,7 @@ test.describe("outline revisions", () => {
       await expect(
         gmPage.getByRole("textbox", { name: "Note text" })
       ).toContainText(ORIGINAL);
-      // Same settling as after Apply: the remount disconnect lets a stale
-      // store flip the row back briefly before the new sync lands.
+      // Same as after Apply: the row follows once the server persists.
       await expect
         .poll(() => outlineContents(), { timeout: 30000 })
         .toBe(ORIGINAL);

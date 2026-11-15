@@ -1,12 +1,18 @@
 import { afterEach, describe, expect, it } from "vitest";
 import * as Y from "yjs";
+import { HocuspocusProvider } from "@hocuspocus/provider";
 
 import { getSupabaseClient } from "config/supabase.config";
 import { createCampaign } from "api-calls/campaign/createCampaign";
 import { joinCampaign } from "api-calls/campaign/joinCampaign";
 import { CampaignType } from "api-calls/campaign/_campaign.type";
 import { getOrCreateCampaignOutline } from "api-calls/notes/campaignOutline";
-import { decodeOutlineContent } from "api-calls/assistant/outlineText";
+import {
+  decodeOutlineContent,
+  readOutlineFromDoc,
+  replaceOutlineInDoc,
+} from "api-calls/assistant/outlineText";
+import { getCampaignNoteDocumentName } from "config/hocuspocus.config";
 import { ASSISTANT_OUTLINE_VERSIONS_TABLE } from "api-calls/assistant/_getRef";
 import {
   applyOutlineRevision,
@@ -16,7 +22,10 @@ import {
 import {
   createPerson,
   deletePerson,
+  hocuspocusUrl,
   liveStackConfig,
+  personToken,
+  waitFor,
   type LivePerson,
   type LiveStackConfig,
 } from "api-calls/testing/liveHarness";
@@ -52,6 +61,18 @@ async function outlineTextAs(
   if (error) return null;
   const content = (data?.[0] as { content?: unknown } | undefined)?.content;
   return typeof content === "string" ? decodeOutlineContent(content) : null;
+}
+
+/** Waits until the stored outline reads as `expected` (the server persists on a debounce). */
+async function storedOutlineBecomes(
+  person: LivePerson,
+  outlineId: string,
+  expected: string
+): Promise<string> {
+  return waitFor(async () => {
+    const text = await outlineTextAs(person, outlineId);
+    return text === expected ? text : null;
+  }, 30000);
 }
 
 describe.skipIf(!config)("assistant outline versions end to end (#133)", () => {
@@ -122,11 +143,11 @@ describe.skipIf(!config)("assistant outline versions end to end (#133)", () => {
     expect(versions.map((version) => version.content)).toEqual([
       "Original plan.",
     ]);
-    expect(await outlineTextAs(gm, outlineId)).toBe("Revised plan.");
+    await storedOutlineBecomes(gm, outlineId, "Revised plan.");
 
     const restored = await undoOutlineRevision({ campaignId, outlineId });
     expect(restored).toBe("Original plan.");
-    expect(await outlineTextAs(gm, outlineId)).toBe("Original plan.");
+    await storedOutlineBecomes(gm, outlineId, "Original plan.");
     expect(await listOutlineVersions({ campaignId })).toEqual([]);
     await signOut();
   });
@@ -199,7 +220,131 @@ describe.skipIf(!config)("assistant outline versions end to end (#133)", () => {
 
     // The outline itself is untouched by the refused writes.
     await signInAs(gm);
-    expect(await outlineTextAs(gm, outlineId)).toBe("Revised plan.");
+    await storedOutlineBecomes(gm, outlineId, "Revised plan.");
     await signOut();
   });
+
+  /**
+   * Regression for #147: a co-GM holds the outline open through the note
+   * server while the other GM applies from the Chat tab. The note server
+   * keeps the open document in memory; an Apply that bypasses it is
+   * written back over. Through the server, the open client receives the
+   * Apply, and it survives the open client's later edits and a reconnect.
+   */
+  it(
+    "an apply reaches an open editor and is not reverted",
+    { timeout: 180000 },
+    async () => {
+      const { gm, coGm, campaignId, outlineId } = await setUpCampaign();
+      const documentName = getCampaignNoteDocumentName(outlineId);
+
+      // The co-GM holds the outline open.
+      const open = new Y.Doc();
+      let openSynced = false;
+      const openProvider = new HocuspocusProvider({
+        url: hocuspocusUrl(cfg),
+        name: documentName,
+        document: open,
+        token: await personToken(coGm),
+        onSynced: () => {
+          openSynced = true;
+        },
+      });
+      try {
+        await waitFor(() => (openSynced ? true : null), 30000);
+        expect(readOutlineFromDoc(open)).toBe("Original plan.");
+
+        // A live edit the stored row has not caught up with (the server
+        // persists on a 2 s debounce).
+        replaceOutlineInDoc(open, "Original plan. Live edit.");
+
+        await signInAs(gm);
+        await applyOutlineRevision({
+          campaignId,
+          outlineId,
+          proposedText: "Revised plan.",
+        });
+
+        // The saved previous version is what the GM saw at Apply time.
+        const versions = await listOutlineVersions({ campaignId });
+        expect(versions.map((version) => version.content)).toEqual([
+          "Original plan. Live edit.",
+        ]);
+
+        // The open editor shows the Apply.
+        await waitFor(
+          () => (readOutlineFromDoc(open) === "Revised plan." ? true : null),
+          30000
+        );
+
+        // Past the server's debounce, with the open client still editing,
+        // the stored outline keeps the Apply (plus the later edit).
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+        replaceOutlineInDoc(open, "Revised plan. And more.");
+        await storedOutlineBecomes(gm, outlineId, "Revised plan. And more.");
+      } finally {
+        openProvider.destroy();
+      }
+
+      // A fresh connection (reconnect) reads the same.
+      const again = new Y.Doc();
+      let againSynced = false;
+      const againProvider = new HocuspocusProvider({
+        url: hocuspocusUrl(cfg),
+        name: documentName,
+        document: again,
+        token: await personToken(coGm),
+        onSynced: () => {
+          againSynced = true;
+        },
+      });
+      try {
+        await waitFor(() => (againSynced ? true : null), 30000);
+        expect(readOutlineFromDoc(again)).toBe("Revised plan. And more.");
+      } finally {
+        againProvider.destroy();
+      }
+      await signOut();
+    }
+  );
+
+  it(
+    "an undo reaches an open editor too",
+    { timeout: 180000 },
+    async () => {
+      const { gm, coGm, campaignId, outlineId } = await setUpCampaign();
+      await signInAs(gm);
+      await applyOutlineRevision({
+        campaignId,
+        outlineId,
+        proposedText: "Revised plan.",
+      });
+      await storedOutlineBecomes(gm, outlineId, "Revised plan.");
+
+      const open = new Y.Doc();
+      let synced = false;
+      const provider = new HocuspocusProvider({
+        url: hocuspocusUrl(cfg),
+        name: getCampaignNoteDocumentName(outlineId),
+        document: open,
+        token: await personToken(coGm),
+        onSynced: () => {
+          synced = true;
+        },
+      });
+      try {
+        await waitFor(() => (synced ? true : null), 30000);
+        await undoOutlineRevision({ campaignId, outlineId });
+        await waitFor(
+          () => (readOutlineFromDoc(open) === "Original plan." ? true : null),
+          30000
+        );
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+        await storedOutlineBecomes(gm, outlineId, "Original plan.");
+      } finally {
+        provider.destroy();
+      }
+      await signOut();
+    }
+  );
 });

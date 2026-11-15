@@ -12,7 +12,7 @@ import { ASSISTANT_OUTLINE_VERSIONS_TABLE } from "./_getRef";
 import { CAMPAIGN_NOTE_CONTENTS_TABLE } from "api-calls/notes/_getRef";
 import { encodeNoteContent } from "api-calls/notes/noteContent";
 import { getSupabaseClient } from "config/supabase.config";
-import { decodeOutlineContent } from "./outlineText";
+import { decodeOutlineBytes } from "./outlineText";
 
 function editorContentsRow(text: string): Record<string, unknown> {
   const doc = TiptapTransformer.toYdoc(
@@ -28,6 +28,81 @@ function editorContentsRow(text: string): Record<string, unknown> {
 }
 
 vi.mock("config/supabase.config");
+vi.mock("config/hocuspocus.config", () => ({
+  getCampaignNoteDocumentName: (id: string) => `campaign-notes/${id}`,
+  getHocuspocusUrl: () => "ws://notes.test/hocuspocus",
+  getHocuspocusToken: async () => "token",
+}));
+
+// The provider is mocked at its seam: a fake note server holds one Y.Doc
+// per document name; a provider copies it in, reports synced, and
+// forwards local changes back before reporting them acknowledged.
+const server = vi.hoisted(() => ({
+  docs: new Map<string, unknown>(),
+  opened: [] as string[],
+  destroyed: 0,
+  acknowledge: true,
+  refuse: false,
+  lastDocument: null as unknown,
+}));
+vi.mock("@hocuspocus/provider", async () => {
+  const Yjs = await import("yjs");
+  class FakeProvider {
+    hasUnsyncedChanges = false;
+    private onUnsynced: (p: { number: number }) => void;
+    constructor(config: {
+      name: string;
+      document: InstanceType<typeof Yjs.Doc>;
+      token: unknown;
+      onSynced?: () => void;
+      onUnsyncedChanges?: (p: { number: number }) => void;
+    }) {
+      server.opened.push(config.name);
+      server.lastDocument = config.document;
+      this.onUnsynced = config.onUnsyncedChanges ?? (() => {});
+      const remote =
+        (server.docs.get(config.name) as InstanceType<typeof Yjs.Doc>) ??
+        new Yjs.Doc();
+      server.docs.set(config.name, remote);
+      if (server.refuse) return;
+      setTimeout(() => {
+        Yjs.applyUpdate(config.document, Yjs.encodeStateAsUpdate(remote));
+        config.document.on("update", (update: Uint8Array, origin: unknown) => {
+          if (origin === "server") return;
+          this.hasUnsyncedChanges = true;
+          this.onUnsynced({ number: 1 });
+          if (!server.acknowledge) return;
+          setTimeout(() => {
+            Yjs.applyUpdate(remote, update, "server");
+            this.hasUnsyncedChanges = false;
+            this.onUnsynced({ number: 0 });
+          }, 5);
+        });
+        config.onSynced?.();
+      }, 5);
+    }
+    destroy() {
+      server.destroyed += 1;
+    }
+  }
+  return { HocuspocusProvider: FakeProvider };
+});
+
+function seedServer(documentName: string, text: string): void {
+  const doc = TiptapTransformer.toYdoc(
+    {
+      type: "doc",
+      content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+    },
+    "default"
+  );
+  server.docs.set(documentName, doc);
+}
+
+function serverText(documentName: string): string {
+  const doc = server.docs.get(documentName) as Y.Doc;
+  return decodeOutlineBytes(Y.encodeStateAsUpdate(doc));
+}
 
 const mockedGetSupabaseClient = vi.mocked(getSupabaseClient);
 
@@ -62,6 +137,11 @@ beforeEach(() => {
   state.deleteResult = [{ id: "version-1" }];
   state.versionRows = [];
   state.contentRows = [];
+  server.docs.clear();
+  server.opened = [];
+  server.destroyed = 0;
+  server.acknowledge = true;
+  server.refuse = false;
   mockedGetSupabaseClient.mockReturnValue({
     auth: {
       getSession: () =>
@@ -116,15 +196,16 @@ beforeEach(() => {
 });
 
 describe("outline versions", () => {
-  it("apply keeps the replaced text, then replaces the outline", async () => {
-    const current = "Act one: the bell rings.";
-    const proposed = "Act one revised: the bell cracks.";
+  it("apply keeps what the note server holds, then replaces it there", async () => {
+    // A live edit the REST row has not caught up with yet.
+    state.contentRows = [editorContentsRow("Stale row text.")];
+    seedServer("campaign-notes/outline-1", "Act one: the bell rings.");
 
     const versionId = await applyOutlineRevision({
       campaignId: "campaign-1",
       outlineId: "outline-1",
-      currentText: current,
-      proposedText: proposed,
+      currentText: "Stale row text.",
+      proposedText: "Act one revised: the bell cracks.",
     });
 
     expect(typeof versionId).toBe("string");
@@ -132,16 +213,18 @@ describe("outline versions", () => {
     expect(state.inserted[0]).toMatchObject({
       campaign_id: "campaign-1",
       created_by: "gm-1",
-      content: current,
+      content: "Act one: the bell rings.",
     });
-    expect(state.upsertedContents).toHaveLength(1);
-    expect(state.upsertedContents[0]).toMatchObject({ note_id: "outline-1" });
-    expect(
-      decodeOutlineContent(state.upsertedContents[0]?.content as string)
-    ).toBe(proposed);
+    expect(server.opened).toEqual(["campaign-notes/outline-1"]);
+    expect(serverText("campaign-notes/outline-1")).toBe(
+      "Act one revised: the bell cracks."
+    );
+    // Nothing is written over REST any more.
+    expect(state.upsertedContents).toHaveLength(0);
+    expect(server.destroyed).toBe(1);
   });
 
-  it("apply with a blank current outline replaces without keeping a version", async () => {
+  it("apply with a blank outline replaces without keeping a version", async () => {
     const versionId = await applyOutlineRevision({
       campaignId: "campaign-1",
       outlineId: "outline-1",
@@ -151,26 +234,56 @@ describe("outline versions", () => {
 
     expect(versionId).toBeNull();
     expect(state.inserted).toHaveLength(0);
-    expect(state.upsertedContents).toHaveLength(1);
-    expect(
-      decodeOutlineContent(state.upsertedContents[0]?.content as string)
-    ).toBe("A fresh plan.");
+    expect(serverText("campaign-notes/outline-1")).toBe("A fresh plan.");
   });
 
-  it("apply replaces the editor fragment without duplicating it", async () => {
-    state.contentRows = [editorContentsRow("Act one: the bell rings.")];
+  it("apply does not report success until the note server acknowledged", async () => {
+    seedServer("campaign-notes/outline-1", "Old.");
+    server.acknowledge = false;
+    vi.useFakeTimers();
+    try {
+      let settled = false;
+      const pending = applyOutlineRevision({
+        campaignId: "campaign-1",
+        outlineId: "outline-1",
+        currentText: "Old.",
+        proposedText: "New.",
+      }).then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        }
+      );
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(60000);
+      await pending;
+      expect(settled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
-    await applyOutlineRevision({
-      campaignId: "campaign-1",
-      outlineId: "outline-1",
-      currentText: "Act one: the bell rings.",
-      proposedText: "Act one revised: the bell cracks.",
-    });
-
-    expect(state.upsertedContents).toHaveLength(1);
-    expect(
-      decodeOutlineContent(state.upsertedContents[0]?.content as string)
-    ).toBe("Act one revised: the bell cracks.");
+  it("apply fails and writes nothing over REST when the note server never syncs", async () => {
+    // Auth refused / server down: no onSynced ever fires.
+    vi.useFakeTimers();
+    try {
+      server.refuse = true;
+      const pending = applyOutlineRevision({
+        campaignId: "campaign-1",
+        outlineId: "outline-1",
+        currentText: "Old.",
+        proposedText: "New.",
+      });
+      const assertion = expect(pending).rejects.toBeTruthy();
+      await vi.advanceTimersByTimeAsync(60000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(state.upsertedContents).toHaveLength(0);
   });
 
   it("apply refuses a blank proposal without writing anything", async () => {
@@ -192,6 +305,7 @@ describe("outline versions", () => {
       versionRow("version-1", "First plan.", "2026-11-14T00:01:00Z"),
     ];
     state.deleteResult = [{ id: "version-2" }];
+    seedServer("campaign-notes/outline-1", "Third plan, live.");
 
     const restored = await undoOutlineRevision({
       campaignId: "campaign-1",
@@ -199,10 +313,8 @@ describe("outline versions", () => {
     });
 
     expect(restored).toBe("Second plan.");
-    expect(state.upsertedContents).toHaveLength(1);
-    expect(
-      decodeOutlineContent(state.upsertedContents[0]?.content as string)
-    ).toBe("Second plan.");
+    expect(state.upsertedContents).toHaveLength(0);
+    expect(serverText("campaign-notes/outline-1")).toBe("Second plan.");
     expect(state.deleted).toContainEqual({ column: "id", value: "version-2" });
   });
 
@@ -213,6 +325,7 @@ describe("outline versions", () => {
     ).rejects.toThrow(/nothing to undo/i);
     expect(state.upsertedContents).toHaveLength(0);
     expect(state.deleted).toHaveLength(0);
+    expect(server.opened).toHaveLength(0);
   });
 
   it("lists versions newest first", async () => {
@@ -235,6 +348,7 @@ describe("outline versions", () => {
     // Seam under test: the version history stays bounded per campaign.
     // Keeping one more past the cap drops the oldest, so Undo still sees
     // the newest rows.
+    seedServer("campaign-notes/outline-1", "Latest plan.");
     const kept = MAX_KEPT_OUTLINE_VERSIONS;
     const total = kept + 2;
     state.versionRows = Array.from({ length: total }, (_, index) => {
