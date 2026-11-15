@@ -159,7 +159,7 @@ export function OutlineTab(props: { campaignId: string }) {
     } catch (error) {
       setUndoError(
         withReference(
-          "The revision couldn't be undone. Nothing was changed.",
+          "The revision couldn't be undone. The outline may not have been changed. Check it and try again.",
           referenceFor(error)
         )
       );

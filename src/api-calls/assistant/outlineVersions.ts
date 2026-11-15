@@ -143,8 +143,11 @@ async function pruneOldOutlineVersions(
  * Applies a proposed outline revision: keeps the text the note server
  * holds as a version (unless the outline is currently blank, when there is
  * nothing worth keeping), then replaces the outline through the note
- * server with the proposed text, waiting until the server has it. Returns the kept version's id, or null when nothing was kept.
- * The proposal must be non-blank; a blank outline and a blank proposal
+ * server with the proposed text, waiting until the server has it.
+ * Returns the kept version's id, or null when nothing was kept. When the
+ * replace fails the kept version is dropped again; when the outline was
+ * changed by someone else meanwhile the Apply throws but keeps the
+ * version. The proposal must be non-blank; a blank outline and a blank proposal
  * both refuse before anything is written. Kept versions are capped to
  * the last MAX_KEPT_OUTLINE_VERSIONS per campaign (best-effort prune),
  * so Undo stays available without unbounded growth.
@@ -195,7 +198,33 @@ export const applyOutlineRevision = createApiFunction<
       }
     }
 
-    await session.replace(proposedText.trim());
+    const proposed = proposedText.trim();
+    try {
+      await session.replace(proposed);
+    } catch (error) {
+      // The replace did not land (timeout or refusal): drop the version
+      // kept just before it, so no orphan row offers a bogus Undo.
+      if (versionId !== null) {
+        try {
+          await client
+            .from(ASSISTANT_OUTLINE_VERSIONS_TABLE)
+            .delete()
+            .eq("id", versionId)
+            .eq("campaign_id", campaignId)
+            .select("id");
+        } catch (cleanupError) {
+          console.error("Could not drop the unused outline version", cleanupError);
+        }
+      }
+      throw error;
+    }
+    if (session.text().trim() !== proposed) {
+      // The replace landed (the version stays for Undo), but someone
+      // else changed the outline in the meantime.
+      throw new Error(
+        "The outline changed while the revision was applied. Check the outline."
+      );
+    }
     if (versionId !== null) {
       await pruneOldOutlineVersions(client, campaignId);
     }

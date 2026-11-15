@@ -24,7 +24,7 @@ const theme = createTheme();
 
 // Seam under test: the stateful revision. Apply replaces the outline and
 // reports the new text to the parent (which moves its editor onto it);
-// Undo restores and reports the restored text; failures stay local.
+// Undo restores the previous text; failures stay local.
 describe("OutlineRevision", () => {
   let root: Root | undefined;
   let container: HTMLDivElement | undefined;
@@ -37,7 +37,7 @@ describe("OutlineRevision", () => {
     vi.clearAllMocks();
   });
 
-  function render(onReplaced: (text: string) => void = () => {}) {
+  function render() {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -50,7 +50,6 @@ describe("OutlineRevision", () => {
             current={"Act one: the bell rings."}
             proposed={"Act one revised: the bell cracks."}
             onDiscard={() => {}}
-            onReplaced={onReplaced}
           />
         </ThemeProvider>
       );
@@ -70,10 +69,9 @@ describe("OutlineRevision", () => {
     });
   }
 
-  it("apply reports the proposed text after replacing", async () => {
+  it("apply replaces the outline and shows it applied", async () => {
     vi.mocked(applyOutlineRevision).mockResolvedValue("version-1");
-    const onReplaced = vi.fn();
-    const view = render(onReplaced);
+    const view = render();
 
     click(view, "Apply to outline");
     click(view, "Confirm replace");
@@ -87,17 +85,13 @@ describe("OutlineRevision", () => {
       currentText: "Act one: the bell rings.",
       proposedText: "Act one revised: the bell cracks.",
     });
-    expect(onReplaced).toHaveBeenCalledWith(
-      "Act one revised: the bell cracks."
-    );
     expect(view.textContent).toContain("Applied");
   });
 
-  it("undo reports the restored text", async () => {
+  it("undo restores the previous text", async () => {
     vi.mocked(applyOutlineRevision).mockResolvedValue("version-1");
     vi.mocked(undoOutlineRevision).mockResolvedValue("Act one restored.");
-    const onReplaced = vi.fn();
-    const view = render(onReplaced);
+    const view = render();
 
     click(view, "Apply to outline");
     click(view, "Confirm replace");
@@ -115,13 +109,12 @@ describe("OutlineRevision", () => {
       campaignId: "campaign-1",
       outlineId: "outline-1",
     });
-    expect(onReplaced).toHaveBeenCalledWith("Act one restored.");
+    expect(view.textContent).not.toContain("Applied");
   });
 
-  it("a failed apply shows an error and reports nothing", async () => {
+  it("a failed apply shows an error and does not show applied", async () => {
     vi.mocked(applyOutlineRevision).mockRejectedValue(new Error("denied"));
-    const onReplaced = vi.fn();
-    const view = render(onReplaced);
+    const view = render();
 
     click(view, "Apply to outline");
     click(view, "Confirm replace");
@@ -130,7 +123,6 @@ describe("OutlineRevision", () => {
     });
 
     expect(view.textContent).toContain("couldn't be replaced");
-    expect(onReplaced).not.toHaveBeenCalled();
     expect(view.textContent).not.toContain("Applied");
   });
 

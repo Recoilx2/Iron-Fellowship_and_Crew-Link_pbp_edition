@@ -257,11 +257,19 @@ describe.skipIf(!config)("assistant outline versions end to end (#133)", () => {
         // A live edit the stored row has not caught up with (the server
         // persists on a 2 s debounce).
         replaceOutlineInDoc(open, "Original plan. Live edit.");
+        // Wait until the server has acknowledged the edit.
+        await waitFor(
+          () => (openProvider.hasUnsyncedChanges ? null : true),
+          30000
+        );
 
         await signInAs(gm);
+        // currentText is stale, as the UI's would be; the saved version
+        // must come from the live server content instead.
         await applyOutlineRevision({
           campaignId,
           outlineId,
+          currentText: "Original plan.",
           proposedText: "Revised plan.",
         });
 

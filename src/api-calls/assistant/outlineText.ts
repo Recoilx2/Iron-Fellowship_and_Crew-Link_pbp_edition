@@ -20,9 +20,9 @@ import {
  * fragment with the same delete-plus-insert surgery a collaborating
  * client performs, so open editors (including co-GMs') converge on the
  * new text through the usual sync instead of showing old and new text
- * side by side. Recomputing bytes from anything but the stored bytes
- * would merge as duplicated text, so Apply and Undo always read the row
- * first.
+ * side by side. Apply and Undo run these on the live document held by the
+ * note server (see outlineSession.ts); recomputing bytes from anything
+ * but that document would merge as duplicated text.
  */
 
 function tipTapDocument(text: string): Record<string, unknown> {
@@ -105,9 +105,9 @@ export function decodeOutlineContent(
 
 /**
  * Returns fresh note-server bytes with the outline text replaced,
- * leaving every other document root untouched. Pure: the data layer
- * builds replacements through here, so previews, Apply and Undo all
- * agree on the bytes the editor will read.
+ * leaving every other document root untouched. A pure byte-level variant
+ * of replaceOutlineInDoc, kept for tests and for building fixtures; Apply
+ * and Undo use the live-document path.
  */
 export function replaceOutlineContent(
   bytes: Uint8Array | null | undefined,

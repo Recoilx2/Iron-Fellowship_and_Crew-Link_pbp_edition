@@ -42,7 +42,15 @@ export async function openOutlineSession(
     name: getCampaignNoteDocumentName(outlineId),
     document: doc,
     token: getHocuspocusToken,
-    onSynced: () => onSynced?.(),
+    // Invisible to co-GMs: no cursor or presence for this short session.
+    awareness: null,
+    onSynced: () => {
+      if (provider.authorizedScope === "readonly") {
+        onRefused?.("read-only access");
+        return;
+      }
+      onSynced?.();
+    },
     onUnsyncedChanges: ({ number }) => {
       if (number === 0) onAcknowledged?.();
     },

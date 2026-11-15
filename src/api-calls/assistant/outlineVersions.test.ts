@@ -12,7 +12,7 @@ import { ASSISTANT_OUTLINE_VERSIONS_TABLE } from "./_getRef";
 import { CAMPAIGN_NOTE_CONTENTS_TABLE } from "api-calls/notes/_getRef";
 import { encodeNoteContent } from "api-calls/notes/noteContent";
 import { getSupabaseClient } from "config/supabase.config";
-import { decodeOutlineBytes } from "./outlineText";
+import { decodeOutlineBytes, replaceOutlineInDoc } from "./outlineText";
 
 function editorContentsRow(text: string): Record<string, unknown> {
   const doc = TiptapTransformer.toYdoc(
@@ -43,12 +43,17 @@ const server = vi.hoisted(() => ({
   destroyed: 0,
   acknowledge: true,
   refuse: false,
+  readOnly: false,
+  authFail: false,
+  interfere: null as null | string,
   lastDocument: null as unknown,
+  awareness: undefined as unknown,
 }));
 vi.mock("@hocuspocus/provider", async () => {
   const Yjs = await import("yjs");
   class FakeProvider {
     hasUnsyncedChanges = false;
+    authorizedScope: string | undefined = undefined;
     private onUnsynced: (p: { number: number }) => void;
     constructor(config: {
       name: string;
@@ -56,7 +61,10 @@ vi.mock("@hocuspocus/provider", async () => {
       token: unknown;
       onSynced?: () => void;
       onUnsyncedChanges?: (p: { number: number }) => void;
+      onAuthenticationFailed?: (p: { reason: string }) => void;
+      awareness?: unknown;
     }) {
+      server.awareness = config.awareness;
       server.opened.push(config.name);
       server.lastDocument = config.document;
       this.onUnsynced = config.onUnsyncedChanges ?? (() => {});
@@ -65,6 +73,13 @@ vi.mock("@hocuspocus/provider", async () => {
         new Yjs.Doc();
       server.docs.set(config.name, remote);
       if (server.refuse) return;
+      if (server.authFail) {
+        setTimeout(
+          () => config.onAuthenticationFailed?.({ reason: "permission-denied" }),
+          5
+        );
+        return;
+      }
       setTimeout(() => {
         Yjs.applyUpdate(config.document, Yjs.encodeStateAsUpdate(remote));
         config.document.on("update", (update: Uint8Array, origin: unknown) => {
@@ -75,9 +90,19 @@ vi.mock("@hocuspocus/provider", async () => {
           setTimeout(() => {
             Yjs.applyUpdate(remote, update, "server");
             this.hasUnsyncedChanges = false;
+            if (server.interfere) {
+              const other = new Yjs.Doc();
+              Yjs.applyUpdate(other, Yjs.encodeStateAsUpdate(remote));
+              replaceOutlineInDoc(other, server.interfere);
+              Yjs.applyUpdate(
+                config.document,
+                Yjs.encodeStateAsUpdate(other)
+              );
+            }
             this.onUnsynced({ number: 0 });
           }, 5);
         });
+        this.authorizedScope = server.readOnly ? "readonly" : "read-write";
         config.onSynced?.();
       }, 5);
     }
@@ -142,6 +167,9 @@ beforeEach(() => {
   server.destroyed = 0;
   server.acknowledge = true;
   server.refuse = false;
+  server.readOnly = false;
+  server.authFail = false;
+  server.interfere = null;
   mockedGetSupabaseClient.mockReturnValue({
     auth: {
       getSession: () =>
@@ -284,6 +312,75 @@ describe("outline versions", () => {
       vi.useRealTimers();
     }
     expect(state.upsertedContents).toHaveLength(0);
+  });
+
+  it("apply leaves no version row behind when the replace times out", async () => {
+    seedServer("campaign-notes/outline-1", "Old.");
+    server.acknowledge = false;
+    vi.useFakeTimers();
+    try {
+      const pending = applyOutlineRevision({
+        campaignId: "campaign-1",
+        outlineId: "outline-1",
+        proposedText: "New.",
+      });
+      const assertion = expect(pending).rejects.toBeTruthy();
+      await vi.advanceTimersByTimeAsync(60000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(state.inserted).toHaveLength(1);
+    expect(state.deleted).toContainEqual({
+      column: "id",
+      value: state.inserted[0]?.id,
+    });
+    expect(server.destroyed).toBe(1);
+  });
+
+  it("apply fails but keeps the version when the outline changed meanwhile", async () => {
+    seedServer("campaign-notes/outline-1", "Old.");
+    server.interfere = "Someone else wrote this.";
+
+    await expect(
+      applyOutlineRevision({
+        campaignId: "campaign-1",
+        outlineId: "outline-1",
+        proposedText: "New.",
+      })
+    ).rejects.toBeTruthy();
+
+    // The replace did land, so the version stays for Undo.
+    expect(state.inserted).toHaveLength(1);
+    expect(state.deleted).toHaveLength(0);
+    expect(server.destroyed).toBe(1);
+  });
+
+  it("apply fails at once when the note server refuses the connection", async () => {
+    server.authFail = true;
+    await expect(
+      applyOutlineRevision({
+        campaignId: "campaign-1",
+        outlineId: "outline-1",
+        proposedText: "New.",
+      })
+    ).rejects.toBeTruthy();
+    expect(state.inserted).toHaveLength(0);
+    expect(server.destroyed).toBe(1);
+  });
+
+  it("apply fails at once on a read-only connection and joins invisibly", async () => {
+    server.readOnly = true;
+    await expect(
+      applyOutlineRevision({
+        campaignId: "campaign-1",
+        outlineId: "outline-1",
+        proposedText: "New.",
+      })
+    ).rejects.toBeTruthy();
+    expect(state.inserted).toHaveLength(0);
+    expect(server.destroyed).toBe(1);
+    expect(server.awareness).toBeNull();
   });
 
   it("apply refuses a blank proposal without writing anything", async () => {
