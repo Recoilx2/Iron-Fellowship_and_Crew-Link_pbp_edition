@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { expectCollapseOpen } from "./collapse";
 import {
   campaignUrl,
   createCampaignAs,
@@ -150,7 +151,25 @@ test.describe("chat momentum burn on a posted roll", () => {
       // The author expands the roll and burns momentum on it.
       await playerOneLiner.click();
       await expect(playerOneLiner).toHaveAttribute("aria-expanded", "true");
-      await playerPage.getByRole("button", { name: "Burn momentum" }).click();
+      const burnButton = playerPage.getByRole("button", {
+        name: "Burn momentum",
+      });
+      // The Collapse must finish opening first: a click on the moving
+      // button is lost (#141).
+      await expectCollapseOpen(burnButton);
+      // Arm the wait before the one deliberate click (no retry: a second
+      // burn is refused by the server), so a lost click fails fast.
+      const burnResponse = playerPage.waitForResponse(
+        (response) =>
+          response.request().method() === "PATCH" &&
+          new URL(response.url()).pathname.endsWith("/rest/v1/chat_posts")
+      );
+      await burnButton.click();
+      const burned = await burnResponse;
+      expect(
+        burned.ok(),
+        `burn PATCH to chat_posts returned ${burned.status()}`
+      ).toBe(true);
 
       // The burned outcome arrives live in both browsers: momentum 5
       // replaces the action total, so the miss becomes a weak hit.
@@ -176,6 +195,11 @@ test.describe("chat momentum burn on a posted roll", () => {
         "aria-expanded",
         "true"
       );
+      // Wait for the Collapse to be open so the absence check is not
+      // vacuously true mid-animation.
+      await expect(
+        otherPage.locator(".MuiCollapse-root.MuiCollapse-entered").first()
+      ).toBeVisible();
       await expect(
         otherPage.getByRole("button", { name: "Burn momentum" })
       ).toHaveCount(0);
