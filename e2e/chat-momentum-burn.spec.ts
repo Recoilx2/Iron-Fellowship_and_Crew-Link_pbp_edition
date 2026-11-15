@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { expectCollapseOpen } from "./collapse";
+import { expectCollapseOpenAfter } from "./collapse";
 import {
   campaignUrl,
   createCampaignAs,
@@ -156,16 +156,29 @@ test.describe("chat momentum burn on a posted roll", () => {
       });
       // The Collapse must finish opening first: a click on the moving
       // button is lost (#141).
-      await expectCollapseOpen(burnButton);
+      await expectCollapseOpenAfter(playerOneLiner);
+      const burnButton = playerPage.getByRole("button", {
+        name: "Burn momentum",
+      });
       // Arm the wait before the one deliberate click (no retry: a second
       // burn is refused by the server), so a lost click fails fast.
-      const burnResponse = playerPage.waitForResponse(
-        (response) =>
-          response.request().method() === "PATCH" &&
-          new URL(response.url()).pathname.endsWith("/rest/v1/chat_posts")
-      );
-      await burnButton.click();
-      const burned = await burnResponse;
+      const [burned] = await Promise.all([
+        playerPage
+          .waitForResponse(
+            (response) =>
+              response.request().method() === "PATCH" &&
+              new URL(response.url()).pathname.endsWith(
+                "/rest/v1/chat_posts"
+              ),
+            { timeout: 15_000 }
+          )
+          .catch(() => {
+            throw new Error(
+              "no burn PATCH to chat_posts within 15 s (click lost, or burn() threw before the update)"
+            );
+          }),
+        burnButton.click(),
+      ]);
       expect(
         burned.ok(),
         `burn PATCH to chat_posts returned ${burned.status()}`
@@ -195,11 +208,9 @@ test.describe("chat momentum burn on a posted roll", () => {
         "aria-expanded",
         "true"
       );
-      // Wait for the Collapse to be open so the absence check is not
-      // vacuously true mid-animation.
-      await expect(
-        otherPage.locator(".MuiCollapse-root.MuiCollapse-entered").first()
-      ).toBeVisible();
+      // Wait for this card's own Collapse to be open so the absence check
+      // is not vacuously true mid-animation.
+      await expectCollapseOpenAfter(otherBurnedOneLiner);
       await expect(
         otherPage.getByRole("button", { name: "Burn momentum" })
       ).toHaveCount(0);
