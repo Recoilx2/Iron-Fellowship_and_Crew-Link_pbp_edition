@@ -14,6 +14,7 @@ export enum NAV_ROUTES {
   CAMPAIGN = "campaign",
   WORLD = "world",
   HOMEBREW = "homebrew",
+  RULES = "rules",
   LOGIN = "login",
   SIGNUP = "signup",
 }
@@ -33,6 +34,8 @@ export function useActiveNavRoute() {
       setSelectedRoute(NAV_ROUTES.WORLD);
     } else if (pathname.includes(HOMEBREW_PREFIX)) {
       setSelectedRoute(NAV_ROUTES.HOMEBREW);
+    } else if (pathname === basePaths[BASE_ROUTES.RULES]) {
+      setSelectedRoute(NAV_ROUTES.RULES);
     } else if (pathname === basePaths[BASE_ROUTES.LOGIN]) {
       setSelectedRoute(NAV_ROUTES.LOGIN);
     } else if (pathname === basePaths[BASE_ROUTES.SIGNUP]) {

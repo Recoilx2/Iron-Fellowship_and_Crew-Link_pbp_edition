@@ -4,6 +4,7 @@ import CharacterIcon from "@mui/icons-material/Person";
 import CampaignIcon from "@mui/icons-material/Groups";
 import WorldIcon from "@mui/icons-material/Public";
 import HomebrewIcon from "@mui/icons-material/Brush";
+import RulesIcon from "@mui/icons-material/MenuBook";
 import SignUpIcon from "@mui/icons-material/PersonAdd";
 import LoginIcon from "@mui/icons-material/AccountCircle";
 import { BASE_ROUTES, basePaths } from "routes";
@@ -67,6 +68,13 @@ export function BottomNav() {
                 label={"Homebrew"}
                 icon={<HomebrewIcon />}
                 active={activeRoute === NAV_ROUTES.HOMEBREW}
+                sx={{ py: 1 }}
+              />
+              <NavItem
+                href={basePaths[BASE_ROUTES.RULES]}
+                label={"Rules"}
+                icon={<RulesIcon />}
+                active={activeRoute === NAV_ROUTES.RULES}
                 sx={{ py: 1 }}
               />
             </>
