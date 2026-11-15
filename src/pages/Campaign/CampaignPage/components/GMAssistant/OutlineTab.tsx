@@ -40,14 +40,15 @@ import { OutlineRevision } from "./OutlineRevision";
  * GM's instruction in a dedicated outline-revision mode -- never guessed
  * from the wording -- and the reply previews the current outline beside
  * the proposed complete replacement, with Apply to outline and Discard.
- * Apply asks for confirmation, then replaces the outline and keeps the
- * previous version for Undo, offered here and on the applied preview.
+ * Apply asks for confirmation, then replaces the outline through the
+ * note server (so this editor and every co-GM's receive it live) and keeps
+ * the previous version for Undo, offered here and on the applied preview.
  * Only the GM's Apply or Undo ever changes the outline; Discard leaves it
  * untouched.
  */
 export function OutlineTab(props: { campaignId: string }) {
   const { campaignId } = props;
-  const { outlineId, bytes, text, loaded, failed, reload, overrideBytes } =
+  const { outlineId, bytes, text, loaded, failed, reload } =
     useOutlineDocument(campaignId);
   // One reference per failed open, stable across re-renders until a retry.
   const failedRef = useMemo(
@@ -57,7 +58,6 @@ export function OutlineTab(props: { campaignId: string }) {
   const [versions, setVersions] = useState(0);
   const [undoing, setUndoing] = useState(false);
   const [undoError, setUndoError] = useState<string | null>(null);
-  const [editorEpoch, setEditorEpoch] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [requesting, setRequesting] = useState(false);
@@ -148,25 +148,6 @@ export function OutlineTab(props: { campaignId: string }) {
     }
   };
 
-  // Moves the open editor onto replaced text at once (after the GM's
-  // Apply or Undo): the bytes are re-read from the row the data layer
-  // just wrote -- never recomputed from possibly stale subscription
-  // bytes, which would merge as duplicated text -- and the remounted
-  // provider syncs them to the note server, so its next persisted store
-  // keeps the replacement instead of resurrecting what it held before.
-  // No reload: that would unmount the tab (and the just-applied preview)
-  // while the outline id is re-resolved; the live subscription already
-  // carries the same bytes everywhere else.
-  const moveEditorTo = async (): Promise<void> => {
-    const fresh = await fetchOutlineContentBytes(outlineId ?? "").catch(
-      () => null
-    );
-    if (fresh) {
-      overrideBytes(fresh);
-    }
-    setEditorEpoch((epoch) => epoch + 1);
-  };
-
   const undo = async (): Promise<void> => {
     if (undoing || !outlineId) {
       return;
@@ -175,11 +156,10 @@ export function OutlineTab(props: { campaignId: string }) {
     setUndoError(null);
     try {
       await undoOutlineRevision({ campaignId, outlineId });
-      await moveEditorTo();
     } catch (error) {
       setUndoError(
         withReference(
-          "The revision couldn't be undone. Nothing was changed.",
+          "The revision couldn't be undone. The outline may not have been changed. Check it and try again.",
           referenceFor(error)
         )
       );
@@ -312,13 +292,12 @@ export function OutlineTab(props: { campaignId: string }) {
             current={preview.current}
             proposed={preview.proposed}
             onDiscard={() => setPreview(null)}
-            onReplaced={() => void moveEditorTo()}
           />
         </Box>
       )}
       <Box sx={{ flexGrow: 1, minHeight: 0, display: "flex" }}>
         <RtcRichTextEditor
-          key={`${outlineId}:${editorEpoch}`}
+          key={outlineId}
           id={outlineId}
           documentName={getCampaignNoteDocumentName(outlineId)}
           initialValue={bytes ?? undefined}

@@ -1,14 +1,14 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
 import { CAMPAIGN_NOTE_CONTENTS_TABLE } from "api-calls/notes/_getRef";
-import { decodeNoteContent, encodeNoteContent } from "api-calls/notes/noteContent";
+import { decodeNoteContent } from "api-calls/notes/noteContent";
 import {
   ASSISTANT_OUTLINE_VERSIONS_TABLE,
   outlineVersionRowToDocument,
   type AssistantOutlineVersion,
   type AssistantOutlineVersionRow,
 } from "./_getRef";
-import { replaceOutlineContent } from "./outlineText";
+import { openOutlineSession } from "./outlineSession";
 
 /**
  * The outline version history behind Apply and Undo (ticket #133): every
@@ -66,39 +66,6 @@ export async function fetchOutlineContentBytes(
     return null;
   }
   return decodeNoteContent(stored);
-}
-
-/**
- * Replaces the outline's body text in the note-server bytes, leaving every
- * other document root untouched. The surgery runs on the stored bytes (a
- * second collaborator replacing text, in Yjs terms), so an open editor
- * converges on the new text through the usual sync instead of showing the
- * old and new text side by side.
- */
-async function replaceOutlineContents(
-  client: ContentsClient,
-  outlineId: string,
-  text: string
-): Promise<void> {
-  const { data, error: readError } = await client
-    .from(CAMPAIGN_NOTE_CONTENTS_TABLE)
-    .select("content")
-    .eq("note_id", outlineId);
-  if (readError) {
-    throw readError;
-  }
-  const stored = (data?.[0] as { content?: unknown } | undefined)?.content;
-  const storedBytes =
-    typeof stored === "string" && stored ? decodeNoteContent(stored) : null;
-  const { error: writeError } = await client
-    .from(CAMPAIGN_NOTE_CONTENTS_TABLE)
-    .upsert({
-      note_id: outlineId,
-      content: encodeNoteContent(replaceOutlineContent(storedBytes, text)),
-    });
-  if (writeError) {
-    throw writeError;
-  }
 }
 
 /**
@@ -173,11 +140,14 @@ async function pruneOldOutlineVersions(
 }
 
 /**
- * Applies a proposed outline revision: keeps the replaced text as a
- * version (unless the outline is currently blank, when there is nothing
- * worth keeping), then replaces the outline contents with the proposed
- * text. Returns the kept version's id, or null when nothing was kept.
- * The proposal must be non-blank; a blank outline and a blank proposal
+ * Applies a proposed outline revision: keeps the text the note server
+ * holds as a version (unless the outline is currently blank, when there is
+ * nothing worth keeping), then replaces the outline through the note
+ * server with the proposed text, waiting until the server has it.
+ * Returns the kept version's id, or null when nothing was kept. When the
+ * replace fails the kept version is dropped again; when the outline was
+ * changed by someone else meanwhile the Apply throws but keeps the
+ * version. The proposal must be non-blank; a blank outline and a blank proposal
  * both refuse before anything is written. Kept versions are capped to
  * the last MAX_KEPT_OUTLINE_VERSIONS per campaign (best-effort prune),
  * so Undo stays available without unbounded growth.
@@ -186,12 +156,13 @@ export const applyOutlineRevision = createApiFunction<
   {
     campaignId: string;
     outlineId: string;
-    currentText: string;
+    /** Ignored: the kept version is read from the note server. */
+    currentText?: string;
     proposedText: string;
   },
   string | null
 >(async (params) => {
-  const { campaignId, outlineId, currentText, proposedText } = params;
+  const { campaignId, outlineId, proposedText } = params;
   if (!campaignId || campaignId.trim().length === 0) {
     throw new Error("A campaign is required to apply an outline revision.");
   }
@@ -204,27 +175,63 @@ export const applyOutlineRevision = createApiFunction<
   const gmId = await signedInGmId();
   const client = getSupabaseClient();
 
-  let versionId: string | null = null;
-  if (currentText && currentText.trim().length > 0) {
-    versionId = crypto.randomUUID();
-    const { error: versionError } = await client
-      .from(ASSISTANT_OUTLINE_VERSIONS_TABLE)
-      .insert({
-        id: versionId,
-        campaign_id: campaignId,
-        created_by: gmId,
-        content: currentText.trim(),
-      });
-    if (versionError) {
-      throw versionError;
+  // The outline is edited through the note server, never over REST: the
+  // server keeps open documents in memory and would write a REST change
+  // back over. What the server holds is also the truth for the kept
+  // version, so it includes edits made in the last seconds.
+  const session = await openOutlineSession(outlineId);
+  try {
+    const previous = session.text().trim();
+    let versionId: string | null = null;
+    if (previous.length > 0) {
+      versionId = crypto.randomUUID();
+      const { error: versionError } = await client
+        .from(ASSISTANT_OUTLINE_VERSIONS_TABLE)
+        .insert({
+          id: versionId,
+          campaign_id: campaignId,
+          created_by: gmId,
+          content: previous,
+        });
+      if (versionError) {
+        throw versionError;
+      }
     }
-  }
 
-  await replaceOutlineContents(client, outlineId, proposedText.trim());
-  if (versionId !== null) {
-    await pruneOldOutlineVersions(client, campaignId);
+    const proposed = proposedText.trim();
+    try {
+      await session.replace(proposed);
+    } catch (error) {
+      // The replace did not land (timeout or refusal): drop the version
+      // kept just before it, so no orphan row offers a bogus Undo.
+      if (versionId !== null) {
+        try {
+          await client
+            .from(ASSISTANT_OUTLINE_VERSIONS_TABLE)
+            .delete()
+            .eq("id", versionId)
+            .eq("campaign_id", campaignId)
+            .select("id");
+        } catch (cleanupError) {
+          console.error("Could not drop the unused outline version", cleanupError);
+        }
+      }
+      throw error;
+    }
+    if (session.text().trim() !== proposed) {
+      // The replace landed (the version stays for Undo), but someone
+      // else changed the outline in the meantime.
+      throw new Error(
+        "The outline changed while the revision was applied. Check the outline."
+      );
+    }
+    if (versionId !== null) {
+      await pruneOldOutlineVersions(client, campaignId);
+    }
+    return versionId;
+  } finally {
+    session.close();
   }
-  return versionId;
 }, "Failed to apply the outline revision.");
 
 /**
@@ -261,7 +268,12 @@ export const undoOutlineRevision = createApiFunction<
     throw new Error("There is nothing to undo.");
   }
 
-  await replaceOutlineContents(client, outlineId, latest.content);
+  const session = await openOutlineSession(outlineId);
+  try {
+    await session.replace(latest.content);
+  } finally {
+    session.close();
+  }
 
   const { data: deleted, error: deleteError } = await client
     .from(ASSISTANT_OUTLINE_VERSIONS_TABLE)

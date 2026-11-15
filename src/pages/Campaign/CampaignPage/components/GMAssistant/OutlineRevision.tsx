@@ -13,8 +13,8 @@ import { OutlineRevisionPreview } from "./OutlineRevisionPreview";
  * tab and the Chat thread both render this for a proposal; Discard leaves
  * the outline untouched and only tells the parent to hide the preview.
  * Failures show a short message; the data layer's thrown error stays out
- * of the UI. After every successful Apply or Undo the parent learns the
- * new outline text, so it can move its editor onto it at once.
+ * of the UI. The editor needs no nudge afterwards: Apply and Undo go
+ * through the note server, so every open editor receives the change live.
  */
 export function OutlineRevision(props: {
   campaignId: string;
@@ -22,9 +22,8 @@ export function OutlineRevision(props: {
   current: string;
   proposed: string;
   onDiscard: () => void;
-  onReplaced?: (text: string) => void;
 }) {
-  const { campaignId, outlineId, current, proposed, onDiscard, onReplaced } =
+  const { campaignId, outlineId, current, proposed, onDiscard } =
     props;
   const [applied, setApplied] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -45,11 +44,10 @@ export function OutlineRevision(props: {
         proposedText: proposed,
       });
       setApplied(true);
-      onReplaced?.(proposed);
     } catch (error) {
       setError(
         withReference(
-          "The outline couldn't be replaced. Retry, or discard.",
+          "The outline couldn't be replaced. Check the outline, then retry or discard.",
           referenceFor(error)
         )
       );
@@ -65,13 +63,12 @@ export function OutlineRevision(props: {
     setUndoing(true);
     setError(null);
     try {
-      const restored = await undoOutlineRevision({ campaignId, outlineId });
+      await undoOutlineRevision({ campaignId, outlineId });
       setApplied(false);
-      onReplaced?.(restored);
     } catch (error) {
       setError(
         withReference(
-          "The revision couldn't be undone. Nothing was changed.",
+          "The revision couldn't be undone. The outline may not have been changed. Check it and try again.",
           referenceFor(error)
         )
       );

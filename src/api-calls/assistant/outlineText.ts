@@ -20,9 +20,9 @@ import {
  * fragment with the same delete-plus-insert surgery a collaborating
  * client performs, so open editors (including co-GMs') converge on the
  * new text through the usual sync instead of showing old and new text
- * side by side. Recomputing bytes from anything but the stored bytes
- * would merge as duplicated text, so Apply and Undo always read the row
- * first.
+ * side by side. Apply and Undo run these on the live document held by the
+ * note server (see outlineSession.ts); recomputing bytes from anything
+ * but that document would merge as duplicated text.
  */
 
 function tipTapDocument(text: string): Record<string, unknown> {
@@ -68,6 +68,15 @@ export function encodeOutlineText(text: string): string {
   return encodeNoteContent(Y.encodeStateAsUpdate(doc));
 }
 
+/** The outline text held by a (possibly live) document. */
+export function readOutlineFromDoc(doc: Y.Doc): string {
+  const tipTap = tipTapText(TiptapTransformer.fromYdoc(doc, "default"));
+  if (tipTap.trim().length > 0) {
+    return tipTap;
+  }
+  return doc.getText("body").toString();
+}
+
 export function decodeOutlineBytes(bytes: Uint8Array): string {
   if (!bytes || bytes.length === 0) {
     return "";
@@ -75,11 +84,7 @@ export function decodeOutlineBytes(bytes: Uint8Array): string {
   try {
     const doc = new Y.Doc();
     Y.applyUpdate(doc, bytes);
-    const tipTap = tipTapText(TiptapTransformer.fromYdoc(doc, "default"));
-    if (tipTap.trim().length > 0) {
-      return tipTap;
-    }
-    return doc.getText("body").toString();
+    return readOutlineFromDoc(doc);
   } catch {
     return "";
   }
@@ -100,9 +105,9 @@ export function decodeOutlineContent(
 
 /**
  * Returns fresh note-server bytes with the outline text replaced,
- * leaving every other document root untouched. Pure: the data layer
- * builds replacements through here, so previews, Apply and Undo all
- * agree on the bytes the editor will read.
+ * leaving every other document root untouched. A pure byte-level variant
+ * of replaceOutlineInDoc, kept for tests and for building fixtures; Apply
+ * and Undo use the live-document path.
  */
 export function replaceOutlineContent(
   bytes: Uint8Array | null | undefined,
@@ -116,6 +121,15 @@ export function replaceOutlineContent(
       // Undecodable bytes read as empty; the replacement still lands.
     }
   }
+  replaceOutlineInDoc(doc, text);
+  return Y.encodeStateAsUpdate(doc);
+}
+
+/**
+ * Replaces the outline text inside a document in one transaction, so a
+ * live document (synced with the note server) sends it as one update.
+ */
+export function replaceOutlineInDoc(doc: Y.Doc, text: string): void {
   const built = TiptapTransformer.toYdoc(tipTapDocument(text), "default");
   const fresh = built.getXmlFragment("default").toArray();
   doc.transact(() => {
@@ -129,5 +143,4 @@ export function replaceOutlineContent(
       ]);
     }
   });
-  return Y.encodeStateAsUpdate(doc);
 }
