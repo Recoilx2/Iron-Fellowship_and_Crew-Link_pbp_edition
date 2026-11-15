@@ -39,6 +39,7 @@ import { listenToConversations } from "api-calls/assistant/listenToConversations
 import { listenToMessages } from "api-calls/assistant/listenToMessages";
 import { createConversation } from "api-calls/assistant/createConversation";
 import { deleteConversation } from "api-calls/assistant/deleteConversation";
+import { toAssistantFailure } from "./assistantFailure";
 import { ContextSizeBar } from "./ContextSizeBar";
 import { ContextTab } from "./ContextTab";
 import { OutlineTab } from "./OutlineTab";
@@ -85,6 +86,7 @@ export function GMAssistantPanel(props: {
   const { campaignId, onClose } = props;
   const [tab, setTab] = useState<AssistantTab>("chat");
   const [models, setModels] = useState<AssistantModelOption[] | null>(null);
+  const [endpointHost, setEndpointHost] = useState<string | null>(null);
   const [settings, setSettings] = useState<AssistantSettingsDocument | null>(
     null
   );
@@ -104,7 +106,8 @@ export function GMAssistantPanel(props: {
         if (cancelled) {
           return;
         }
-        setModels(Array.isArray(list) ? list : []);
+        setModels(Array.isArray(list.models) ? list.models : []);
+        setEndpointHost(list.endpointHost ?? null);
         setSettings(saved);
         setFailure(null);
       } catch (error) {
@@ -112,20 +115,7 @@ export function GMAssistantPanel(props: {
           return;
         }
         setModels([]);
-        setFailure({
-          code:
-            typeof (error as { code?: unknown })?.code === "string"
-              ? (error as { code: string }).code
-              : "UPSTREAM_ERROR",
-          message:
-            error instanceof Error
-              ? error.message
-              : "The assistant request failed.",
-          ref:
-            typeof (error as { ref?: unknown })?.ref === "string"
-              ? (error as { ref: string }).ref
-              : null,
-        });
+        setFailure(toAssistantFailure(error));
       }
     };
     void load();
@@ -271,6 +261,7 @@ export function GMAssistantPanel(props: {
             models={models}
             failure={failure}
             currentModel={currentModel}
+            endpointHost={endpointHost}
             onTokenEstimate={setConversationTokens}
             onRetry={() => {
               setFailure(null);
@@ -299,10 +290,11 @@ function ChatTab(props: {
   models: AssistantModelOption[] | null;
   failure: ModelsFailure | null;
   currentModel: string;
+  endpointHost: string | null;
   onTokenEstimate: (tokens: number) => void;
   onRetry: () => void;
 }) {
-  const { campaignId, models, failure, currentModel, onTokenEstimate, onRetry } = props;
+  const { campaignId, models, failure, currentModel, endpointHost, onTokenEstimate, onRetry } = props;
   if (failure?.code === "NOT_SET_UP") {
     return (
       <Box sx={{ p: 2 }}>
@@ -337,11 +329,11 @@ function ChatTab(props: {
       </Box>
     );
   }
-  return <ConversationThread campaignId={campaignId} currentModel={currentModel} onTokenEstimate={onTokenEstimate} />;
+  return <ConversationThread campaignId={campaignId} currentModel={currentModel} endpointHost={endpointHost} onTokenEstimate={onTokenEstimate} />;
 }
 
-function ConversationThread(props: { campaignId: string; currentModel: string; onTokenEstimate?: (tokens: number) => void }) {
-  const { campaignId, currentModel, onTokenEstimate } = props;
+function ConversationThread(props: { campaignId: string; currentModel: string; endpointHost: string | null; onTokenEstimate?: (tokens: number) => void }) {
+  const { campaignId, currentModel, endpointHost, onTokenEstimate } = props;
   const [conversations, setConversations] = useState<
     AssistantConversationWithId[]
   >([]);
@@ -491,20 +483,7 @@ function ConversationThread(props: { campaignId: string; currentModel: string; o
       // The finished reply arrives through the message listener, which
       // also carries the stopped marker when the GM stopped it partway.
     } catch (error) {
-      setSendError({
-        code:
-          typeof (error as { code?: unknown })?.code === "string"
-            ? (error as { code: string }).code
-            : "UPSTREAM_ERROR",
-        message:
-          error instanceof Error
-            ? error.message
-            : "The assistant request failed.",
-        ref:
-          typeof (error as { ref?: unknown })?.ref === "string"
-            ? (error as { ref: string }).ref
-            : null,
-      });
+      setSendError(toAssistantFailure(error));
     } finally {
       abortRef.current = null;
       setStreamingText(null);
@@ -770,9 +749,11 @@ function ConversationThread(props: { campaignId: string; currentModel: string; o
           )}
         </Stack>
         <Typography variant={"caption"} color={"text.secondary"}>
-          Drafts use {currentModel || "the default model"} via this
-          server&apos;s configured endpoint. Players never see the
-          assistant.
+          Drafts use {currentModel || "the default model"}.{" "}
+          {endpointHost
+            ? `Requests go to ${endpointHost} via this server.`
+            : "Requests go to this server's configured endpoint."}{" "}
+          Players never see the assistant.
         </Typography>
       </Box>
     </>
