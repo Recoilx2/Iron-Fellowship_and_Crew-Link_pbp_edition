@@ -137,7 +137,13 @@ function makeFake(options: FakeOptions = {}): {
         return Response.json(options.conversation ? [options.conversation] : []);
       }
       if (url.includes("assistant_messages") && call.method === "GET") {
-        return Response.json(options.history ?? []);
+        // Emulate PostgREST: `history` is the stored table oldest first;
+        // honour the single `order` and `limit` parameters the handler sends.
+        const query = new URL(url).searchParams;
+        const stored = [...(options.history ?? [])];
+        if ((query.get("order") ?? "").startsWith("created_at.desc")) stored.reverse();
+        const limit = Number(query.get("limit"));
+        return Response.json(Number.isFinite(limit) && limit > 0 ? stored.slice(0, limit) : stored);
       }
       if (url.includes("assistant_messages") && call.method === "POST") {
         return Response.json([{ id: "new-message-id" }], { status: 201 });
@@ -382,11 +388,43 @@ describe("gm assistant models endpoint", () => {
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
+      endpointHost: "llm.test",
       models: [
         { id: "test-chat-model", context_tokens: 4096 },
         { id: "third-model", context_tokens: 16384 },
       ],
     });
+  });
+
+  it("reports only the host of the endpoint, never userinfo, path, query or key", async () => {
+    const { fetchImpl } = makeFake({ rosterRole: "gm" });
+    const handle = createGmAssistantHandler(
+      baseEnv({ endpoint: "https://user:hunter2@llm.test:8443/v1/?token=abc#frag" }),
+      fetchImpl,
+    );
+    const res = await handle(
+      new Request(`http://x/gm-assistant/models?campaignId=${CAMPAIGN_ID}`, {
+        headers: { Authorization: `Bearer ${gmToken()}` },
+      }),
+    );
+    const text = await res.text();
+    expect(JSON.parse(text).endpointHost).toBe("llm.test:8443");
+    for (const secret of ["user", "hunter2", "/v1", "token=", "abc", "frag", API_KEY]) {
+      expect(text).not.toContain(secret);
+    }
+  });
+
+  it("reports a null endpoint host when the endpoint cannot be parsed", async () => {
+    const { fetchImpl } = makeFake({ rosterRole: "gm" });
+    const handle = createGmAssistantHandler(baseEnv({ endpoint: "not a url" }), fetchImpl);
+    const res = await handle(
+      new Request(`http://x/gm-assistant/models?campaignId=${CAMPAIGN_ID}`, {
+        headers: { Authorization: `Bearer ${gmToken()}` },
+      }),
+    );
+    const body = (await res.json()) as { endpointHost?: unknown };
+    expect(body.endpointHost ?? null).toBeNull();
+    expect(JSON.stringify(body)).not.toContain("not a url");
   });
 
   it("falls back to the default context size without an upstream value", async () => {
@@ -398,6 +436,7 @@ describe("gm assistant models endpoint", () => {
       }),
     );
     expect(await res.json()).toEqual({
+      endpointHost: "llm.test",
       models: [
         { id: "test-chat-model", context_tokens: 4096 },
         { id: "other-model", context_tokens: 8192 },
@@ -590,6 +629,33 @@ describe("gm assistant chat endpoint", () => {
       { role: "assistant", content: "First answer" },
       { role: "user", content: "Then what?" },
     ]);
+  });
+
+  it("sends the newest 100 stored messages, oldest first", async () => {
+    const history = Array.from({ length: 130 }, (_, index) => ({
+      role: index % 2 === 0 ? "user" : "assistant",
+      content: `message ${index + 1}`,
+    }));
+    const { fetchImpl, calls } = makeFake({ history });
+    const handle = createGmAssistantHandler(baseEnv(), fetchImpl);
+    const res = await handle(
+      chatRequest({ conversationId: CONVERSATION_ID, message: "latest" }),
+    );
+    expect(res.status).toBe(200);
+    await res.text();
+    const historyCall = calls.find(
+      (call) => call.url.includes("assistant_messages") && call.method === "GET",
+    );
+    const query = new URL(historyCall?.url ?? "http://x").searchParams;
+    expect(query.getAll("order")).toEqual(["created_at.desc,id.desc"]);
+    expect(query.get("limit")).toBe("100");
+    const upstream = calls.find((call) => call.url.endsWith("/chat/completions"));
+    const outgoing = (upstream?.body as { messages: Array<{ content: string }> }).messages;
+    const sent = outgoing.slice(1, -1).map((message) => message.content);
+    expect(sent).toHaveLength(100);
+    expect(sent[0]).toBe("message 31");
+    expect(sent[99]).toBe("message 130");
+    expect(outgoing[outgoing.length - 1].content).toBe("latest");
   });
 
   it("uses the GM's saved model when the endpoint still offers it", async () => {

@@ -4,6 +4,7 @@ import {
   applyOutlineRevision,
   undoOutlineRevision,
 } from "api-calls/assistant/outlineVersions";
+import { referenceFor, withReference } from "./assistantFailure";
 import { OutlineRevisionPreview } from "./OutlineRevisionPreview";
 
 /**
@@ -45,8 +46,13 @@ export function OutlineRevision(props: {
       });
       setApplied(true);
       onReplaced?.(proposed);
-    } catch {
-      setError("The outline couldn't be replaced. Retry, or discard.");
+    } catch (error) {
+      setError(
+        withReference(
+          "The outline couldn't be replaced. Retry, or discard.",
+          referenceFor(error)
+        )
+      );
     } finally {
       setApplying(false);
     }
@@ -62,8 +68,13 @@ export function OutlineRevision(props: {
       const restored = await undoOutlineRevision({ campaignId, outlineId });
       setApplied(false);
       onReplaced?.(restored);
-    } catch {
-      setError("The revision couldn't be undone. Nothing was changed.");
+    } catch (error) {
+      setError(
+        withReference(
+          "The revision couldn't be undone. Nothing was changed.",
+          referenceFor(error)
+        )
+      );
     } finally {
       setUndoing(false);
     }

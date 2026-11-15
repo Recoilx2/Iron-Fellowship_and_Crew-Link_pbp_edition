@@ -88,6 +88,7 @@ vi.mock("api-calls/assistant/outlineVersions", () => ({
 
 import { GMAssistant } from "../GMAssistant";
 import {
+  AssistantRequestError,
   fetchAssistantContextSize,
   fetchAssistantModels,
   type AssistantContextSize,
@@ -197,10 +198,10 @@ describe("GMAssistant model picker", () => {
       instructionTokens: 0,
       unavailable: [],
     } as AssistantContextSize);
-    vi.mocked(fetchAssistantModels).mockResolvedValue([
+    vi.mocked(fetchAssistantModels).mockResolvedValue({ endpointHost: "llm.example:8443", models: [
       { id: "m1", contextTokens: 4096 },
       { id: "m2", contextTokens: 16384 },
-    ]);
+    ] });
     vi.mocked(fetchAssistantSettings).mockResolvedValue({
       model: "m2",
       context: savedContext,
@@ -276,10 +277,11 @@ describe("GMAssistant model picker", () => {
 
   it("shows the not-set-up message when the server has no model server", async () => {
     vi.mocked(fetchAssistantModels).mockRejectedValue(
-      Object.assign(new Error("The GM assistant is not set up on this server."), {
-        code: "NOT_SET_UP",
-        ref: "ABC123",
-      })
+      new AssistantRequestError(
+        "NOT_SET_UP",
+        "The GM assistant is not set up on this server.",
+        { status: 503, ref: "ABC123" }
+      )
     );
     const view = await renderAndOpen();
 
@@ -290,8 +292,8 @@ describe("GMAssistant model picker", () => {
 
   it("shows a generic error with the reference when models fail", async () => {
     vi.mocked(fetchAssistantModels).mockRejectedValue(
-      Object.assign(new Error("The assistant request failed."), {
-        code: "UPSTREAM_ERROR",
+      new AssistantRequestError("UPSTREAM_ERROR", "The assistant request failed.", {
+        status: 502,
         ref: "ZZ9Q12",
       })
     );
@@ -330,7 +332,7 @@ describe("GMAssistant gating", () => {
       instructionTokens: 0,
       unavailable: [],
     } as AssistantContextSize);
-    vi.mocked(fetchAssistantModels).mockResolvedValue([]);
+    vi.mocked(fetchAssistantModels).mockResolvedValue({ endpointHost: "llm.example:8443", models: [] });
     vi.mocked(fetchAssistantSettings).mockResolvedValue(null);
     vi.mocked(listenToConversations).mockImplementation(
       (_campaignId, handlers) => {
@@ -506,9 +508,9 @@ describe("GMAssistant chat thread", () => {
       instructionTokens: 0,
       unavailable: [],
     } as AssistantContextSize);
-    vi.mocked(fetchAssistantModels).mockResolvedValue([
+    vi.mocked(fetchAssistantModels).mockResolvedValue({ endpointHost: "llm.example:8443", models: [
       { id: "m1", contextTokens: 4096 },
-    ]);
+    ] });
     vi.mocked(fetchAssistantSettings).mockResolvedValue({
       model: null,
       context: emptyAssistantContextChoice(),
@@ -709,9 +711,9 @@ describe("GMAssistant streaming", () => {
       instructionTokens: 0,
       unavailable: [],
     } as AssistantContextSize);
-    vi.mocked(fetchAssistantModels).mockResolvedValue([
+    vi.mocked(fetchAssistantModels).mockResolvedValue({ endpointHost: "llm.example:8443", models: [
       { id: "m1", contextTokens: 4096 },
-    ]);
+    ] });
     vi.mocked(fetchAssistantSettings).mockResolvedValue({
       model: null,
       context: emptyAssistantContextChoice(),
@@ -854,8 +856,8 @@ describe("GMAssistant streaming", () => {
       "api-calls/assistant/gmAssistantClient"
     );
     vi.mocked(streamAssistantChat).mockRejectedValue(
-      Object.assign(new Error("The assistant request failed."), {
-        code: "UPSTREAM_ERROR",
+      new AssistantRequestError("UPSTREAM_ERROR", "The assistant request failed.", {
+        status: 502,
         ref: "Q7X2KD",
       })
     );
@@ -876,7 +878,46 @@ describe("GMAssistant streaming", () => {
     const view = await renderAndOpen();
 
     expect(view.textContent).toContain("m1");
-    expect(view.textContent).toContain("configured endpoint");
+    expect(view.textContent).toContain("Requests go to llm.example:8443 via this server");
+    expect(view.textContent).not.toContain("configured endpoint");
+  });
+
+  it("keeps the plain wording when the server names no endpoint host", async () => {
+    vi.mocked(fetchAssistantModels).mockResolvedValue({
+      endpointHost: null,
+      models: [{ id: "m1", contextTokens: 8192 }],
+    });
+    const view = await renderAndOpen();
+
+    expect(view.textContent).toContain("Requests go to this server's configured endpoint");
+  });
+
+  it("shows a generic error with a reference when loading models fails without a server answer", async () => {
+    vi.mocked(fetchAssistantModels).mockRejectedValue(new TypeError("Failed to fetch"));
+    const view = await renderAndOpen();
+
+    expect(view.textContent).toContain("The assistant request failed.");
+    expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
+    expect(view.textContent).not.toContain("Failed to fetch");
+  });
+
+  it("shows a generic error with a reference when sending fails without a server answer", async () => {
+    const { streamAssistantChat } = await import(
+      "api-calls/assistant/gmAssistantClient"
+    );
+    vi.mocked(streamAssistantChat).mockRejectedValue(new TypeError("Failed to fetch"));
+    const view = await renderAndOpen();
+    typeMessage(view, "What happens next?");
+    act(() => {
+      buttonByLabel(view, "Send to assistant").dispatchEvent(
+        new MouseEvent("click", { bubbles: true })
+      );
+    });
+    await flush();
+
+    expect(view.textContent).toContain("The assistant request failed.");
+    expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
+    expect(view.textContent).not.toContain("Failed to fetch");
   });
 });
 
@@ -940,9 +981,9 @@ describe("GMAssistant outline revisions", () => {
       instructionTokens: 0,
       unavailable: [],
     } as AssistantContextSize);
-    vi.mocked(fetchAssistantModels).mockResolvedValue([
+    vi.mocked(fetchAssistantModels).mockResolvedValue({ endpointHost: "llm.example:8443", models: [
       { id: "m1", contextTokens: 4096 },
-    ]);
+    ] });
     vi.mocked(fetchAssistantSettings).mockResolvedValue({
       model: null,
       context: emptyAssistantContextChoice(),

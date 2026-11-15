@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
@@ -22,6 +22,8 @@ import {
   undoOutlineRevision,
 } from "api-calls/assistant/outlineVersions";
 import { listenToOutlineVersions } from "api-calls/assistant/listenToOutlineVersions";
+import { mintErrorReference } from "functions/errorReference";
+import { referenceFor, withReference } from "./assistantFailure";
 import { useOutlineDocument } from "./useOutlineDocument";
 import { OutlineRevision } from "./OutlineRevision";
 
@@ -47,6 +49,11 @@ export function OutlineTab(props: { campaignId: string }) {
   const { campaignId } = props;
   const { outlineId, bytes, text, loaded, failed, reload, overrideBytes } =
     useOutlineDocument(campaignId);
+  // One reference per failed open, stable across re-renders until a retry.
+  const failedRef = useMemo(
+    () => (failed ? mintErrorReference() : null),
+    [failed]
+  );
   const [versions, setVersions] = useState(0);
   const [undoing, setUndoing] = useState(false);
   const [undoError, setUndoError] = useState<string | null>(null);
@@ -119,15 +126,23 @@ export function OutlineTab(props: { campaignId: string }) {
       const proposed = extractOutlineProposal(result.text);
       if (!proposed) {
         setRevisionError(
-          "The assistant didn't return a marked revision. Try again with a plainer instruction."
+          withReference(
+            "The assistant didn't return a marked revision. Try again with a plainer instruction.",
+            mintErrorReference()
+          )
         );
         return;
       }
       setPreview({ current, proposed });
       setShowForm(false);
       setInstruction("");
-    } catch {
-      setRevisionError("The revision request failed. Try again.");
+    } catch (error) {
+      setRevisionError(
+        withReference(
+          "The revision request failed. Try again.",
+          referenceFor(error)
+        )
+      );
     } finally {
       setRequesting(false);
     }
@@ -161,14 +176,19 @@ export function OutlineTab(props: { campaignId: string }) {
     try {
       await undoOutlineRevision({ campaignId, outlineId });
       await moveEditorTo();
-    } catch {
-      setUndoError("The revision couldn't be undone. Nothing was changed.");
+    } catch (error) {
+      setUndoError(
+        withReference(
+          "The revision couldn't be undone. Nothing was changed.",
+          referenceFor(error)
+        )
+      );
     } finally {
       setUndoing(false);
     }
   };
 
-  if (failed) {
+  if (failed && failedRef) {
     return (
       <Box sx={{ p: 2 }}>
         <Alert
@@ -179,7 +199,7 @@ export function OutlineTab(props: { campaignId: string }) {
             </Button>
           }
         >
-          The assistant couldn&apos;t open the outline.
+          {withReference("The assistant couldn't open the outline.", failedRef)}
         </Alert>
       </Box>
     );

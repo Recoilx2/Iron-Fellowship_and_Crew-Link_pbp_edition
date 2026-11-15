@@ -65,6 +65,7 @@ describe("gmAssistantClient", () => {
   it("lists the server's models for the campaign", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(200, {
+        endpointHost: "llm.example:8443",
         models: [
           { id: "live-chat-model", context_tokens: 4096 },
           { id: "live-other-model", context_tokens: 8192 },
@@ -73,12 +74,15 @@ describe("gmAssistantClient", () => {
     );
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const models = await fetchAssistantModels("campaign-1");
+    const result = await fetchAssistantModels("campaign-1");
 
-    expect(models).toEqual([
-      { id: "live-chat-model", contextTokens: 4096 },
-      { id: "live-other-model", contextTokens: 8192 },
-    ]);
+    expect(result).toEqual({
+      endpointHost: "llm.example:8443",
+      models: [
+        { id: "live-chat-model", contextTokens: 4096 },
+        { id: "live-other-model", contextTokens: 8192 },
+      ],
+    });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(
       "https://stack.example/functions/v1/gm-assistant/models?campaignId=campaign-1"
@@ -86,6 +90,13 @@ describe("gmAssistantClient", () => {
     expect((init.headers as Headers).get("Authorization")).toBe(
       `Bearer ${sessionToken}`
     );
+  });
+
+  it("treats a missing or non-string endpoint host as unknown", async () => {
+    globalThis.fetch = (async () =>
+      jsonResponse(200, { endpointHost: 42, models: [] })) as unknown as typeof fetch;
+
+    expect((await fetchAssistantModels("campaign-1")).endpointHost).toBeNull();
   });
 
   it("reports the not-set-up state with the server code", async () => {

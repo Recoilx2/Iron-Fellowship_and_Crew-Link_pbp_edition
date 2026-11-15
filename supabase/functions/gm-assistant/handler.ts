@@ -523,6 +523,20 @@ interface ChatMessage {
   content: string;
 }
 
+/**
+ * Host (and port) of the configured endpoint, for telling GMs where their
+ * material goes. Never userinfo, path, query or key; null when unset or
+ * unparseable.
+ */
+function endpointHostOf(endpoint: string): string | null {
+  if (!endpoint.trim()) return null;
+  try {
+    return new URL(endpoint.trim()).host || null;
+  } catch {
+    return null;
+  }
+}
+
 async function readHistory(
   env: GmAssistantEnv,
   callerToken: string,
@@ -532,12 +546,13 @@ async function readHistory(
   const { status, rows } = await postgrest(
     env,
     callerToken,
-    `assistant_messages?conversation_id=eq.${encodeURIComponent(conversationId)}&select=role,content&order=created_at.asc&order=id.asc&limit=100`,
+    `assistant_messages?conversation_id=eq.${encodeURIComponent(conversationId)}&select=role,content&order=created_at.desc,id.desc&limit=100`,
     fetchImpl,
   );
   if (status !== 200) return null;
   const history: ChatMessage[] = [];
-  for (const row of rows) {
+  // Newest 100 come back newest first; the model wants oldest first.
+  for (const row of [...rows].reverse()) {
     if (
       (row.role === "user" || row.role === "assistant") &&
       typeof row.content === "string"
@@ -1015,6 +1030,7 @@ async function handleModels(
   headers.set("Content-Type", "application/json");
   return Response.json(
     {
+      endpointHost: endpointHostOf(env.endpoint),
       models: result.models.map((model) => ({
         id: model.id,
         context_tokens: model.contextTokens,

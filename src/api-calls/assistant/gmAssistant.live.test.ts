@@ -279,6 +279,8 @@ describe.skipIf(!config)("gm assistant server function", () => {
     const models = await call(`/gm-assistant/models?campaignId=${campaignId}`, { token });
     expect(models.status).toBe(200);
     expect(JSON.parse(models.text)).toEqual({
+      // Host and port only: the fake upstream's address, nothing else.
+      endpointHost: new URL(fake?.containerUrl ?? "").host,
       models: [
         { id: FAKE_CHAT_MODEL, context_tokens: 4096 },
         { id: FAKE_OTHER_MODEL, context_tokens: 8192 },

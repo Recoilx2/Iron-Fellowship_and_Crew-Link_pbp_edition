@@ -15,6 +15,12 @@ export interface AssistantModelOption {
   contextTokens: number;
 }
 
+export interface AssistantModelsResult {
+  /** Host (and port) of the server's model endpoint; null when unknown. */
+  endpointHost: string | null;
+  models: AssistantModelOption[];
+}
+
 export interface AssistantContextSizeItem {
   key: string;
   label: string;
@@ -162,13 +168,14 @@ async function throwForStatus(
 
 /**
  * Lists the models the server offers for a campaign, each with an
- * approximate context size. Throws AssistantRequestError with code
+ * approximate context size, plus the host (never credentials or path) of
+ * the endpoint the server sends material to, or null when it isn't told. Throws AssistantRequestError with code
  * NOT_SET_UP when the operator has not configured a model server.
  */
 export async function fetchAssistantModels(
   campaignId: string,
   options?: { signal?: AbortSignal }
-): Promise<AssistantModelOption[]> {
+): Promise<AssistantModelsResult> {
   let response: Response;
   try {
     const headers = await authHeaders();
@@ -190,18 +197,25 @@ export async function fetchAssistantModels(
     await throwForStatus(response, "The assistant request failed.");
   }
   const parsed = (await response.json()) as {
+    endpointHost?: unknown;
     models?: Array<{ id?: unknown; context_tokens?: unknown }>;
   };
   const models = Array.isArray(parsed.models) ? parsed.models : [];
-  return models
-    .filter((entry) => typeof entry.id === "string" && entry.id)
-    .map((entry) => ({
-      id: entry.id as string,
-      contextTokens:
-        typeof entry.context_tokens === "number" && entry.context_tokens > 0
-          ? Math.trunc(entry.context_tokens)
-          : 8192,
-    }));
+  return {
+    endpointHost:
+      typeof parsed.endpointHost === "string" && parsed.endpointHost
+        ? parsed.endpointHost
+        : null,
+    models: models
+      .filter((entry) => typeof entry.id === "string" && entry.id)
+      .map((entry) => ({
+        id: entry.id as string,
+        contextTokens:
+          typeof entry.context_tokens === "number" && entry.context_tokens > 0
+            ? Math.trunc(entry.context_tokens)
+            : 8192,
+      })),
+  };
 }
 
 /**
