@@ -80,6 +80,14 @@ describe("Rules navigation entry", () => {
     expect(rulesLink(view)?.getAttribute("aria-current")).toBe("page");
   });
 
+  it.each(["/rules/", "/rules/anything"])(
+    "keeps Rules as the current section on %s",
+    (path) => {
+      const view = render(<NavRail />, path);
+      expect(rulesLink(view)?.getAttribute("aria-current")).toBe("true");
+    }
+  );
+
   it.each([
     ["the nav rail", <NavRail key="rail" />],
     ["the phone bottom bar", <BottomNav key="bottom" />],

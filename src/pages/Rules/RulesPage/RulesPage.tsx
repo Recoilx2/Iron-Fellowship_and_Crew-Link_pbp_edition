@@ -1,4 +1,5 @@
 import { Box, Typography } from "@mui/material";
+import { useId } from "react";
 import { Head } from "providers/HeadProvider/Head";
 import { PageContent } from "components/shared/Layout/PageContent";
 import { PageHeader } from "components/shared/Layout/PageHeader";
@@ -15,13 +16,14 @@ interface RuleTerm {
   description: string;
 }
 
-function RuleTermList(props: { label: string; terms: RuleTerm[] }) {
-  const { label, terms } = props;
+function RuleTermList(props: { labelledBy: string; terms: RuleTerm[] }) {
+  const { labelledBy, terms } = props;
 
   return (
     <Box
       component={"ul"}
-      aria-label={label}
+      role={"list"}
+      aria-labelledby={labelledBy}
       sx={{ listStyle: "none", m: 0, py: 1, px: { xs: 2, sm: 0 } }}
     >
       {terms.map((term) => (
@@ -46,6 +48,8 @@ function RuleTermList(props: { label: string; terms: RuleTerm[] }) {
  * campaign, and in reference mode nothing on it rolls or saves.
  */
 export function RulesPage() {
+  const statsHeadingId = useId();
+  const metersHeadingId = useId();
   const stats = useStore((store) => store.rules.stats);
   const conditionMeters = useStore((store) => store.rules.conditionMeters);
 
@@ -63,15 +67,23 @@ export function RulesPage() {
   return (
     <ReferenceModeContext.Provider value={true}>
       <Head title={"Rules"} />
-      <PageHeader
-        label={"Rules"}
-        subLabel={"Look up moves, oracles, stats and condition meters."}
-      />
+      <PageHeader label={"Rules"} />
       <PageContent isPaper>
-        <SectionHeading breakContainer label={"Stats"} />
-        <RuleTermList label={"Stats"} terms={statTerms} />
-        <SectionHeading breakContainer label={"Condition Meters"} />
-        <RuleTermList label={"Condition Meters"} terms={meterTerms} />
+        <Typography color={"text.secondary"} sx={{ pt: 2, px: { xs: 2, sm: 0 } }}>
+          Look up moves, oracles, stats and condition meters.
+        </Typography>
+        <SectionHeading
+          breakContainer
+          label={"Stats"}
+          headingId={statsHeadingId}
+        />
+        <RuleTermList labelledBy={statsHeadingId} terms={statTerms} />
+        <SectionHeading
+          breakContainer
+          label={"Condition Meters"}
+          headingId={metersHeadingId}
+        />
+        <RuleTermList labelledBy={metersHeadingId} terms={meterTerms} />
         <SectionHeading breakContainer label={"Moves"} />
         <MovesSection shouldExpandLocally />
         <SectionHeading breakContainer label={"Oracles"} />

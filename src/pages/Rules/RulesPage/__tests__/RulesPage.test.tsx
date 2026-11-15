@@ -4,6 +4,8 @@ import { act } from "react";
 import { createRoot, Root } from "react-dom/client";
 import { ThemeProvider, createTheme } from "@mui/material";
 import { classic } from "@datasworn-community/ironsworn-classic";
+import { starforged } from "@datasworn-community/starforged";
+import { Datasworn } from "@datasworn-community/core";
 import { createRulesSlice } from "stores/rules/rules.slice";
 
 const rulesetsMock = vi.hoisted(() => ({
@@ -34,7 +36,10 @@ type TestState = {
 };
 
 /** Builds the rules exactly as rebuildRules does at runtime. */
-function buildState(withCharacter: boolean): TestState {
+function buildState(
+  withCharacter: boolean,
+  ruleset: Datasworn.Ruleset = classic
+): TestState {
   const state = {
     homebrew: { collections: {}, expansions: {} },
   } as TestState;
@@ -43,7 +48,7 @@ function buildState(withCharacter: boolean): TestState {
     (() => state) as never,
     undefined as never
   );
-  state.rules.setBaseRuleset(classic);
+  state.rules.setBaseRuleset(ruleset);
   state.rules.expansionIds = [];
   state.rules.rebuildRules();
 
@@ -151,6 +156,20 @@ describe("RulesPage", () => {
     return match;
   }
 
+  /** The list a section heading names with aria-labelledby. */
+  function listNamed(view: HTMLElement, name: string) {
+    const list = Array.from(view.querySelectorAll("ul[role='list']")).find(
+      (candidate) =>
+        document.getElementById(
+          candidate.getAttribute("aria-labelledby") ?? ""
+        )?.textContent === name
+    );
+    if (!list) {
+      throw new Error(`No list named ${name}`);
+    }
+    return list;
+  }
+
   /** Opens every move category, then every move, the way a reader would. */
   function expandEveryMove(view: HTMLElement) {
     view
@@ -186,16 +205,55 @@ describe("RulesPage", () => {
   it("shows the stats and condition meters of the ruleset with their descriptions", () => {
     const view = render();
 
-    const stats = view.querySelector("[aria-label='Stats']");
+    const stats = listNamed(view, "Stats");
     // The rules name stats in lower case; the page capitalizes them.
     expect(stats?.textContent).toContain("edge");
     expect(stats?.textContent).toContain("Quickness, agility, and prowess");
     expect(stats?.textContent).toContain("wits");
 
-    const meters = view.querySelector("[aria-label='Condition Meters']");
+    const meters = listNamed(view, "Condition Meters");
     expect(meters?.textContent).toContain("Health represents your current");
     expect(meters?.textContent).toContain("Spirit is your current mental state");
     expect(meters?.textContent).toContain("Supply is an abstract");
+  });
+
+  it("has one h1 and only the four section headings as h2", () => {
+    const view = render();
+
+    const headings = (level: string) =>
+      Array.from(view.querySelectorAll(level)).map((heading) =>
+        heading.textContent?.trim()
+      );
+    expect(headings("h1")).toEqual(["Rules"]);
+    expect(headings("h2")).toEqual([
+      "Stats",
+      "Condition Meters",
+      "Moves",
+      "Oracles",
+    ]);
+  });
+
+  it("follows the game system: Starforged stats, meters and moves", () => {
+    state = buildState(false, starforged);
+    const view = render();
+
+    const stats = listNamed(view, "Stats");
+    expect(stats.textContent).toContain("edge");
+    expect(stats.textContent).toContain(
+      "Quickness, agility, and prowess when fighting at a distance."
+    );
+    expect(listNamed(view, "Condition Meters").textContent).toContain(
+      "Health represents your current physical condition and stamina."
+    );
+
+    click(buttonNamed(view, "Adventure Moves"));
+    const faceDanger = buttonNamed(view, "Face Danger");
+    click(faceDanger);
+    expect(faceDanger.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      document.getElementById(faceDanger.getAttribute("aria-controls") ?? "")
+        ?.textContent
+    ).toContain("When you attempt something risky");
   });
 
   it("lists the oracles and opens a table to read, without rolling", () => {

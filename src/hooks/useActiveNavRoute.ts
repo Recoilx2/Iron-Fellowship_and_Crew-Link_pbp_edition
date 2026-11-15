@@ -1,4 +1,4 @@
-import { useLocation } from "react-router-dom";
+import { matchPath, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import {
   BASE_ROUTES,
@@ -34,7 +34,9 @@ export function useActiveNavRoute() {
       setSelectedRoute(NAV_ROUTES.WORLD);
     } else if (pathname.includes(HOMEBREW_PREFIX)) {
       setSelectedRoute(NAV_ROUTES.HOMEBREW);
-    } else if (pathname === basePaths[BASE_ROUTES.RULES]) {
+    } else if (
+      matchPath({ path: basePaths[BASE_ROUTES.RULES], end: false }, pathname)
+    ) {
       setSelectedRoute(NAV_ROUTES.RULES);
     } else if (pathname === basePaths[BASE_ROUTES.LOGIN]) {
       setSelectedRoute(NAV_ROUTES.LOGIN);
