@@ -7,6 +7,7 @@ import { ListItemButtonWithSecondaryAction } from "./ListItemButtonWithSecondary
 import { ToggleVisibilityButton } from "components/shared/ToggleVisibilityButton";
 import { useStore } from "stores/store";
 import { useState } from "react";
+import { useReferenceMode } from "hooks/useReferenceMode";
 
 export interface OracleListItemProps {
   oracleId: string;
@@ -23,6 +24,8 @@ export function OracleListItem(props: OracleListItemProps) {
     props;
   const oracle = oracles[oracleId];
   const { rollOracleTable } = useRoller();
+  const isReferenceMode = useReferenceMode();
+  const openDialog = useStore((store) => store.appState.openDialog);
 
   const updateHiddenOracles = useStore(
     (store) => store.campaigns.currentCampaign.updateHiddenOracles
@@ -70,7 +73,13 @@ export function OracleListItem(props: OracleListItemProps) {
         </>
       }
       disabled={disabled}
-      onClick={!actionIsHide ? () => rollOracleTable(oracle._id, true, false) : undefined}
+      onClick={
+        isReferenceMode
+          ? () => openDialog(oracle._id)
+          : !actionIsHide
+            ? () => rollOracleTable(oracle._id, true, false)
+            : undefined
+      }
       sx={{
         filter: hidden ? "grayscale(30%) opacity(70%)" : undefined
       }}

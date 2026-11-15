@@ -3,6 +3,7 @@ import { useRoller } from "stores/appState/useRoller";
 import { useStore } from "stores/store";
 import RollIcon from "@mui/icons-material/Casino";
 import { Datasworn, IdParser } from "@datasworn-community/core";
+import { useReferenceMode } from "hooks/useReferenceMode";
 
 export interface OracleButtonProps extends ButtonProps {
   oracleId: string;
@@ -35,8 +36,9 @@ export function OracleButton(props: OracleButtonProps) {
   );
 
   const { rollOracleTable } = useRoller();
+  const isReferenceMode = useReferenceMode();
 
-  if (!oracle || oracle.oracle_type === "tables") {
+  if (isReferenceMode || !oracle || oracle.oracle_type === "tables") {
     return null;
   }
   return (

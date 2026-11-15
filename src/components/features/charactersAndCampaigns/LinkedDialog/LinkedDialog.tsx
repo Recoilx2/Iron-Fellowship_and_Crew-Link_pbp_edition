@@ -3,6 +3,9 @@ import { useStore } from "stores/store";
 import { LinkedDialogContent } from "./LinkedDialogContent";
 import { useIsMobile } from "hooks/useIsMobile";
 import { idMap } from "data/idMap";
+import { useMatch } from "react-router-dom";
+import { BASE_ROUTES, basePaths } from "routes";
+import { ReferenceModeContext } from "hooks/useReferenceMode";
 
 export function LinkedDialog() {
   const { isOpen, previousIds, openId } = useStore(
@@ -12,11 +15,15 @@ export function LinkedDialog() {
   const handleClose = useStore((store) => store.appState.closeDialog);
 
   const isMobile = useIsMobile();
+  // The dialog sits outside the page, so it follows the page it opened from:
+  // moves and oracles opened from the Rules page are for reading only.
+  const isRulesPage = !!useMatch(basePaths[BASE_ROUTES.RULES]);
 
   const newId = openId ? idMap[openId] ?? openId : undefined;
 
   if (isMobile) {
     return (
+      <ReferenceModeContext.Provider value={isRulesPage}>
       <SwipeableDrawer
         anchor={"bottom"}
         open={isOpen}
@@ -44,10 +51,12 @@ export function LinkedDialog() {
           handleClose={handleClose}
         />
       </SwipeableDrawer>
+      </ReferenceModeContext.Provider>
     );
   }
 
   return (
+    <ReferenceModeContext.Provider value={isRulesPage}>
     <Dialog open={isOpen} onClose={handleClose}>
       <LinkedDialogContent
         id={newId}
@@ -56,5 +65,6 @@ export function LinkedDialog() {
         handleClose={handleClose}
       />
     </Dialog>
+    </ReferenceModeContext.Provider>
   );
 }
