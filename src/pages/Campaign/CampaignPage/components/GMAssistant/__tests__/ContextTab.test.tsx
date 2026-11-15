@@ -187,4 +187,16 @@ describe("ContextTab", () => {
       cleanup();
     }
   });
+
+  it("shows a reference, not raw error text, when listing the material fails", async () => {
+    vi.mocked(fetchAssistantContextOptions).mockRejectedValue(
+      new Error("relation does not exist")
+    );
+    const view = await render(() => {});
+
+    expect(view.textContent).toContain("couldn't list the campaign material");
+    expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
+    expect(view.textContent).not.toContain("relation does not exist");
+    cleanup();
+  });
 });

@@ -20,6 +20,7 @@ import {
 } from "api-calls/assistant/assistantContextOptions";
 import type { AssistantContextChoice } from "api-calls/assistant/_assistant.type";
 import type { AssistantContextSize } from "api-calls/assistant/gmAssistantClient";
+import { referenceFor, withReference } from "./assistantFailure";
 
 /**
  * The GM assistant's Context tab (spec #10, ticket #132): the checklist of
@@ -41,19 +42,19 @@ export function ContextTab(props: {
 }) {
   const { campaignId, context, size, conversationTokens, onSave } = props;
   const [options, setOptions] = useState<AssistantContextOptions | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failedRef, setFailedRef] = useState<string | null>(null);
   const [reloads, setReloads] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setOptions(null);
-    setFailed(false);
+    setFailedRef(null);
     fetchAssistantContextOptions({ campaignId })
       .then((loaded) => {
         if (!cancelled) setOptions(loaded);
       })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
+      .catch((error: unknown) => {
+        if (!cancelled) setFailedRef(referenceFor(error));
       });
     return () => {
       cancelled = true;
@@ -90,7 +91,7 @@ export function ContextTab(props: {
     });
   };
 
-  if (failed) {
+  if (failedRef) {
     return (
       <Box sx={{ p: 2 }}>
         <Alert
@@ -101,7 +102,10 @@ export function ContextTab(props: {
             </Button>
           }
         >
-          The assistant couldn&apos;t list the campaign material.
+          {withReference(
+            "The assistant couldn't list the campaign material.",
+            failedRef
+          )}
         </Alert>
       </Box>
     );

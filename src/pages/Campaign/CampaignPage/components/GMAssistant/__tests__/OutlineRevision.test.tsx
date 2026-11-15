@@ -9,6 +9,7 @@ vi.mock("api-calls/assistant/outlineVersions", () => ({
   undoOutlineRevision: vi.fn(),
 }));
 
+import { AssistantRequestError } from "api-calls/assistant/gmAssistantClient";
 import { OutlineRevision } from "../OutlineRevision";
 import {
   applyOutlineRevision,
@@ -131,5 +132,55 @@ describe("OutlineRevision", () => {
     expect(view.textContent).toContain("couldn't be replaced");
     expect(onReplaced).not.toHaveBeenCalled();
     expect(view.textContent).not.toContain("Applied");
+  });
+
+  it("keeps the server's reference on a failed apply", async () => {
+    vi.mocked(applyOutlineRevision).mockRejectedValue(
+      new AssistantRequestError("FORBIDDEN", "denied", { status: 403, ref: "SRV123" })
+    );
+    const view = render();
+
+    click(view, "Apply to outline");
+    click(view, "Confirm replace");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(view.textContent).toContain("couldn't be replaced");
+    expect(view.textContent).toContain("(ref: SRV123)");
+    expect(view.textContent).not.toContain("denied");
+  });
+
+  it("a failed apply shows a minted reference and no raw error text", async () => {
+    vi.mocked(applyOutlineRevision).mockRejectedValue(new Error("denied"));
+    const view = render();
+
+    click(view, "Apply to outline");
+    click(view, "Confirm replace");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
+    expect(view.textContent).not.toContain("denied");
+  });
+
+  it("a failed undo shows a reference", async () => {
+    vi.mocked(applyOutlineRevision).mockResolvedValue("version-1");
+    vi.mocked(undoOutlineRevision).mockRejectedValue(new Error("policy"));
+    const view = render();
+
+    click(view, "Apply to outline");
+    click(view, "Confirm replace");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    click(view, "Undo");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(view.textContent).toContain("couldn't be undone");
+    expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
   });
 });

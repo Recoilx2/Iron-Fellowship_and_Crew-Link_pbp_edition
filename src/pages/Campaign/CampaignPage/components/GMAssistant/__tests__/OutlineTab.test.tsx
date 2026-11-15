@@ -35,6 +35,21 @@ vi.mock("api-calls/assistant/gmAssistantClient", () => ({
     return proposed.length > 0 ? proposed : null;
   },
   streamAssistantChat: vi.fn(),
+  AssistantRequestError: class extends Error {
+    code: string;
+    status: number;
+    ref: string | null;
+    constructor(
+      code: string,
+      message: string,
+      options: { status: number; ref?: string | null }
+    ) {
+      super(message);
+      this.code = code;
+      this.status = options.status;
+      this.ref = options.ref ?? null;
+    }
+  },
 }));
 vi.mock("api-calls/assistant/createConversation", () => ({
   createConversation: vi.fn(),
@@ -84,6 +99,7 @@ import {
 } from "api-calls/assistant/outlineVersions";
 import { createConversation } from "api-calls/assistant/createConversation";
 import {
+  AssistantRequestError,
   streamAssistantChat,
 } from "api-calls/assistant/gmAssistantClient";
 import { updateNote } from "api-calls/notes/updateNote";
@@ -328,6 +344,119 @@ describe("OutlineTab", () => {
 
     expect(view.textContent).toContain("didn't return a marked revision");
     expect(view.textContent).not.toContain("Proposed outline");
+  });
+
+  function requestRevisionFrom(view: HTMLDivElement) {
+    act(() => {
+      view
+        .querySelector('button[aria-label="Revise outline"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const field = view.querySelector("textarea");
+    if (!field) {
+      throw new Error("no revision instruction field");
+    }
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value"
+    )?.set;
+    act(() => {
+      setter?.call(field, "Tighten act one.");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => {
+      view
+        .querySelector('button[aria-label="Request outline revision"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+  }
+
+  it("shows the server's reference when a revision request fails", async () => {
+    vi.mocked(streamAssistantChat).mockRejectedValueOnce(
+      new AssistantRequestError("UPSTREAM_ERROR", "The assistant request failed.", {
+        status: 502,
+        ref: "SRV123",
+      })
+    );
+    const view = render();
+    await flush();
+    requestRevisionFrom(view);
+    await flush();
+
+    expect(view.textContent).toContain("The revision request failed. Try again.");
+    expect(view.textContent).toContain("(ref: SRV123)");
+  });
+
+  it("shows a generic message with a minted reference for other revision failures", async () => {
+    vi.mocked(streamAssistantChat).mockRejectedValueOnce(
+      new TypeError("Failed to fetch")
+    );
+    const view = render();
+    await flush();
+    requestRevisionFrom(view);
+    await flush();
+
+    expect(view.textContent).toContain("The revision request failed. Try again.");
+    expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
+    expect(view.textContent).not.toContain("Failed to fetch");
+  });
+
+  it("gives the marked-revision error a reference too", async () => {
+    vi.mocked(streamAssistantChat).mockResolvedValueOnce({
+      text: "Just some chat with no proposal.",
+      aborted: false,
+    });
+    const view = render();
+    await flush();
+    requestRevisionFrom(view);
+    await flush();
+
+    expect(view.textContent).toContain("didn't return a marked revision");
+    expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
+  });
+
+  it("shows a reference when the undo fails", async () => {
+    vi.mocked(listenToOutlineVersions).mockImplementation(
+      (_campaignId, handlers) => {
+        handlers.onVersions([
+          {
+            id: "version-1",
+            campaignId: "campaign-1",
+            content: "Act one: the bell rings.",
+            createdBy: "gm-1",
+            createdAt: "2026-11-14T00:00:00Z",
+          },
+        ]);
+        handlers.onLoaded();
+        return () => {};
+      }
+    );
+    vi.mocked(undoOutlineRevision).mockRejectedValueOnce(
+      new Error("row violates policy")
+    );
+    const view = render();
+    await flush();
+    act(() => {
+      view
+        .querySelector('button[aria-label="Undo outline revision"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(view.textContent).toContain("couldn't be undone");
+    expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
+    expect(view.textContent).not.toContain("row violates policy");
+  });
+
+  it("shows a reference when opening the outline fails", async () => {
+    vi.mocked(getOrCreateCampaignOutline).mockRejectedValueOnce(
+      new Error("no access")
+    );
+    const view = render();
+    await flush();
+
+    expect(view.textContent).toContain("couldn't open the outline");
+    expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
   });
 
   it("offers undo while a version is kept and undoes on click", async () => {
