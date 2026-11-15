@@ -24,6 +24,13 @@ The stack tests (`src/**/*.live.test.ts`) skip without a stack, so plain `npm te
 
 Browser tests (Playwright, spec #9) run against one running copy plus the site container it serves. Start the copy from `supabase/` (generate the env first with `python3 bin/gen-env.py --copy ironsworn --port 8000 --out .env.live`, then `ENV_FILE=.env.live docker compose -p live --env-file .env.live -f docker-compose.yml up -d --build`), then run `npm run test:e2e` from the repo root (it fails the run when any browser test is skipped). The first run on a machine also needs `npx playwright install chromium`. In CI the `e2e` job in `.github/workflows/supabase-smoke.yml` does all of this on every pull request and keeps traces and screenshots as CI artifacts on failure. UI tickets add a browser test for their main flow under `e2e/`.
 
+## Merging
+
+A PR merges when its CI is green (including the `live` and `e2e` jobs), a **reviewer** has passed it, and every review finding is fixed or answered on the PR. The reviewer is a fresh agent that did not write the code, given the diff, the ticket and its parent spec.
+
+- **Ticket PR into an `integration/*` branch:** the agent merges it and deletes the ticket branch.
+- **Integration branch into `prod`:** the agent opens the PR and gets it green and reviewed; the human merges it.
+
 ## Agent skills
 
 ### Issue tracker
@@ -49,8 +56,7 @@ One ladder per failure. Run it in order, then stop.
    diagnosis must check whether the failing rule matches the spec or ADR it
    comes from. If the rule itself is wrong, stop and report; don't fix code
    around it.
-3. **Fix** through the normal flow: ticket, PR, review by another harness,
-   merge per **Merging**. Zero-paid probes are the "try".
+3. **Fix** through the normal flow: ticket, PR, review, merge per **Merging**. Zero-paid probes are the "try".
 4. **Still failing?** Run the `moa` skill (mixture of agents: independent
    agents propose a fix) once, and take its fix through the same flow.
 5. **Any second failure, of any kind:** stop and post a handoff (`stuck` →
