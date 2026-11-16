@@ -59,3 +59,17 @@ export function loggedReferenceOf(error: unknown): string | null {
     ? (loggedReferences.get(error) ?? null)
     : null;
 }
+
+/**
+ * The reference to show for a failure, so it always matches one log line:
+ * the one already remembered for this error (for example logged by
+ * `createApiFunction`), else a newly minted one logged now with `details`.
+ * Details never include post text, image data or tokens.
+ */
+export function shownReference(error: unknown, ...details: unknown[]): string {
+  const known = loggedReferenceOf(error);
+  if (known) return known;
+  const ref = referenceForLogging(error);
+  logFailureReference(ref, ...details);
+  return ref;
+}

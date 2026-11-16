@@ -150,10 +150,6 @@ vi.mock("api-calls/chat/chatImages", () => ({
 
 import { ChatComposer } from "../ChatComposer";
 import type { ChannelWithId } from "api-calls/chat/listenToCampaignChannels";
-import {
-  logFailureReference,
-  rememberReference,
-} from "functions/errorReference";
 
 const grey = {
   light: "#666",
@@ -754,13 +750,24 @@ describe("ChatComposer", () => {
       spy.mockRestore();
     });
 
-    it("keeps image data out of the attach log line", async () => {
+    it("logs only size and type for the attached image", async () => {
       const spy = vi.spyOn(console, "error").mockImplementation(() => {});
       const view = await failToAttach();
       const ref = shownReference(view);
+      const call = spy.mock.calls.find((c: unknown[]) =>
+        String(c[0]).includes(ref)
+      ) as unknown[];
       const line = errorCalls(spy).find((l) => l.includes(ref)) ?? "";
+      expect(line).not.toContain("lantern.png");
       expect(line).not.toContain(IMAGE_BYTES);
-      expect(line).not.toContain("data:image");
+      const details = call.find(
+        (part) =>
+          typeof part === "object" && part !== null && !(part instanceof Error)
+      );
+      expect(Object.keys(details as object).sort()).toEqual([
+        "fileSize",
+        "fileType",
+      ]);
       spy.mockRestore();
     });
 
@@ -783,12 +790,14 @@ describe("ChatComposer", () => {
       spy.mockRestore();
     });
 
-    it("reuses the reference createApiFunction already logged for a send", async () => {
+    it("shows the reference the real createApiFunction wrapper logged", async () => {
       const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-      const failure = new Error("database down");
-      rememberReference(failure, "ABC123");
-      logFailureReference("ABC123", failure);
-      createPost.mockRejectedValue(failure);
+      const { createApiFunction } = await vi.importActual<
+        typeof import("api-calls/createApiFunction")
+      >("api-calls/createApiFunction");
+      createPost.mockImplementation(
+        createApiFunction(() => Promise.reject(new Error("database down")), "x")
+      );
       const view = render(ic);
       typeText(textBox(view), POST_TEXT);
       render(ic);
@@ -798,10 +807,15 @@ describe("ChatComposer", () => {
       await act(async () => {
         send.click();
       });
-      expect(shownReference(view)).toBe("ABC123");
-      expect(
-        errorCalls(spy).filter((line) => line.includes("ABC123"))
-      ).toHaveLength(1);
+      const ref = shownReference(view);
+      const wrapperLines = errorCalls(spy).filter((line) =>
+        line.startsWith("API call failed (ref: ")
+      );
+      expect(wrapperLines).toHaveLength(1);
+      expect(wrapperLines[0]).toContain(`(ref: ${ref})`);
+      expect(errorCalls(spy).filter((line) => line.includes(ref))).toHaveLength(
+        1
+      );
       spy.mockRestore();
     });
   });
