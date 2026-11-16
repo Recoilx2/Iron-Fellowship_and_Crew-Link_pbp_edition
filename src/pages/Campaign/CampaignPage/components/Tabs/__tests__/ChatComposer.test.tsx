@@ -762,7 +762,7 @@ describe("ChatComposer", () => {
       expect(line).not.toContain(IMAGE_BYTES);
       const details = call.find(
         (part) =>
-          typeof part === "object" && part !== null && !(part instanceof Error)
+          typeof part === "object" && part !== null && "fileSize" in part
       );
       expect(Object.keys(details as object).sort()).toEqual([
         "fileSize",

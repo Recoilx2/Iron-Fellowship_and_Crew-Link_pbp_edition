@@ -44,13 +44,64 @@ export function referenceForLogging(error: unknown): string {
   return mintErrorReference();
 }
 
+const MAX_LOGGED_STRING = 500;
+
+/**
+ * Error-like means an `Error`, or a plain object with a string `message`
+ * plus a `code` or `details` (the shape of a PostgrestError that is not an
+ * Error subclass). Detail objects callers pass on purpose, such as
+ * `{fileSize, fileType}` or `{path, status, body}`, have no `message`, so
+ * they are never taken for errors.
+ */
+function isErrorLike(value: unknown): value is Record<string, unknown> {
+  if (value instanceof Error) return true;
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.message === "string" &&
+    ("code" in candidate || "details" in candidate)
+  );
+}
+
+function capped(value: string): string {
+  return value.length > MAX_LOGGED_STRING
+    ? `${value.slice(0, MAX_LOGGED_STRING)}...`
+    : value;
+}
+
+/**
+ * The only parts of an error that are logged: name, code, status and
+ * message. `details` (a PostgrestError's "Failing row contains (...)" can
+ * hold post text), `hint`, `stack`, `cause` and any other field are dropped.
+ */
+function summariseError(error: Record<string, unknown>): Record<string, unknown> {
+  const summary: Record<string, unknown> = {};
+  for (const key of ["name", "code", "status", "message"] as const) {
+    const value = error[key];
+    if (typeof value === "string") summary[key] = capped(value);
+    else if (typeof value === "number") summary[key] = value;
+  }
+  return summary;
+}
+
+function safeToLog(detail: unknown): unknown {
+  if (typeof detail === "string") return capped(detail);
+  if (isErrorLike(detail)) return summariseError(detail);
+  return detail;
+}
+
 /**
  * Logs a failure under its reference in the one shape every failure uses
  * (`API call failed (ref: ABC123)`), so a reference a user reports can be
- * found. Pass details only; never request bodies, auth headers or tokens.
+ * found. This is the single choke point for failure logs: any error-like
+ * argument is reduced to name, code, status and message (see
+ * `isErrorLike`), and strings are capped at 500 characters (the gm-assistant
+ * client's own 500-character gateway body slice passes whole). Other
+ * detail objects are logged as given. Pass details only; never request
+ * bodies, auth headers or tokens.
  */
 export function logFailureReference(ref: string, ...details: unknown[]): void {
-  console.error(`API call failed (ref: ${ref})`, ...details);
+  console.error(`API call failed (ref: ${ref})`, ...details.map(safeToLog));
 }
 
 /** The reference already remembered for this error, if any. */
