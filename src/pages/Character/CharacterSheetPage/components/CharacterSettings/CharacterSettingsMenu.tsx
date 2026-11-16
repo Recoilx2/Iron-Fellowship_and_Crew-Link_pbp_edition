@@ -35,6 +35,7 @@ import { NotesExporter } from "services/export/exporters/exportNotes";
 import { RollLogExporter } from "services/export/exporters/exportRollLog";
 import { WorldExporter } from "services/export/exporters/exportWorld";
 import { Exporter } from "services/export";
+import { logError } from "functions/errorReference";
 
 export interface CharacterSettingsMenuProps {
   id?: string;
@@ -147,7 +148,7 @@ export function CharacterSettingsMenu(props: CharacterSettingsMenuProps) {
         success("Copied Link to Clipboard");
       })
       .catch((e) => {
-        console.error(e);
+        logError("CharacterSettingsMenu", e);
       });
   };
 

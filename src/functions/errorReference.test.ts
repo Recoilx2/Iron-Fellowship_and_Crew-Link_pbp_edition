@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { logFailureReference } from "functions/errorReference";
+import {
+  logError,
+  logFailureReference,
+  shownReference,
+  summariseErrorValue,
+} from "functions/errorReference";
 
 describe("logFailureReference", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -55,5 +60,65 @@ describe("logFailureReference", () => {
       hint: "secret",
     });
     expect(summary).toEqual({ message: "m" });
+  });
+});
+
+describe("summariseErrorValue and nested details", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("summarises an error-shaped object with no code by position", () => {
+    expect(
+      summariseErrorValue({ message: "not json", extra: "secret body" })
+    ).toEqual({ message: "not json" });
+  });
+
+  it("summarises a plain {error: {...}} rejection", () => {
+    expect(
+      summariseErrorValue({ error: { details: "secret post text" } })
+    ).toEqual({});
+  });
+
+  it("caps messages and primitives at exactly 500 characters plus ellipsis", () => {
+    const expected = "x".repeat(500) + "...";
+    expect(summariseErrorValue({ message: "x".repeat(2000) })).toEqual({
+      message: expected,
+    });
+    expect(summariseErrorValue("x".repeat(2000))).toBe(expected);
+  });
+
+  it("turns other primitives into strings", () => {
+    expect(summariseErrorValue(42)).toBe("42");
+    expect(summariseErrorValue(undefined)).toBe("undefined");
+  });
+
+  it("summarises a nested error inside a {path, error} detail", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    logFailureReference("ABC123", {
+      path: "/p",
+      error: { message: "m", code: "1", details: "secret post text" },
+    });
+    expect(spy.mock.calls[0][1]).toEqual({
+      path: "/p",
+      error: { code: "1", message: "m" },
+    });
+  });
+
+  it("shownReference logs the error argument's summary by position", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    shownReference({ message: "m", hint: "secret hint" });
+    expect(spy.mock.calls[0][1]).toEqual({ message: "m" });
+  });
+
+  it("logError logs the context plus the summary only", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    logError("Load failed", {
+      code: "23514",
+      message: "bad",
+      details: "Failing row contains (secret post text)",
+    });
+    expect(spy).toHaveBeenCalledWith("Load failed", {
+      code: "23514",
+      message: "bad",
+    });
   });
 });

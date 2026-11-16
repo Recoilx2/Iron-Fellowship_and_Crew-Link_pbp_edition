@@ -7,6 +7,7 @@ import {
 import { useSnackbar } from "providers/SnackbarProvider";
 import { useMemo } from "react";
 import { useStore } from "stores/store";
+import { logError } from "functions/errorReference";
 
 export interface InviteUsersDialogProps {
   open: boolean;
@@ -35,7 +36,7 @@ export function InviteUsersDialog(props: InviteUsersDialogProps) {
         success("Copied Link to Clipboard");
       })
       .catch((e) => {
-        console.error(e);
+        logError("InviteUsersDialog", e);
       });
   };
 

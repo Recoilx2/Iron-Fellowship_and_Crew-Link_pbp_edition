@@ -236,7 +236,7 @@ export function ChatComposer(props: {
         (error: unknown) => {
           // Size and type only: never the image's content or its file name,
           // which can identify a person.
-          const ref = shownReference(error, error, {
+          const ref = shownReference(error, {
             fileSize: file.size,
             fileType: file.type,
           });
@@ -377,7 +377,7 @@ export function ChatComposer(props: {
         setAttachError(undefined);
       })
       .catch((error: unknown) => {
-        const ref = shownReference(error, error);
+        const ref = shownReference(error);
         for (const path of paths) {
           sentPathsRef.current.delete(path);
           // The post never landed, so its staged uploads are orphans:

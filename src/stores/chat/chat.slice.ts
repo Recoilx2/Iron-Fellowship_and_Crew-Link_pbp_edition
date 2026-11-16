@@ -10,6 +10,7 @@ import {
 import { fetchOlderChannelPosts } from "api-calls/chat/fetchOlderChannelPosts";
 import type { Unsubscribe } from "api-calls/helpers.type";
 import { getRollDescription } from "functions/rollText";
+import { logError } from "functions/errorReference";
 
 // The live post subscription per channel stays on the latest page, so the
 // shared listener's reconcile re-fetch stays one page even in long
@@ -121,7 +122,7 @@ function startPosts(channelId: string, set: ChatSet, get: ChatGet): void {
       },
     },
     (error) => {
-      console.error(error);
+      logError("chat.slice", error);
       set((store) => {
         store.chat.postsLoading = false;
         store.chat.postsError = "Failed to load posts.";
@@ -162,7 +163,7 @@ export const createChatSlice: CreateSliceType<ChatSlice> = (set, get) => ({
         onLoaded: () => {},
       },
       (error) => {
-        console.error(error);
+        logError("chat.slice", error);
       }
     );
     const stopChannels = listenToCampaignChannels(
@@ -194,7 +195,7 @@ export const createChatSlice: CreateSliceType<ChatSlice> = (set, get) => ({
         },
       },
       (error) => {
-        console.error(error);
+        logError("chat.slice", error);
         set((store) => {
           store.chat.loading = false;
           store.chat.error = "Failed to load channels.";
@@ -255,7 +256,7 @@ export const createChatSlice: CreateSliceType<ChatSlice> = (set, get) => ({
         store.chat.hasOlderByChannel[channelId] = page.hasOlder;
       });
     } catch (error) {
-      console.error(error);
+      logError("chat.slice", error);
       set((store) => {
         store.chat.postsError = "Failed to load older posts.";
       });

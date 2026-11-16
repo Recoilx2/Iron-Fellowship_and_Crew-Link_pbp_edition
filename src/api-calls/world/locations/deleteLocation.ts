@@ -2,6 +2,7 @@ import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
 import { WORLD_IMAGES_BUCKET } from "api-calls/world/worldImageStorage";
 import { WORLD_LOCATIONS_TABLE } from "./_getRef";
+import { logError } from "functions/errorReference";
 
 interface Params {
   worldId: string;
@@ -29,7 +30,7 @@ export const deleteLocation = createApiFunction<Params, void>(
         await client.storage.from(WORLD_IMAGES_BUCKET).remove(paths);
       }
     } catch (e) {
-      console.error(e);
+      logError("deleteLocation", e);
     }
     const { error } = await client
       .from(WORLD_LOCATIONS_TABLE)

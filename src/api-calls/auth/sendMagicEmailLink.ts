@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "config/supabase.config";
+import { logError } from "functions/errorReference";
 
 /**
  * Sends a magic-link sign-in email through the deployment's SMTP server
@@ -23,7 +24,7 @@ export function sendMagicEmailLink(params: {
     })
     .then(({ error }) => {
       if (error) {
-        console.error(error);
+        logError("sendMagicEmailLink", error);
         return Promise.reject("Failed to send sign-in email.");
       }
       return true;

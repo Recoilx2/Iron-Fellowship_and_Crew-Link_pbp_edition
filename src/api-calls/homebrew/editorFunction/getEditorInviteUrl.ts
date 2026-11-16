@@ -3,6 +3,7 @@ import {
   resolveClient,
 } from "api-calls/homebrew/_supabase";
 import { constructHomebrewEditorInvitePath } from "pages/Homebrew/routes";
+import { logError } from "functions/errorReference";
 
 /**
  * Mints an editor invite link for a collection. Only editors can mint;
@@ -18,7 +19,7 @@ export function getEditorInviteUrl(
       { p_collection_id: homebrewCollectionId }
     );
     if (error || !data) {
-      console.error(error ?? "No invite key was returned");
+      logError("getEditorInviteUrl", error ?? "No invite key was returned");
       throw new Error("No invite key was returned");
     }
     return constructHomebrewEditorInvitePath(data as string);

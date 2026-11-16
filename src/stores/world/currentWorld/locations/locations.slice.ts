@@ -26,6 +26,7 @@ import {
   getWorldItemNoteIds,
 } from "api-calls/world/worldNotes";
 import type { GMLocation } from "types/Locations.type";
+import { logError } from "functions/errorReference";
 
 /**
  * Merges streamed GM notes bytes into the structured GM details, keeping
@@ -432,7 +433,7 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
         });
       },
       (error) => {
-        console.error(error);
+        logError("locations.slice", error);
       }
     );
 
@@ -454,7 +455,7 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
         });
       },
       (error) => {
-        console.error(error);
+        logError("locations.slice", error);
       }
     );
 
@@ -473,7 +474,7 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
         });
       },
       (error) => {
-        console.error(error);
+        logError("locations.slice", error);
       }
     );
 

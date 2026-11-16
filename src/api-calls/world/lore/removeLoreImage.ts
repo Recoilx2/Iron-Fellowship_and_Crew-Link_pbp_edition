@@ -1,6 +1,7 @@
 import { createApiFunction } from "api-calls/createApiFunction";
 import { removeWorldImageFile } from "api-calls/world/worldImageStorage";
 import { updateLore } from "./updateLore";
+import { logError } from "functions/errorReference";
 
 /**
  * Removes a lore image, clearing the lore's image list. Only world GMs
@@ -21,6 +22,6 @@ export const removeLoreImage = createApiFunction<
     lore: { imageFilenames: [] },
   });
   await removeWorldImageFile(worldId, loreId, filename).catch((e) =>
-    console.error(e)
+    logError("removeLoreImage", e)
   );
 }, "Failed to delete lore image.");

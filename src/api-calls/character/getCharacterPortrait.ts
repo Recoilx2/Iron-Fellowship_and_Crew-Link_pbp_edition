@@ -1,5 +1,6 @@
 import { getPortraitUrl } from "api-calls/character/portraitStorage";
 import { createApiFunction } from "api-calls/createApiFunction";
+import { logError } from "functions/errorReference";
 
 export const getCharacterPortraitUrl = createApiFunction<
   {
@@ -13,7 +14,7 @@ export const getCharacterPortraitUrl = createApiFunction<
   try {
     return await getPortraitUrl(uid, characterId, filename);
   } catch (e) {
-    console.error(e);
+    logError("getCharacterPortrait", e);
     throw e;
   }
 }, "Failed to load character portrait.");

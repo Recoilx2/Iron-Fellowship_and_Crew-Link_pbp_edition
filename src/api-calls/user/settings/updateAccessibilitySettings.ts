@@ -2,6 +2,7 @@ import { getSupabaseClient } from "config/supabase.config";
 import { ApiFunction } from "api-calls/createApiFunction";
 import { AccessibilitySettingsDocument } from "api-calls/user/settings/_settings.type";
 import { USER_SETTINGS_TABLE } from "./_getRef";
+import { logError } from "functions/errorReference";
 
 export const updateAccessibilitySettings: ApiFunction<
   { uid: string; settings: Partial<AccessibilitySettingsDocument> },
@@ -16,7 +17,7 @@ export const updateAccessibilitySettings: ApiFunction<
     .from(USER_SETTINGS_TABLE)
     .upsert({ user_id: uid, ...patch }, { onConflict: "user_id" });
   if (error) {
-    console.error(error);
+    logError("updateAccessibilitySettings", error);
     throw error;
   }
 };

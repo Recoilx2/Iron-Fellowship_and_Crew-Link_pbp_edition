@@ -74,7 +74,9 @@ function capped(value: string): string {
  * message. `details` (a PostgrestError's "Failing row contains (...)" can
  * hold post text), `hint`, `stack`, `cause` and any other field are dropped.
  */
-function summariseError(error: Record<string, unknown>): Record<string, unknown> {
+function summariseError(
+  error: Record<string, unknown>
+): Record<string, unknown> {
   const summary: Record<string, unknown> = {};
   for (const key of ["name", "code", "status", "message"] as const) {
     const value = error[key];
@@ -84,9 +86,47 @@ function summariseError(error: Record<string, unknown>): Record<string, unknown>
   return summary;
 }
 
+/**
+ * Summarises a value the caller KNOWS is the error, whatever its shape (an
+ * Error, a postgrest-js `{message}` body, a plain `{error: {...}}`
+ * rejection, a string). Objects reduce to name, code, status and a capped
+ * message; primitives become a capped string. Nothing else is kept, so
+ * `details`, `hint`, `stack`, `cause` and any unknown field never reach a
+ * log. Use this where position says "this is the error"; shape-based
+ * detection (`isErrorLike`) is only for extra detail arguments.
+ */
+export function summariseErrorValue(value: unknown): unknown {
+  if (typeof value === "object" && value !== null) {
+    return summariseError(value as Record<string, unknown>);
+  }
+  return capped(String(value));
+}
+
+/** Detail objects are copied only when a nested error had to be summarised. */
+function safeObjectToLog(detail: object): object {
+  if (Array.isArray(detail)) return detail;
+  const entries = Object.entries(detail);
+  let changed = false;
+  const copy: Record<string, unknown> = {};
+  for (const [key, value] of entries) {
+    if (
+      isErrorLike(value) ||
+      (key === "error" && value !== null && typeof value === "object")
+    ) {
+      copy[key] = summariseErrorValue(value);
+      changed = true;
+    } else {
+      copy[key] = value;
+    }
+  }
+  return changed ? copy : detail;
+}
+
 function safeToLog(detail: unknown): unknown {
   if (typeof detail === "string") return capped(detail);
   if (isErrorLike(detail)) return summariseError(detail);
+  if (typeof detail === "object" && detail !== null)
+    return safeObjectToLog(detail);
   return detail;
 }
 
@@ -121,6 +161,23 @@ export function shownReference(error: unknown, ...details: unknown[]): string {
   const known = loggedReferenceOf(error);
   if (known) return known;
   const ref = referenceForLogging(error);
-  logFailureReference(ref, ...details);
+  logFailureReference(ref, summariseErrorValue(error), ...details);
   return ref;
+}
+
+/**
+ * The safe replacement for a bare `console.error(error)`: logs `context`
+ * plus the error's summary (see `summariseErrorValue`), never the whole
+ * object. With no error it logs the context alone. ESLint bans bare
+ * `console.error`/`console.warn` outside this file.
+ */
+export function logError(context: string, error?: unknown): void {
+  if (arguments.length < 2) console.error(context);
+  else console.error(context, summariseErrorValue(error));
+}
+
+/** `console.warn` twin of `logError`. */
+export function logWarning(context: string, error?: unknown): void {
+  if (arguments.length < 2) console.warn(context);
+  else console.warn(context, summariseErrorValue(error));
 }

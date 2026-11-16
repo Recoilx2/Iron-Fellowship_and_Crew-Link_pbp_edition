@@ -16,6 +16,7 @@ import {
   ensureWorldItemNotes,
   getWorldItemNoteIds,
 } from "api-calls/world/worldNotes";
+import { logError } from "functions/errorReference";
 
 export const createLoreSlice: CreateSliceType<LoreSlice> = (set, getState) => ({
   ...defaultLoreSlice,
@@ -207,7 +208,7 @@ export const createLoreSlice: CreateSliceType<LoreSlice> = (set, getState) => ({
         });
       },
       (error) => {
-        console.error(error);
+        logError("lore.slice", error);
       }
     );
 
@@ -226,7 +227,7 @@ export const createLoreSlice: CreateSliceType<LoreSlice> = (set, getState) => ({
         });
       },
       (error) => {
-        console.error(error);
+        logError("lore.slice", error);
       }
     );
 

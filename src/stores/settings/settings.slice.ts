@@ -7,6 +7,7 @@ import { showOrHideCustomMove } from "api-calls/character-campaign-settings/show
 import { showOrHideCustomOracle } from "api-calls/character-campaign-settings/showOrHideCustomOracle";
 import { updatePinnedOracle } from "api-calls/user/settings/updatePinnedOracle";
 import { updateSettings } from "api-calls/character-campaign-settings/updateSettings";
+import { logError } from "functions/errorReference";
 
 // Per-user custom moves and oracles lived in Firebase and were not carried
 // over (spec #11): homebrew collections are their replacement. This slice
@@ -44,7 +45,7 @@ export const createSettingsSlice: CreateSliceType<SettingsSlice> = (
           });
         },
         (error) => {
-          console.error(error);
+          logError("settings.slice", error);
         }
       );
     }
@@ -60,7 +61,7 @@ export const createSettingsSlice: CreateSliceType<SettingsSlice> = (
         });
       },
       (error) => {
-        console.error(error);
+        logError("settings.slice", error);
       }
     );
   },

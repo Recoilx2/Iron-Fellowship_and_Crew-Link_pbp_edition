@@ -5,6 +5,7 @@ import {
 import { updateCharacter } from "./updateCharacter";
 import { getCharacterForExport } from "./getCharacterForExport";
 import { createApiFunction } from "api-calls/createApiFunction";
+import { logError } from "functions/errorReference";
 
 export const updateCharacterPortrait = createApiFunction<
   {
@@ -28,7 +29,7 @@ export const updateCharacterPortrait = createApiFunction<
     });
     if (oldPortraitFilename && oldPortraitFilename !== filename) {
       await removePortraitFile(uid, characterId, oldPortraitFilename).catch(
-        (e) => console.error(e)
+        (e) => logError("updateCharacterPortrait", e)
       );
     }
     return;

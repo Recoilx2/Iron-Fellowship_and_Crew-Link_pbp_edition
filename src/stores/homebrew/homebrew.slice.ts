@@ -61,6 +61,7 @@ import { deleteHomebrewNonLinearMeter } from "api-calls/homebrew/rules/nonLinear
 import { listenToHomebrewCollection } from "api-calls/homebrew/listenToHomebrewCollection";
 import { Datasworn } from "@datasworn-community/core";
 import { convertHomebrewToRules } from "functions/convertHomebrewToRules";
+import { logError } from "functions/errorReference";
 
 enum ListenerRefreshes {
   Oracles,
@@ -282,7 +283,7 @@ export const createHomebrewSlice: CreateSliceType<HomebrewSlice> = (
                 "Failed to load homebrew information",
               );
             });
-            console.error(error);
+            logError("homebrew.slice", error);
           },
           () => {
             set((store) => {

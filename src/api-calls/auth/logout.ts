@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "config/supabase.config";
+import { logError } from "functions/errorReference";
 
 /**
  * Signs out, ending the persisted session on this device.
@@ -6,7 +7,7 @@ import { getSupabaseClient } from "config/supabase.config";
 export async function logout(): Promise<void> {
   const { error } = await getSupabaseClient().auth.signOut();
   if (error) {
-    console.error(error);
+    logError("logout", error);
     throw new Error("Failed to sign out.");
   }
 }

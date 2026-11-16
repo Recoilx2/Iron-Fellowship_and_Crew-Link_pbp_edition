@@ -3,6 +3,7 @@ import { AssetDocument } from "api-calls/assets/_asset.type";
 import { StatsMap } from "api-calls/character/_character.type";
 import { CHARACTERS_TABLE } from "./_getRef";
 import { createApiFunction } from "api-calls/createApiFunction";
+import { logError } from "functions/errorReference";
 
 export const createCharacter = createApiFunction<
   {
@@ -61,7 +62,7 @@ export const createCharacter = createApiFunction<
         }))
       );
     if (assetsError) {
-      console.error(assetsError);
+      logError("createCharacter", assetsError);
     }
   }
 

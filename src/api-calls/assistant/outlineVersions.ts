@@ -9,6 +9,7 @@ import {
   type AssistantOutlineVersionRow,
 } from "./_getRef";
 import { openOutlineSession } from "./outlineSession";
+import { logError } from "functions/errorReference";
 
 /**
  * The outline version history behind Apply and Undo (ticket #133): every
@@ -213,7 +214,7 @@ export const applyOutlineRevision = createApiFunction<
             .eq("campaign_id", campaignId)
             .select("id");
         } catch (cleanupError) {
-          console.error("Could not drop the unused outline version", cleanupError);
+          logError("Could not drop the unused outline version", cleanupError);
         }
       }
       throw error;

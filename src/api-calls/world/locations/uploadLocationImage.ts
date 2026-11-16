@@ -4,6 +4,7 @@ import {
 } from "api-calls/world/worldImageStorage";
 import { updateLocation } from "./updateLocation";
 import { createApiFunction } from "api-calls/createApiFunction";
+import { logError } from "functions/errorReference";
 
 /**
  * Uploads a location image, shrinking it in the browser first. The new
@@ -28,7 +29,7 @@ export const uploadLocationImage = createApiFunction<
   });
   if (oldImageFilename && oldImageFilename !== filename) {
     await removeWorldImageFile(worldId, locationId, oldImageFilename).catch(
-      (e) => console.error(e)
+      (e) => logError("uploadLocationImage", e)
     );
   }
 }, "Failed to upload image");

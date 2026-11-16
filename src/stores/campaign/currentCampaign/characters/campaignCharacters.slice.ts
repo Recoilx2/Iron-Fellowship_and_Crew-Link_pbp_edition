@@ -6,6 +6,7 @@ import { listenToAssets } from "api-calls/assets/listenToAssets";
 import { updateCharacter } from "api-calls/character/updateCharacter";
 import { listenToProgressTracks } from "api-calls/tracks/listenToProgressTracks";
 import { TrackStatus, TrackTypes } from "types/Track.type";
+import { logError } from "functions/errorReference";
 
 export const createCampaignCharactersSlice: CreateSliceType<
   CampaignCharactersSlice
@@ -26,7 +27,7 @@ export const createCampaignCharactersSlice: CreateSliceType<
         });
       },
       onError: (error) => {
-        console.error(error);
+        logError("campaignCharacters.slice", error);
       },
     });
     return () => {
@@ -54,7 +55,7 @@ export const createCampaignCharactersSlice: CreateSliceType<
           });
         },
         (error) => {
-          console.error(error);
+          logError("campaignCharacters.slice", error);
         }
       );
     });
@@ -106,7 +107,7 @@ export const createCampaignCharactersSlice: CreateSliceType<
             });
           },
           (error) => {
-            console.error(error);
+            logError("campaignCharacters.slice", error);
           }
         )
       )

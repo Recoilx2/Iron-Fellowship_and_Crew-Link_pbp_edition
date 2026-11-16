@@ -16,6 +16,7 @@ import { useStore } from "stores/store";
 import { LocationWithGMProperties } from "stores/world/currentWorld/locations/locations.slice.type";
 import { LocationItemAvatar } from "./LocationMap/LocationItemAvatar";
 import { useState } from "react";
+import { logError } from "functions/errorReference";
 
 export interface MoveLocationDialogProps {
   open: boolean;
@@ -138,9 +139,7 @@ function isLocationADescendantOf(
 
     if (parentLocationId) {
       if (seenParentIds.has(parentLocationId)) {
-        console.error(
-          `Found loop in location hierarchy. ${locationId} -> ${parentLocationId}`
-        );
+        logError(`Found loop in location hierarchy. ${locationId} -> ${parentLocationId}`);
         return false;
       }
       seenParentIds.add(parentLocationId);

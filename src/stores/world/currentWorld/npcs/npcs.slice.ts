@@ -21,6 +21,7 @@ import {
   getWorldItemNoteIds,
 } from "api-calls/world/worldNotes";
 import type { GMNPC } from "types/NPCs.type";
+import { logError } from "functions/errorReference";
 
 /**
  * Merges streamed GM notes bytes into the structured GM details, keeping
@@ -264,7 +265,7 @@ export const createNPCsSlice: CreateSliceType<NPCsSlice> = (set, getState) => ({
         });
       },
       (error) => {
-        console.error(error);
+        logError("npcs.slice", error);
       }
     );
 
@@ -284,7 +285,7 @@ export const createNPCsSlice: CreateSliceType<NPCsSlice> = (set, getState) => ({
         });
       },
       (error) => {
-        console.error(error);
+        logError("npcs.slice", error);
       }
     );
 
@@ -301,7 +302,7 @@ export const createNPCsSlice: CreateSliceType<NPCsSlice> = (set, getState) => ({
         });
       },
       (error) => {
-        console.error(error);
+        logError("npcs.slice", error);
       }
     );
 

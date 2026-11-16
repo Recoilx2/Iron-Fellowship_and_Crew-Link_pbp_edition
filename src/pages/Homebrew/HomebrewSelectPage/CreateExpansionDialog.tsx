@@ -15,6 +15,7 @@ import { useStore } from "stores/store";
 import { GAME_SYSTEMS } from "types/GameSystems.type";
 import { constructHomebrewEditorPath } from "../routes";
 import { PackageTypes } from "api-calls/homebrew/_homebrewCollection.type";
+import { logError } from "functions/errorReference";
 
 export interface CreateExpansionDialogProps {
   open: boolean;
@@ -43,7 +44,7 @@ export function CreateExpansionDialog(props: CreateExpansionDialogProps) {
     try {
       idSlug = convertIdPart(collectionName);
     } catch (e) {
-      console.error(e);
+      logError("CreateExpansionDialog", e);
       setError(
         "Failed to convert name to an id. Make sure you have at least three letters in your collection name."
       );

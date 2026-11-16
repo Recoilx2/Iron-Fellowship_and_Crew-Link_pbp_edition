@@ -8,6 +8,7 @@ import { defaultGameLogSlice } from "./gameLog.slice.default";
 import { removeLog } from "api-calls/game-log/removeLog";
 import { updateLog } from "api-calls/game-log/updateLog";
 import { listenToLogs } from "api-calls/game-log/listenToLogs";
+import { logError } from "functions/errorReference";
 
 export const createGameLogSlice: CreateSliceType<GameLogSlice> = (
   set,
@@ -112,7 +113,7 @@ export const createGameLogSlice: CreateSliceType<GameLogSlice> = (
         });
       },
       onError: (error) => {
-        console.error(error);
+        logError("gameLog.slice", error);
       },
     });
   },
