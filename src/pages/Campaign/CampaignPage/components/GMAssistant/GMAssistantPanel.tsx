@@ -25,7 +25,6 @@ import { ContextSizeBar } from "./ContextSizeBar";
 import { ContextTab } from "./ContextTab";
 import { OutlineTab } from "./OutlineTab";
 import { ChatTab, type ModelsFailure } from "./ChatTab";
-import { useStore } from "stores/store";
 import type {
   AssistantContextChoice,
   AssistantSettingsDocument,

@@ -405,7 +405,7 @@ describe("ContextTab", () => {
 
   it("reuses a cached preview for the same candidates without requesting again", async () => {
     const previewCache = new Map<string, Map<string, number>>();
-    const view = await render(() => {}, { previewCache });
+    await render(() => {}, { previewCache });
     try {
       expect(fetchAssistantContextSize).toHaveBeenCalledTimes(1);
     } finally {

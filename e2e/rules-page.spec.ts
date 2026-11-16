@@ -1,6 +1,5 @@
 import { test, expect } from "@playwright/test";
-import type { Locator, Page } from "@playwright/test";
-import {
+import type { Locator, Page } from "@playwright/test";import {
   createPerson,
   deletePerson,
   signInAs,
@@ -113,8 +112,9 @@ test.describe("rules page", () => {
 
   // Oracle buttons are named after the oracle, so a name match alone
   // cannot prove the page rolls nothing; the dice icon is what every roll
-  // control carries (ticket #151).
-  const diceIcons = (page: Page) => page.locator('[data-testid="CasinoIcon"]');
+  // control carries (ticket #151). The scope is the page, or a dialog.
+  const diceIcons = (scope: Page | Locator) =>
+    scope.locator('[data-testid="CasinoIcon"]');
 
   async function nothingRolls(page: Page) {
     // Pay the Price places a rollable table inline. Elsewhere its roll
