@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator } from "@playwright/test";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 import {
   campaignUrl,
@@ -54,6 +54,33 @@ function resolveEnvFile(value: string): string {
     return value;
   }
   return resolve(dirname(__dirname), "supabase", basename(value));
+}
+
+/** Waits until two consecutive bounding-box reads are identical. */
+async function settled(locator: Locator): Promise<void> {
+  let previous = "";
+  await expect
+    .poll(
+      async () => {
+        const box = await locator.boundingBox();
+        const current = JSON.stringify(box);
+        const equal = box !== null && current === previous;
+        previous = current;
+        return equal;
+      },
+      { timeout: 5000, intervals: [100, 100, 250, 250, 500] }
+    )
+    .toBe(true);
+}
+
+async function boxOf(
+  locator: Locator
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  const box = await locator.boundingBox();
+  if (!box) {
+    throw new Error("e2e: element has no bounding box");
+  }
+  return box;
 }
 
 test.describe("gm assistant panel", () => {
@@ -182,6 +209,76 @@ test.describe("gm assistant panel", () => {
           (post.text ?? "").includes("Hello traveller")
         )
       ).toBe(false);
+    } finally {
+      await gmContext.close().catch(() => undefined);
+    }
+  });
+
+  test("on desktop the assistant takes the side pane's place and leaves the chat feed uncovered", async ({
+    browser,
+  }) => {
+    const gmContext = await browser.newContext({
+      viewport: { width: 1400, height: 900 },
+    });
+    const gmPage = await gmContext.newPage();
+    try {
+      await signInAs(gmPage, config, gm, campaignUrl(campaignId));
+      await expect(gmPage.getByRole("tab", { name: "Chat" })).toBeVisible();
+
+      const sidePane = gmPage.getByTestId("chat-side-pane");
+      // The post list itself, not the composer under it.
+      const feedPane = gmPage.getByLabel(/^Posts in #/);
+      await expect(sidePane).toBeVisible();
+      await expect(feedPane).toBeVisible();
+      await settled(sidePane);
+      await settled(feedPane);
+      const sideBefore = await boxOf(sidePane);
+      const feedBefore = await boxOf(feedPane);
+
+      const trigger = gmPage.getByRole("button", {
+        name: "Assistant",
+        exact: true,
+      });
+      await trigger.click();
+
+      // The side pane is swapped out, not covered.
+      const dock = gmPage.getByTestId("assistant-dock");
+      await expect(dock).toBeVisible();
+      await expect(sidePane).toHaveCount(0);
+      const panel = gmPage.getByRole("complementary", {
+        name: "GM assistant",
+        exact: true,
+      });
+      await expect(panel).toBeFocused();
+      await expect(
+        gmPage.getByRole("combobox", { name: "Model" })
+      ).toBeVisible();
+
+      // Layout settles once the dock and the feed report the same box on
+      // two consecutive reads.
+      await settled(dock);
+      await settled(feedPane);
+      const dockBox = await boxOf(dock);
+      const feedAfter = await boxOf(feedPane);
+
+      // Same slot as the side pane it replaced.
+      expect(Math.abs(dockBox.x - sideBefore.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(dockBox.width - sideBefore.width)).toBeLessThanOrEqual(1);
+      // The chat feed's column ends where the panel begins: no overlap.
+      expect(feedAfter.x + feedAfter.width).toBeLessThanOrEqual(
+        dockBox.x + 1
+      );
+      expect(feedAfter.x).toBeGreaterThanOrEqual(feedBefore.x - 1);
+      // Nothing floats over the page.
+      await expect(
+        panel.locator("xpath=ancestor::*[contains(@class,'MuiDrawer-')]")
+      ).toHaveCount(0);
+
+      // Closing brings the side pane back and focus returns to the button.
+      await gmPage.getByRole("button", { name: "Close assistant" }).click();
+      await expect(dock).toHaveCount(0);
+      await expect(sidePane).toBeVisible();
+      await expect(trigger).toBeFocused();
     } finally {
       await gmContext.close().catch(() => undefined);
     }
