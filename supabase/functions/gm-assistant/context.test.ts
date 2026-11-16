@@ -96,6 +96,10 @@ interface ContextFakeOptions {
   loreId?: string;
   /** The campaign the fake's note row really belongs to. */
   noteCampaignId?: string;
+  /** The world the fake's campaign belongs to; null means no world. */
+  campaignWorldId?: string | null;
+  /** The world the fake's lore row really belongs to. */
+  loreWorldId?: string;
 }
 
 function makeContextFake(options: ContextFakeOptions = {}): {
@@ -106,6 +110,8 @@ function makeContextFake(options: ContextFakeOptions = {}): {
   const includeGmParts = options.includeGmParts ?? true;
   const loreId = options.loreId ?? LORE_ID;
   const noteCampaignId = options.noteCampaignId ?? CAMPAIGN_ID;
+  const campaignWorldId = options.campaignWorldId === undefined ? WORLD_ID : options.campaignWorldId;
+  const loreWorldId = options.loreWorldId ?? WORLD_ID;
   const fetchImpl: UpstreamFetch = async (input, init = {}) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     let body: unknown;
@@ -156,11 +162,11 @@ function makeContextFake(options: ContextFakeOptions = {}): {
           },
         ]);
       }
-      if (url.includes("campaigns?")) return Response.json([{ world_id: WORLD_ID }]);
+      if (url.includes("campaigns?")) return Response.json([{ world_id: campaignWorldId }]);
       if (url.includes("world_lore?")) {
         if (url.includes(LORE_ID)) {
           return Response.json([
-            { id: LORE_ID, name: "Old Vault", tags: ["ruin"], world_id: WORLD_ID },
+            { id: LORE_ID, name: "Old Vault", tags: ["ruin"], world_id: loreWorldId },
           ]);
         }
         return Response.json([]);
@@ -428,6 +434,94 @@ describe("gm assistant context-size preview", () => {
     const hugeBody = (await huge.json()) as { message: string; ref: string };
     expect(hugeBody.ref).toMatch(/^[A-Z0-9]{6}$/);
     expect(hugeBody.message).not.toContain("xxx");
+  });
+});
+
+describe("world references follow the campaign's own world", () => {
+  const worldTables = ["world_lore?", "world_npcs?", "world_locations?"];
+  const OTHER_WORLD_ID = "abababab-abab-4bab-8bab-abababababab";
+  const NPC_ID = "13131313-1313-4313-8313-131313131313";
+  const LOCATION_ID = "14141414-1414-4414-8414-141414141414";
+
+  function sizeRequest(): Request {
+    return new Request(`http://x/gm-assistant/context-size?campaignId=${CAMPAIGN_ID}`, {
+      headers: { Authorization: `Bearer ${gmToken()}` },
+    });
+  }
+
+  function previewRequest(): Request {
+    return new Request("http://x/gm-assistant/context-size", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${gmToken()}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        campaignId: CAMPAIGN_ID,
+        context: {
+          includeOutline: false,
+          lore: [{ id: LORE_ID, includeGmParts: true }],
+          npcs: [{ id: NPC_ID, includeGmParts: true }],
+          locations: [{ id: LOCATION_ID, includeGmParts: true }],
+          notes: [],
+          channels: [],
+        },
+      }),
+    });
+  }
+
+  function upstreamText(calls: RecordedCall[]): string {
+    return calls
+      .filter((call) => call.url.endsWith("/chat/completions"))
+      .map((call) => JSON.stringify(call.body))
+      .join("\n");
+  }
+
+  type SizeBody = { items: Array<{ key: string }>; unavailable: Array<{ key: string }> };
+
+  it("ignores world references, with no world query, when the campaign has no world", async () => {
+    const { fetchImpl, calls } = makeContextFake({ campaignWorldId: null });
+    const handle = createGmAssistantHandler(baseEnv(), fetchImpl);
+
+    const chat = await handle(chatRequest({ conversationId: CONVERSATION_ID, message: "hi" }));
+    expect(chat.status).toBe(200);
+    await chat.text();
+    expect(upstreamText(calls)).not.toContain("The vault holds old coins.");
+
+    for (const request of [sizeRequest(), previewRequest()]) {
+      const res = await handle(request);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as SizeBody;
+      expect(body.items.some((item) => item.key.startsWith("lore:"))).toBe(false);
+      expect(body.unavailable.map((entry) => entry.key)).toContain(`lore:${LORE_ID}`);
+    }
+    const preview = (await (await handle(previewRequest())).json()) as SizeBody;
+    expect(preview.unavailable.map((entry) => entry.key)).toEqual(
+      expect.arrayContaining([`npc:${NPC_ID}`, `location:${LOCATION_ID}`]),
+    );
+
+    expect(calls.some((call) => worldTables.some((table) => call.url.includes(table)))).toBe(false);
+    expect(calls.some((call) => call.url.includes("world_notes?"))).toBe(false);
+  });
+
+  it("ignores a reference from another world when the campaign has a world", async () => {
+    const { fetchImpl, calls } = makeContextFake({ loreWorldId: OTHER_WORLD_ID });
+    const handle = createGmAssistantHandler(baseEnv(), fetchImpl);
+
+    const chat = await handle(chatRequest({ conversationId: CONVERSATION_ID, message: "hi" }));
+    expect(chat.status).toBe(200);
+    await chat.text();
+    expect(upstreamText(calls)).not.toContain("The vault holds old coins.");
+
+    for (const request of [sizeRequest(), previewRequest()]) {
+      const res = await handle(request);
+      const body = (await res.json()) as SizeBody;
+      expect(body.items.some((item) => item.key.startsWith("lore:"))).toBe(false);
+      expect(body.unavailable.map((entry) => entry.key)).toContain(`lore:${LORE_ID}`);
+    }
+
+    const loreReads = calls.filter((call) => call.url.includes("world_lore?"));
+    expect(loreReads.length).toBeGreaterThan(0);
+    for (const call of loreReads) {
+      expect(call.url).toContain(`world_id=eq.${WORLD_ID}`);
+    }
   });
 });
 
