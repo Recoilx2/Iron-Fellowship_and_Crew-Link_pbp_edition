@@ -58,6 +58,11 @@ export function GMAssistantPanel(props: {
   onClose: () => void;
 }) {
   const { campaignId, onClose } = props;
+  // Preview sizes from earlier Context-tab opens this session (ticket
+  // #151): a repeat open of the same candidates makes no request at all.
+  const [previewCache] = useState(
+    () => new Map<string, Map<string, number>>()
+  );
   const [tab, setTab] = useState<AssistantTab>("chat");
   const [models, setModels] = useState<AssistantModelOption[] | null>(null);
   const [endpointHost, setEndpointHost] = useState<string | null>(null);
@@ -268,6 +273,7 @@ export function GMAssistantPanel(props: {
             size={size}
             conversationTokens={conversationTokens}
             onSave={saveContext}
+            previewCache={previewCache}
           />
         )}
         {tab === "outline" && <OutlineTab campaignId={campaignId} />}
