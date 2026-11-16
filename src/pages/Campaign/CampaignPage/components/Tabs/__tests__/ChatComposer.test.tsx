@@ -688,6 +688,138 @@ describe("ChatComposer", () => {
     expect(state.chat.drafts["ic"]).toBe("see this");
   });
 
+  describe("failure references are logged once", () => {
+    const POST_TEXT = "the secret lantern plan";
+    const IMAGE_BYTES = "SECRET-IMAGE-BYTES";
+
+    function errorCalls(spy: ReturnType<typeof vi.spyOn>): string[] {
+      return spy.mock.calls.map((call: unknown[]) =>
+        call
+          .map((part) =>
+            part instanceof Error
+              ? `${part.name}: ${part.message}`
+              : typeof part === "string"
+                ? part
+                : JSON.stringify(part)
+          )
+          .join(" ")
+      );
+    }
+
+    function shownReference(view: HTMLDivElement): string {
+      const alert = view.querySelector('[role="alert"]');
+      const match = /ref: ([A-Z0-9]{6})/.exec(alert?.textContent ?? "");
+      if (!match) {
+        throw new Error("no referenced alert shown");
+      }
+      return match[1];
+    }
+
+    async function failToAttach() {
+      uploadChatImage.mockRejectedValue(new Error("storage down"));
+      const view = render(ic);
+      const file = new File([IMAGE_BYTES], "lantern.png", {
+        type: "image/png",
+      });
+      dropFiles(view, [file]);
+      await flushUploads();
+      return view;
+    }
+
+    async function failToSend() {
+      createPost.mockRejectedValue(new Error("database down"));
+      const view = render(ic);
+      typeText(textBox(view), POST_TEXT);
+      render(ic);
+      const send = view.querySelector(
+        'button[aria-label="Send"]'
+      ) as HTMLButtonElement;
+      await act(async () => {
+        send.click();
+      });
+      return view;
+    }
+
+    it("logs the attach reference in exactly one console.error call", async () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const view = await failToAttach();
+      const ref = shownReference(view);
+      expect(errorCalls(spy).filter((line) => line.includes(ref))).toHaveLength(
+        1
+      );
+      spy.mockRestore();
+    });
+
+    it("logs only size and type for the attached image", async () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const view = await failToAttach();
+      const ref = shownReference(view);
+      const call = spy.mock.calls.find((c: unknown[]) =>
+        String(c[0]).includes(ref)
+      ) as unknown[];
+      const line = errorCalls(spy).find((l) => l.includes(ref)) ?? "";
+      expect(line).not.toContain("lantern.png");
+      expect(line).not.toContain(IMAGE_BYTES);
+      const details = call.find(
+        (part) =>
+          typeof part === "object" && part !== null && !(part instanceof Error)
+      );
+      expect(Object.keys(details as object).sort()).toEqual([
+        "fileSize",
+        "fileType",
+      ]);
+      spy.mockRestore();
+    });
+
+    it("logs the send reference in exactly one console.error call", async () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const view = await failToSend();
+      const ref = shownReference(view);
+      expect(errorCalls(spy).filter((line) => line.includes(ref))).toHaveLength(
+        1
+      );
+      spy.mockRestore();
+    });
+
+    it("keeps the post text out of the send log line", async () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const view = await failToSend();
+      const ref = shownReference(view);
+      const line = errorCalls(spy).find((l) => l.includes(ref)) ?? "";
+      expect(line).not.toContain(POST_TEXT);
+      spy.mockRestore();
+    });
+
+    it("shows the reference the real createApiFunction wrapper logged", async () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const { createApiFunction } = await vi.importActual<
+        typeof import("api-calls/createApiFunction")
+      >("api-calls/createApiFunction");
+      createPost.mockImplementation(
+        createApiFunction(() => Promise.reject(new Error("database down")), "x")
+      );
+      const view = render(ic);
+      typeText(textBox(view), POST_TEXT);
+      render(ic);
+      const send = view.querySelector(
+        'button[aria-label="Send"]'
+      ) as HTMLButtonElement;
+      await act(async () => {
+        send.click();
+      });
+      const ref = shownReference(view);
+      const wrapperLines = errorCalls(spy).filter((line) =>
+        line.startsWith("API call failed (ref: ")
+      );
+      expect(wrapperLines).toHaveLength(1);
+      expect(wrapperLines[0]).toContain(`(ref: ${ref})`);
+      expect(errorCalls(spy).filter((line) => line.includes(ref))).toHaveLength(
+        1
+      );
+      spy.mockRestore();
+    });
+  });
+
   it("refuses oversized and foreign images with a clear error", async () => {
     const view = render(ic);
     const big = new File(["x"], "huge.png", { type: "image/png" });

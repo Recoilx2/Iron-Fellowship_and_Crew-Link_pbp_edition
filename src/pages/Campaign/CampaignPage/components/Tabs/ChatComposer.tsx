@@ -21,7 +21,7 @@ import type { ChannelKind } from "api-calls/chat/_chat.type";
 import type { ChannelWithId } from "api-calls/chat/listenToCampaignChannels";
 import { createPost } from "api-calls/chat/createPost";
 import { validateChatImageFile } from "api-calls/chat/chatImageLimits";
-import { mintErrorReference } from "functions/errorReference";
+import { shownReference } from "functions/errorReference";
 import {
   removeChatImage,
   uploadChatImage,
@@ -233,14 +233,20 @@ export function ChatComposer(props: {
             )
           );
         },
-        () => {
+        (error: unknown) => {
+          // Size and type only: never the image's content or its file name,
+          // which can identify a person.
+          const ref = shownReference(error, error, {
+            fileSize: file.size,
+            fileType: file.type,
+          });
           cancelledKeysRef.current.delete(key);
           revokePreviewUrl(previewUrl);
           setAttachments((current) =>
             current.filter((attachment) => attachment.key !== key)
           );
           setAttachError(
-            `Could not attach that image. Try again. (ref: ${mintErrorReference()})`
+            `Could not attach that image. Try again. (ref: ${ref})`
           );
         }
       );
@@ -370,7 +376,8 @@ export function ChatComposer(props: {
         pendingPostIdRef.current = undefined;
         setAttachError(undefined);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        const ref = shownReference(error, error);
         for (const path of paths) {
           sentPathsRef.current.delete(path);
           // The post never landed, so its staged uploads are orphans:
@@ -381,7 +388,7 @@ export function ChatComposer(props: {
         // spent: the user sees a generic error with a reference and can
         // retry the same send.
         setSendError(
-          `Could not send that post. Try again. (ref: ${mintErrorReference()})`
+          `Could not send that post. Try again. (ref: ${ref})`
         );
       })
       .finally(() => {
