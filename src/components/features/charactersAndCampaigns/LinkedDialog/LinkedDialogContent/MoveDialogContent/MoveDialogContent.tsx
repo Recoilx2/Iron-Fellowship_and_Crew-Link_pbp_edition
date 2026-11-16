@@ -8,10 +8,12 @@ export interface MoveDialogContentProps {
   handleBack: () => void;
   handleClose: () => void;
   isLastItem: boolean;
+  /** The id the dialog is named by, when its container is not an MUI Dialog. */
+  titleId?: string;
 }
 
 export function MoveDialogContent(props: MoveDialogContentProps) {
-  const { id, handleBack, handleClose, isLastItem } = props;
+  const { id, handleBack, handleClose, isLastItem, titleId } = props;
 
   const moves = useStore((store) => store.rules.moveMaps.moveMap);
   const move = moves[id];
@@ -23,6 +25,7 @@ export function MoveDialogContent(props: MoveDialogContentProps) {
           handleBack={handleBack}
           handleClose={handleClose}
           isLastItem={isLastItem}
+          titleId={titleId}
         >
           Move Not Found
         </LinkedDialogContentTitle>
@@ -38,6 +41,7 @@ export function MoveDialogContent(props: MoveDialogContentProps) {
         handleBack={handleBack}
         handleClose={handleClose}
         isLastItem={isLastItem}
+        titleId={titleId}
       >
         {move.name}
       </LinkedDialogContentTitle>

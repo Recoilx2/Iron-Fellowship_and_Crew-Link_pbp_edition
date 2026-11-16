@@ -107,7 +107,9 @@ export function RtcRichTextEditor(props: RtcRichTextEditorProps) {
       onSynced: () => setSynced(true),
       onUnsyncedChanges: () => setSynced(false),
       onAuthenticationFailed: ({ reason }) => {
-        logError(`Note ${documentName} is not available live: ${reason ?? "not authorized"}`);
+        logError(
+          `Note ${documentName} is not available live: ${reason ?? "not authorized"}`
+        );
       },
     });
 

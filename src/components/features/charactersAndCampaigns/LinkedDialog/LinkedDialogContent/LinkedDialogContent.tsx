@@ -10,10 +10,12 @@ export interface LinkedDialogContentProps {
   handleBack: () => void;
   handleClose: () => void;
   isLastItem: boolean;
+  /** The id the dialog is named by, when its container is not an MUI Dialog. */
+  titleId?: string;
 }
 
 export function LinkedDialogContent(props: LinkedDialogContentProps) {
-  const { id, handleBack, handleClose, isLastItem } = props;
+  const { id, handleBack, handleClose, isLastItem, titleId } = props;
 
   const unsupportedContent = (
     <>
@@ -22,6 +24,7 @@ export function LinkedDialogContent(props: LinkedDialogContentProps) {
         handleBack={handleBack}
         handleClose={handleClose}
         isLastItem={isLastItem}
+        titleId={titleId}
       >
         Not Supported
       </LinkedDialogContentTitle>
@@ -44,6 +47,7 @@ export function LinkedDialogContent(props: LinkedDialogContentProps) {
         handleBack={handleBack}
         handleClose={handleClose}
         isLastItem={isLastItem}
+        titleId={titleId}
       />
     );
   }
@@ -55,6 +59,7 @@ export function LinkedDialogContent(props: LinkedDialogContentProps) {
         handleBack={handleBack}
         handleClose={handleClose}
         isLastItem={isLastItem}
+        titleId={titleId}
       />
     );
   }
@@ -66,6 +71,7 @@ export function LinkedDialogContent(props: LinkedDialogContentProps) {
         handleBack={handleBack}
         handleClose={handleClose}
         isLastItem={isLastItem}
+        titleId={titleId}
       />
     );
   }

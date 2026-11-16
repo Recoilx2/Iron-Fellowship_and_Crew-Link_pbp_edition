@@ -24,7 +24,7 @@ function readStoredUserDoc(uid: string): UserDocument | undefined {
     const raw = localStorage.getItem(userDocStorageKey(uid));
     return raw ? (JSON.parse(raw) as UserDocument) : undefined;
   } catch (e) {
-    logError("auth.slice", e);
+    logError("auth.slice readStoredUserDoc", e);
     return undefined;
   }
 }
@@ -36,7 +36,7 @@ function writeStoredUserDoc(uid: string, doc: UserDocument): void {
   try {
     localStorage.setItem(userDocStorageKey(uid), JSON.stringify(doc));
   } catch (e) {
-    logError("auth.slice", e);
+    logError("auth.slice writeStoredUserDoc", e);
   }
 }
 
@@ -75,7 +75,7 @@ export const createAuthSlice: CreateSliceType<AuthSlice> = (set, getState) => ({
 
             if (!profile && displayName) {
               upsertProfile({ uid: user.uid, displayName }).catch((e) => {
-                logError("auth.slice", e);
+                logError("auth.slice upsertProfile", e);
               });
             }
 
@@ -86,7 +86,7 @@ export const createAuthSlice: CreateSliceType<AuthSlice> = (set, getState) => ({
             });
           })
           .catch((e) => {
-            logError("auth.slice", e);
+            logError("auth.slice getProfile", e);
             set((state) => {
               state.auth.user = undefined;
               state.auth.uid = "";
@@ -95,7 +95,7 @@ export const createAuthSlice: CreateSliceType<AuthSlice> = (set, getState) => ({
           });
       },
       onError: (error) => {
-        logError("auth.slice", error);
+        logError("auth.slice auth state", error);
         set((state) => {
           state.auth.user = undefined;
           state.auth.uid = "";

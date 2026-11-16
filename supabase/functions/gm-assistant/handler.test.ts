@@ -968,8 +968,11 @@ describe("gm assistant error logging (ticket #170)", () => {
         new Request(`http://x/gm-assistant/models?campaignId=${CAMPAIGN_ID}`, { headers: bearer(token) }),
     },
     {
-      name: "the model endpoint with a key in the query string",
-      shouldThrow: (url) => url.includes("llm.test"),
+      name: "the chat endpoint with a key in the query string",
+      // Only the chat-completions call: the models call happens first and
+      // has its own catch, so matching it here would leave the upstream
+      // chat catch untested (ticket #151).
+      shouldThrow: (url) => url.includes("/chat/completions"),
       request: (token) =>
         new Request("http://x/gm-assistant/chat", { method: "POST", headers: bearer(token), body: chatBody() }),
     },

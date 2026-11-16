@@ -78,7 +78,7 @@ export function CustomDiceRollerButton() {
       <Button
         onClick={handleOpen}
         color="inherit"
-        startIcon={<CasinoIcon />}
+        startIcon={<CasinoIcon data-testid="CasinoIcon" />}
         variant="outlined"
       >
         Roll Dice
@@ -222,7 +222,7 @@ export function CustomDiceRollerButton() {
             variant="contained"
             disabled={!canRoll}
             onClick={handleRoll}
-            startIcon={<CasinoIcon />}
+            startIcon={<CasinoIcon data-testid="CasinoIcon" />}
           >
             Roll
           </Button>

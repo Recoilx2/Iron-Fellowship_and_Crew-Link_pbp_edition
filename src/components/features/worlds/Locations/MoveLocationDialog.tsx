@@ -139,7 +139,9 @@ function isLocationADescendantOf(
 
     if (parentLocationId) {
       if (seenParentIds.has(parentLocationId)) {
-        logError(`Found loop in location hierarchy. ${locationId} -> ${parentLocationId}`);
+        logError(
+          `Found loop in location hierarchy. ${locationId} -> ${parentLocationId}`
+        );
         return false;
       }
       seenParentIds.add(parentLocationId);

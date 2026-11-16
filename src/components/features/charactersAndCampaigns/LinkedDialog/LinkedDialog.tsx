@@ -1,5 +1,4 @@
 import { Dialog, SwipeableDrawer } from "@mui/material";
-import DialogContext from "@mui/material/Dialog/DialogContext";
 import { useId } from "react";
 import { useStore } from "stores/store";
 import { LinkedDialogContent } from "./LinkedDialogContent";
@@ -18,8 +17,9 @@ export function LinkedDialog() {
 
   const isMobile = useIsMobile();
   // The phone drawer is a dialog to screen readers, like the desktop Dialog,
-  // named by the same heading (DialogTitleWithCloseButton reads the id from
-  // DialogContext).
+  // named by the same heading. Unlike the desktop Dialog, a SwipeableDrawer
+  // provides no title id of its own, so the title's id is set explicitly and
+  // handed down to the title element (no internal MUI DialogContext import).
   const titleId = useId();
   // The dialog sits outside the page, so it follows the page it opened from:
   // moves and oracles opened from the Rules page are for reading only.
@@ -56,14 +56,13 @@ export function LinkedDialog() {
             }),
           }}
         >
-          <DialogContext.Provider value={{ titleId }}>
-            <LinkedDialogContent
-              id={newId}
-              isLastItem={previousIds.length === 0}
-              handleBack={handleBack}
-              handleClose={handleClose}
-            />
-          </DialogContext.Provider>
+          <LinkedDialogContent
+            id={newId}
+            isLastItem={previousIds.length === 0}
+            handleBack={handleBack}
+            handleClose={handleClose}
+            titleId={titleId}
+          />
         </SwipeableDrawer>
       </ReferenceModeContext.Provider>
     );

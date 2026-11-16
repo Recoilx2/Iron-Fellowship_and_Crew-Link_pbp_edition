@@ -12,8 +12,6 @@ import {
   constructAssistantConversationsFilter,
   constructAssistantMessagesChannelName,
   constructAssistantMessagesFilter,
-  constructAssistantSettingsChannelName,
-  constructAssistantSettingsFilter,
   messageRowToDocument,
   settingsRowToDocument,
   type AssistantConversationRow,
@@ -97,12 +95,8 @@ describe("assistant refs", () => {
     expect(constructAssistantMessagesFilter("conversation-1")).toBe(
       "conversation_id=eq.conversation-1"
     );
-    expect(constructAssistantSettingsChannelName("campaign-1")).toBe(
-      "assistant-settings:campaign-1"
-    );
-    expect(constructAssistantSettingsFilter("campaign-1")).toBe(
-      "campaign_id=eq.campaign-1"
-    );
+    // Deliberately no assistant-settings constructors: no listener opens
+    // that channel (see _getRef.ts).
   });
 
   it("reads a conversation row as the document the list shows", () => {

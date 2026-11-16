@@ -60,8 +60,23 @@ module.exports = {
               "Use logError/logWarning from functions/errorReference instead of a bare console.error/console.warn.",
           },
           {
+            // The computed form too: console["error"](...) gets past a
+            // property-name match alone.
+            selector:
+              "CallExpression[callee.object.name='console'][callee.computed=true][callee.property.value=/^(error|warn)$/]",
+            message:
+              "Use logError/logWarning from functions/errorReference instead of a bare console.error/console.warn.",
+          },
+          {
             selector:
               "MemberExpression[object.name='console'][property.name=/^(error|warn)$/]:not(CallExpression > MemberExpression.callee)",
+            message:
+              "Do not pass console.error/console.warn as a callback; use logError/logWarning from functions/errorReference.",
+          },
+          {
+            // The computed form of the same, e.g. .catch(console["error"]).
+            selector:
+              "MemberExpression[object.name='console'][computed=true][property.value=/^(error|warn)$/]:not(CallExpression > MemberExpression.callee)",
             message:
               "Do not pass console.error/console.warn as a callback; use logError/logWarning from functions/errorReference.",
           },

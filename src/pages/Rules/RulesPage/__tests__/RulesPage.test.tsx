@@ -296,6 +296,12 @@ describe("RulesPage", () => {
       expandEveryMove(view);
       click(buttonNamed(view, "Action and Theme Oracles"));
 
+      // Oracle buttons are named after the oracle, so a name match alone
+      // cannot prove the page rolls nothing; the dice icon is what every
+      // roll control carries (ticket #151). No dice icon anywhere.
+      expect(view.querySelectorAll('[data-testid="CasinoIcon"]')).toHaveLength(
+        0
+      );
       const names = Array.from(
         view.querySelectorAll("button, a, input, select, textarea")
       ).map(

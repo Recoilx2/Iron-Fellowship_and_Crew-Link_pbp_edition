@@ -12,9 +12,11 @@ export interface LinkedDialogContentTitleProps extends PropsWithChildren {
   handleClose: () => void;
   isLastItem: boolean;
   actions?: ReactNode;
+  /** The id the dialog is named by, when its container is not an MUI Dialog. */
+  titleId?: string;
 }
 export function LinkedDialogContentTitle(props: LinkedDialogContentTitleProps) {
-  const { children, id, handleBack, handleClose, isLastItem, actions } = props;
+  const { children, id, handleBack, handleClose, isLastItem, actions, titleId } = props;
 
   const { success } = useSnackbar();
 
@@ -27,6 +29,7 @@ export function LinkedDialogContentTitle(props: LinkedDialogContentTitleProps) {
   return (
     <DialogTitleWithCloseButton
       onClose={handleClose}
+      titleId={titleId}
       actions={
         <>
           {actions}

@@ -78,7 +78,7 @@ describe("chat slice channel list", () => {
         details: "Failing row contains (secret post text)",
         hint: "secret hint",
       });
-      expect(spy).toHaveBeenCalledWith("chat.slice", {
+      expect(spy).toHaveBeenCalledWith("chat.slice channels subscription", {
         code: "23514",
         message: "new row violates check constraint",
       });
