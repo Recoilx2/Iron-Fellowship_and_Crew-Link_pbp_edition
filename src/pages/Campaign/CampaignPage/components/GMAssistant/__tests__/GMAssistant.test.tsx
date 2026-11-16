@@ -72,6 +72,9 @@ vi.mock("api-calls/assistant/assistantSettings", () => ({
   fetchAssistantSettings: vi.fn(),
   saveAssistantSettings: vi.fn(),
 }));
+vi.mock("api-calls/assistant/assistantContextOptions", () => ({
+  fetchAssistantContextOptions: vi.fn(),
+}));
 vi.mock("api-calls/assistant/createConversation", () => ({
   createConversation: vi.fn(),
 }));
@@ -106,6 +109,7 @@ import {
 } from "api-calls/assistant/assistantSettings";
 import { listenToConversations } from "api-calls/assistant/listenToConversations";
 import { listenToMessages } from "api-calls/assistant/listenToMessages";
+import { fetchAssistantContextOptions } from "api-calls/assistant/assistantContextOptions";
 import { createConversation } from "api-calls/assistant/createConversation";
 import { deleteConversation } from "api-calls/assistant/deleteConversation";
 import { emptyAssistantContextChoice } from "api-calls/assistant/_assistant.type";
@@ -273,6 +277,49 @@ describe("GMAssistant model picker", () => {
     selectModel(view, "m1");
     await flush();
 
+    expect(view.textContent).toContain("The assistant request failed.");
+    expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
+    expect(view.textContent).not.toContain("row-level security");
+  });
+
+  it("puts the context choice back and shows a generic error with a reference when saving it fails", async () => {
+    vi.mocked(fetchAssistantContextOptions).mockResolvedValue({
+      worldId: "world-1",
+      outlineAvailable: true,
+      lore: [],
+      npcs: [],
+      locations: [],
+      notes: [],
+      channels: [],
+    });
+    vi.mocked(saveAssistantSettings).mockRejectedValue(
+      new Error("row-level security policy violated")
+    );
+    const view = await renderAndOpen();
+    const contextTab = Array.from(view.querySelectorAll('[role="tab"]')).find(
+      (entry) => entry.textContent === "Context"
+    );
+    act(() => {
+      contextTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+    const outline = () =>
+      view.querySelector(
+        'input[aria-label="Include campaign outline"]'
+      ) as HTMLInputElement;
+    expect(outline().checked).toBe(false);
+
+    act(() => {
+      outline().click();
+    });
+    await flush();
+
+    expect(saveAssistantSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ includeOutline: true }),
+      })
+    );
+    expect(outline().checked).toBe(false);
     expect(view.textContent).toContain("The assistant request failed.");
     expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
     expect(view.textContent).not.toContain("row-level security");
@@ -675,6 +722,33 @@ describe("GMAssistant chat thread", () => {
     expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
     expect(view.textContent).not.toContain("permission denied");
     expect(view.textContent).toContain("First plan");
+  });
+
+  it("clears a failed-action error when another conversation is picked", async () => {
+    vi.mocked(deleteConversation).mockRejectedValue(new Error("denied"));
+    const view = await renderAndOpen();
+    act(() => {
+      buttonByLabel(view, "Delete conversation").dispatchEvent(
+        new MouseEvent("click", { bubbles: true })
+      );
+    });
+    await flush();
+    expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
+
+    act(() => {
+      buttonByLabel(view, "Conversations").dispatchEvent(
+        new MouseEvent("click", { bubbles: true })
+      );
+    });
+    const second = Array.from(
+      view.querySelectorAll('[role="menuitem"]')
+    ).find((entry) => entry.textContent?.includes("Second plan"));
+    act(() => {
+      second?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(view.textContent).not.toMatch(/\(ref: [A-Z0-9]{6}\)/);
   });
 
   it("deletes the open conversation and moves to the next one", async () => {

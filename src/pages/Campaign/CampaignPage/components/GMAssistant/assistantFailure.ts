@@ -1,10 +1,26 @@
 import { AssistantRequestError } from "api-calls/assistant/gmAssistantClient";
-import { loggedReferenceOf, mintErrorReference } from "functions/errorReference";
+import {
+  loggedReferenceOf,
+  logFailureReference,
+  referenceForLogging,
+} from "functions/errorReference";
 
 export interface AssistantFailure {
   code: string;
   message: string;
   ref: string;
+}
+
+/**
+ * The reference already logged for this error, else a new one that is
+ * logged now, so a reference shown to the GM can always be found.
+ */
+function loggedOrNew(error: unknown): string {
+  const known = loggedReferenceOf(error);
+  if (known) return known;
+  const ref = referenceForLogging(error);
+  logFailureReference(ref, error);
+  return ref;
 }
 
 const GENERIC_MESSAGE = "The assistant request failed.";
@@ -15,9 +31,9 @@ const GENERIC_MESSAGE = "The assistant request failed.";
  */
 const MESSAGES_BY_CODE: Record<string, string> = {
   NOT_SET_UP: "The assistant isn't set up on this server.",
-  FORBIDDEN: "Only the GM of this campaign can use the assistant.",
+  FORBIDDEN: "Only a GM of this campaign can use the assistant.",
   UNAUTHORIZED: "Sign in again and retry.",
-  INVALID_REQUEST: "The assistant couldn't use that request.",
+  INVALID_REQUEST: "The assistant couldn't handle that request.",
   CONVERSATION_NOT_FOUND: "That conversation wasn't found.",
   UPSTREAM_ERROR: GENERIC_MESSAGE,
   PAYLOAD_TOO_LARGE: "That request was too large.",
@@ -42,13 +58,13 @@ export function toAssistantFailure(error: unknown): AssistantFailure {
     return {
       code: error.code,
       message: messageForCode(error.code),
-      ref: error.ref ?? loggedReferenceOf(error) ?? mintErrorReference(),
+      ref: error.ref ?? loggedOrNew(error),
     };
   }
   return {
     code: "UPSTREAM_ERROR",
     message: GENERIC_MESSAGE,
-    ref: loggedReferenceOf(error) ?? mintErrorReference(),
+    ref: loggedOrNew(error),
   };
 }
 
@@ -59,7 +75,7 @@ export function toAssistantFailure(error: unknown): AssistantFailure {
 export function referenceFor(error: unknown): string {
   return error instanceof AssistantRequestError && error.ref
     ? error.ref
-    : (loggedReferenceOf(error) ?? mintErrorReference());
+    : loggedOrNew(error);
 }
 
 /** `message (ref: ABC123)`, the shape every assistant error is shown in. */

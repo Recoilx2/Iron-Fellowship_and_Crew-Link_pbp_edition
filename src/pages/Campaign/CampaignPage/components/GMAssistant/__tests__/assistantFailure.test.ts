@@ -15,9 +15,9 @@ describe("toAssistantFailure", () => {
 
   const fixed: Array<[string, string]> = [
     ["NOT_SET_UP", "The assistant isn't set up on this server."],
-    ["FORBIDDEN", "Only the GM of this campaign can use the assistant."],
+    ["FORBIDDEN", "Only a GM of this campaign can use the assistant."],
     ["UNAUTHORIZED", "Sign in again and retry."],
-    ["INVALID_REQUEST", "The assistant couldn't use that request."],
+    ["INVALID_REQUEST", "The assistant couldn't handle that request."],
     ["CONVERSATION_NOT_FOUND", "That conversation wasn't found."],
     ["UPSTREAM_ERROR", "The assistant request failed."],
     ["PAYLOAD_TOO_LARGE", "That request was too large."],
@@ -83,5 +83,42 @@ describe("toAssistantFailure", () => {
 
     expect(String(consoleSpy.mock.calls[0][0])).toContain("SRV123");
     expect(toAssistantFailure(failure).ref).toBe("SRV123");
+  });
+
+  it("logs a reference it has to mint, once, and shows that reference", () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const error = new TypeError("Failed to fetch");
+    const shown = toAssistantFailure(error);
+    toAssistantFailure(error);
+
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    expect(String(consoleSpy.mock.calls[0][0])).toContain(`ref: ${shown.ref}`);
+  });
+
+  it("does not take a stray ref property on another error for a reference", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const stray = Object.assign(new Error("x"), { ref: "NOTMINE" });
+    const wrapped = createApiFunction<undefined, never>(
+      () => Promise.reject(stray),
+      "Failed to do it."
+    );
+    await expect(wrapped(undefined)).rejects.toBe(stray);
+    expect(String(consoleSpy.mock.calls[0][0])).not.toContain("NOTMINE");
+  });
+
+  it("logs a client-minted reference once under the same reference when wrapped", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const error = new AssistantRequestError("NETWORK_ERROR", "x", {
+      status: 0,
+      ref: "CLI123",
+    });
+    const wrapped = createApiFunction<undefined, never>(
+      () => Promise.reject(error),
+      "Failed to do it."
+    );
+    await expect(wrapped(undefined)).rejects.toBe(error);
+    for (const call of consoleSpy.mock.calls) {
+      expect(String(call[0])).toContain("CLI123");
+    }
   });
 });

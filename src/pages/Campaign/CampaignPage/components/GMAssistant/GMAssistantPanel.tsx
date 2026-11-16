@@ -568,6 +568,7 @@ function ConversationThread(props: { campaignId: string; currentModel: string; e
               selected={entry.id === selectedId}
               onClick={() => {
                 setSelectedId(entry.id);
+                setThreadError(null);
                 setHistoryAnchor(null);
               }}
             >

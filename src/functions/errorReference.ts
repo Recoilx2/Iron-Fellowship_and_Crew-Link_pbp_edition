@@ -18,25 +18,42 @@ export function mintErrorReference(): string {
 const loggedReferences = new WeakMap<object, string>();
 
 /**
- * The reference to log and show for a failure: the one already logged for
- * this error, else the server's `ref` when the error carries one, else a
- * newly minted one. The choice is remembered for object errors so the log
- * line, the toast and any panel agree.
+ * Remembers the reference a thrown error carries (the server's `ref`, or one
+ * the client minted and logged), so every surface shows the same code.
+ * Only the client's own error class calls this; a stray `ref` property on
+ * any other object is never taken for a reference.
+ */
+export function rememberReference(error: object, ref: string): void {
+  loggedReferences.set(error, ref);
+}
+
+/**
+ * The reference to log and show for a failure: the one remembered for this
+ * error, else a newly minted one, remembered for object errors so the log
+ * line, the toast and any panel agree. A reused error object keeps its
+ * first reference.
  */
 export function referenceForLogging(error: unknown): string {
   if (typeof error === "object" && error !== null) {
     const known = loggedReferences.get(error);
     if (known) return known;
-    const serverRef = (error as { ref?: unknown }).ref;
-    const chosen =
-      typeof serverRef === "string" && serverRef ? serverRef : mintErrorReference();
-    loggedReferences.set(error, chosen);
-    return chosen;
+    const minted = mintErrorReference();
+    loggedReferences.set(error, minted);
+    return minted;
   }
   return mintErrorReference();
 }
 
-/** The reference already logged for this error, if any. */
+/**
+ * Logs a failure under its reference in the one shape every failure uses
+ * (`API call failed (ref: ABC123)`), so a reference a user reports can be
+ * found. Pass details only; never request bodies, auth headers or tokens.
+ */
+export function logFailureReference(ref: string, ...details: unknown[]): void {
+  console.error(`API call failed (ref: ${ref})`, ...details);
+}
+
+/** The reference already remembered for this error, if any. */
 export function loggedReferenceOf(error: unknown): string | null {
   return typeof error === "object" && error !== null
     ? (loggedReferences.get(error) ?? null)

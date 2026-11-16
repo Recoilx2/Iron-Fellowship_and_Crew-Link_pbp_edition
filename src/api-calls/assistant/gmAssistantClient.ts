@@ -1,5 +1,9 @@
 import { getSupabaseClient } from "config/supabase.config";
-import { mintErrorReference } from "functions/errorReference";
+import {
+  logFailureReference,
+  mintErrorReference,
+  rememberReference,
+} from "functions/errorReference";
 import type { AssistantContextChoice } from "./_assistant.type";
 
 /**
@@ -105,7 +109,25 @@ export class AssistantRequestError extends Error {
     this.code = code;
     this.status = options.status;
     this.ref = options.ref ?? null;
+    if (this.ref) {
+      rememberReference(this, this.ref);
+    }
   }
+}
+
+const MODELS_PATH = "/gm-assistant/models";
+const CONTEXT_SIZE_PATH = "/gm-assistant/context-size";
+const CHAT_PATH = "/gm-assistant/chat";
+
+/** A network-level failure: a minted reference, logged once with the path. */
+function networkFailure(path: string): AssistantRequestError {
+  const ref = mintErrorReference();
+  logFailureReference(ref, `${path} network failure (status 0)`);
+  return new AssistantRequestError(
+    "NETWORK_ERROR",
+    "The assistant request failed.",
+    { status: 0, ref }
+  );
 }
 
 function functionsBaseUrl(): string {
@@ -137,12 +159,15 @@ interface ErrorBody {
 
 async function throwForStatus(
   response: Response,
+  path: string,
   fallbackMessage: string
 ): Promise<never> {
   let code = "UPSTREAM_ERROR";
   let ref: string | null = null;
+  let body = "";
   try {
-    const parsed = (await response.json()) as ErrorBody;
+    body = await response.text();
+    const parsed = JSON.parse(body) as ErrorBody;
     if (typeof parsed.code === "string" && parsed.code) {
       code = parsed.code;
     }
@@ -151,10 +176,16 @@ async function throwForStatus(
     }
   } catch {
     // A non-JSON failure still reports generically with a minted reference.
-    ref = mintErrorReference();
   }
   if (!ref && response.status !== 401) {
+    // The server never logged this one, so the client does, with the
+    // gateway's own text kept out of the UI but in the log.
     ref = mintErrorReference();
+    logFailureReference(
+      ref,
+      `${path} status ${response.status}`,
+      body.slice(0, 500)
+    );
   }
   // The server's or gateway's own text is never carried: the message is
   // always the fixed client text, and the panel maps the code to its own.
@@ -185,14 +216,10 @@ export async function fetchAssistantModels(
     if (error instanceof AssistantRequestError) {
       throw error;
     }
-    throw new AssistantRequestError(
-      "NETWORK_ERROR",
-      "The assistant request failed.",
-      { status: 0, ref: mintErrorReference() }
-    );
+    throw networkFailure(MODELS_PATH);
   }
   if (!response.ok) {
-    await throwForStatus(response, "The assistant request failed.");
+    await throwForStatus(response, MODELS_PATH, "The assistant request failed.");
   }
   const parsed = (await response.json()) as {
     endpointHost?: unknown;
@@ -250,14 +277,10 @@ export async function fetchAssistantContextSize(
     if (error instanceof AssistantRequestError) {
       throw error;
     }
-    throw new AssistantRequestError(
-      "NETWORK_ERROR",
-      "The assistant request failed.",
-      { status: 0, ref: mintErrorReference() }
-    );
+    throw networkFailure(CONTEXT_SIZE_PATH);
   }
   if (!response.ok) {
-    await throwForStatus(response, "The assistant request failed.");
+    await throwForStatus(response, CONTEXT_SIZE_PATH, "The assistant request failed.");
   }
   const parsed = (await response.json()) as {
     items?: Array<{ key?: unknown; label?: unknown; chars?: unknown; tokens?: unknown }>;
@@ -339,21 +362,13 @@ export async function streamAssistantChat(args: {
     if (error instanceof DOMException && error.name === "AbortError") {
       return { text: "", aborted: true };
     }
-    throw new AssistantRequestError(
-      "NETWORK_ERROR",
-      "The assistant request failed.",
-      { status: 0, ref: mintErrorReference() }
-    );
+    throw networkFailure(CHAT_PATH);
   }
   if (!response.ok) {
-    await throwForStatus(response, "The assistant request failed.");
+    await throwForStatus(response, CHAT_PATH, "The assistant request failed.");
   }
   if (!response.body) {
-    throw new AssistantRequestError(
-      "NETWORK_ERROR",
-      "The assistant request failed.",
-      { status: 0, ref: mintErrorReference() }
-    );
+    throw networkFailure(CHAT_PATH);
   }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -396,11 +411,7 @@ export async function streamAssistantChat(args: {
     if (error instanceof DOMException && error.name === "AbortError") {
       return { text, aborted: true };
     }
-    throw new AssistantRequestError(
-      "NETWORK_ERROR",
-      "The assistant request failed.",
-      { status: 0, ref: mintErrorReference() }
-    );
+    throw networkFailure(CHAT_PATH);
   } finally {
     reader.releaseLock();
   }
