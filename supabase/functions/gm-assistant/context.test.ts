@@ -34,6 +34,7 @@ const CHANNEL_ID = "aaaaaaaa-aaaa-4222-8222-aaaaaaaaaaaa";
 const DM_CHANNEL_ID = "bbbbbbbb-bbbb-4222-8222-bbbbbbbbbbbb";
 const PLAYER_ID = "dddddddd-dddd-4222-8222-dddddddddddd";
 const PLAYER_CHARACTER_ID = "eeeeeeee-eeee-4222-8222-eeeeeeeeeeee";
+const OTHER_PLAYER_ID = "12121212-1212-4212-8212-121212121212";
 const OTHER_CAMPAIGN_ID = "ffffffff-ffff-4222-8222-ffffffffffff";
 const MISSING_LORE_ID = "cccccccc-cccc-4222-8222-cccccccccccc";
 const API_KEY = "sk-test-secret-KEY-abcdef123456";
@@ -116,7 +117,11 @@ function makeContextFake(options: ContextFakeOptions = {}): {
     calls.push({ url, method: (init.method ?? "GET").toUpperCase(), body });
     if (url.includes("/rest/v1/")) {
       if (url.includes("campaign_members")) {
-        return Response.json([{ role: "gm", user_id: GM_ID }]);
+        return Response.json([
+          { role: "gm", user_id: GM_ID },
+          { role: "player", user_id: PLAYER_ID },
+          { role: "player", user_id: OTHER_PLAYER_ID },
+        ]);
       }
       if (url.includes("characters?")) {
         return Response.json([{ id: PLAYER_CHARACTER_ID, name: "Kira Vance" }]);
@@ -226,6 +231,20 @@ function makeContextFake(options: ContextFakeOptions = {}): {
               speaker_character_id: null,
               speaker_npc_id: null,
             },
+            {
+              text: "Out of character: brb.",
+              created_at: "2026-11-13T23:59:00Z",
+              author_id: OTHER_PLAYER_ID,
+              speaker_character_id: null,
+              speaker_npc_id: null,
+            },
+            {
+              text: "The GM narrates as Kira.",
+              created_at: "2026-11-13T23:58:00Z",
+              author_id: GM_ID,
+              speaker_character_id: PLAYER_CHARACTER_ID,
+              speaker_npc_id: null,
+            },
           ]);
         }
         return Response.json([]);
@@ -330,8 +349,8 @@ describe("gm assistant context-size endpoint", () => {
     expect(body.unavailable.some((entry) => entry.key.includes(MISSING_LORE_ID))).toBe(true);
   });
 
-  it("refuses callers who are not GMs of the campaign", async () => {
-    const { fetchImpl } = makeContextFake();
+  it("refuses callers who are not GMs of the campaign, before any data is read", async () => {
+    const { fetchImpl, calls } = makeContextFake();
     const denying: UpstreamFetch = async (input, init = {}) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       if (url.includes("/rest/v1/campaign_members")) return Response.json([{ role: "player" }]);
@@ -344,6 +363,9 @@ describe("gm assistant context-size endpoint", () => {
       }),
     );
     expect(res.status).toBe(403);
+    // Only the role check ran: the gate comes before every data read.
+    const reads = calls.filter((call) => call.url.includes("/rest/v1/"));
+    expect(reads.every((call) => call.url.includes("campaign_members"))).toBe(true);
   });
 });
 
@@ -398,6 +420,14 @@ describe("gm assistant context-size preview", () => {
     expect(denied.status).toBe(403);
     const bad = await post(createGmAssistantHandler(baseEnv(), fetchImpl), "not json");
     expect(bad.status).toBe(400);
+    const huge = await post(
+      createGmAssistantHandler(baseEnv(), fetchImpl),
+      JSON.stringify({ campaignId: CAMPAIGN_ID, context: { notes: [], pad: "x".repeat(70 * 1024) } }),
+    );
+    expect(huge.status).toBe(413);
+    const hugeBody = (await huge.json()) as { message: string; ref: string };
+    expect(hugeBody.ref).toMatch(/^[A-Z0-9]{6}$/);
+    expect(hugeBody.message).not.toContain("xxx");
   });
 });
 
@@ -481,7 +511,7 @@ describe("gm assistant chat with server-built context", () => {
     });
   });
 
-  it("names the speaker of every recent post, with a GM label for the GM", async () => {
+  it("names the speaker of every recent post without sending account display names", async () => {
     const { fetchImpl, calls } = makeContextFake();
     const handle = createGmAssistantHandler(baseEnv(), fetchImpl);
     const res = await handle(chatRequest({ conversationId: CONVERSATION_ID, message: "hi" }));
@@ -489,7 +519,15 @@ describe("gm assistant chat with server-built context", () => {
     await res.text();
     const text = allUpstreamText(calls);
     expect(text).toContain("Kira Vance: The bell rings.");
-    expect(text).toContain("Mara (GM): A wolf howls.");
+    expect(text).toContain("GM: A wolf howls.");
+    // A player with no character gets a stable neutral label, not their name.
+    expect(text).toContain("Player 2: Out of character: brb.");
+    // A named GM speaker keeps the GM suffix.
+    expect(text).toContain("Kira Vance (GM): The GM narrates as Kira.");
+    // Account display names never reach the model endpoint.
+    expect(text).not.toContain("Mara");
+    expect(text).not.toContain("Jo");
+    expect(calls.some((call) => call.url.includes("profiles"))).toBe(false);
     // Oldest first, as before.
     expect(text.indexOf("A wolf howls.")).toBeLessThan(text.indexOf("The bell rings."));
   });

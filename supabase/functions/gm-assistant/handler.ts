@@ -95,6 +95,9 @@ const UUID_PATTERN =
 
 const DEFAULT_CONTEXT_TOKENS = 8192;
 
+/** Largest preview body accepted: 100 references x 5 kinds is well under it. */
+const MAX_PREVIEW_BODY_BYTES = 64 * 1024;
+
 function mintReference(): string {
   const bytes = new Uint8Array(6);
   crypto.getRandomValues(bytes);
@@ -827,37 +830,47 @@ async function buildAssistantContext(
     }
     return map;
   };
-  let gmIds: Set<string> | null = null;
+  let roster: { gmIds: Set<string>; playerNumber: Map<string, number> } | null = null;
   /**
-   * Who spoke each recent post: the NPC or character voice, else the
-   * author's display name, with a GM label for the campaign's GMs. A name
-   * that cannot be read falls back to "Someone".
+   * Who spoke each recent post: the NPC or character voice. Otherwise a
+   * neutral label for the member: "GM", or "Player N" numbered by the
+   * campaign's stable member order. Account display names may be real
+   * names, so they are never sent to the model endpoint. A GM speaking as
+   * an NPC or character carries a "(GM)" suffix, judged by the current GM
+   * roster. A member who cannot be found reads as "Someone".
    */
   const readSpeakerNames = async (posts: Array<Record<string, unknown>>) => {
-    if (gmIds === null) {
+    if (roster === null) {
       const members = await readRows(
-        `campaign_members?campaign_id=eq.${encodeURIComponent(campaignId)}&role=eq.gm&select=user_id`,
+        `campaign_members?campaign_id=eq.${encodeURIComponent(campaignId)}&select=user_id,role&order=created_at.asc,user_id.asc`,
       );
-      gmIds = new Set(idsOf(members, "user_id"));
+      const gmIds = new Set<string>();
+      const playerNumber = new Map<string, number>();
+      for (const member of members) {
+        if (typeof member.user_id !== "string") continue;
+        if (member.role === "gm") gmIds.add(member.user_id);
+        else if (!playerNumber.has(member.user_id)) playerNumber.set(member.user_id, playerNumber.size + 1);
+      }
+      roster = { gmIds, playerNumber };
     }
-    const [characters, npcs, authors] = await Promise.all([
+    const [characters, npcs] = await Promise.all([
       namesById("characters", "name", idsOf(posts, "speaker_character_id")),
       namesById("world_npcs", "name", idsOf(posts, "speaker_npc_id")),
-      namesById("profiles", "display_name", idsOf(posts, "author_id")),
     ]);
-    const gm = gmIds;
+    const { gmIds, playerNumber } = roster;
     return {
       speakerOf: (post: Record<string, unknown>): string => {
-        const name =
+        const author = typeof post.author_id === "string" ? post.author_id : "";
+        const isGm = gmIds.has(author);
+        const voice =
           (typeof post.speaker_npc_id === "string" ? npcs.get(post.speaker_npc_id) : undefined) ??
           (typeof post.speaker_character_id === "string"
             ? characters.get(post.speaker_character_id)
-            : undefined) ??
-          (typeof post.author_id === "string" ? authors.get(post.author_id) : undefined) ??
-          "Someone";
-        return typeof post.author_id === "string" && gm.has(post.author_id)
-          ? `${name} (GM)`
-          : name;
+            : undefined);
+        if (voice) return isGm ? `${voice} (GM)` : voice;
+        if (isGm) return "GM";
+        const number = playerNumber.get(author);
+        return number ? `Player ${number}` : "Someone";
       },
     };
   };
@@ -1119,9 +1132,15 @@ async function handleContextSize(
   let campaignId = new URL(req.url).searchParams.get("campaignId") ?? "";
   let preview: AssistantContextChoice | null = null;
   if (req.method === "POST") {
+    const tooLarge = () =>
+      errorResponse(req, env, 413, "PAYLOAD_TOO_LARGE", "That request was too large.", mintReference());
+    const declared = Number(req.headers.get("content-length"));
+    if (Number.isFinite(declared) && declared > MAX_PREVIEW_BODY_BYTES) return tooLarge();
     let body: unknown;
     try {
-      body = await req.json();
+      const raw = await req.text();
+      if (new TextEncoder().encode(raw).length > MAX_PREVIEW_BODY_BYTES) return tooLarge();
+      body = JSON.parse(raw);
     } catch {
       body = null;
     }

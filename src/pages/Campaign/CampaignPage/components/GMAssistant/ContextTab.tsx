@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Alert,
   Box,
@@ -24,6 +24,9 @@ import {
   type AssistantContextSize,
 } from "api-calls/assistant/gmAssistantClient";
 import { referenceFor, withReference } from "./assistantFailure";
+
+/** The server's cap on references per kind in one sizing request. */
+const PREVIEW_LIMIT = 100;
 
 /**
  * The GM assistant's Context tab (spec #10, ticket #132): the checklist of
@@ -80,36 +83,50 @@ export function ContextTab(props: {
     setPreview("loading");
     if (!options) return;
     let cancelled = false;
-    const candidates: AssistantContextChoice = {
-      includeOutline: options.outlineAvailable,
-      lore: options.lore.map((entry) => ({ id: entry.id, includeGmParts: false })),
-      npcs: options.npcs.map((entry) => ({ id: entry.id, includeGmParts: false })),
-      locations: options.locations.map((entry) => ({
-        id: entry.id,
-        includeGmParts: false,
-      })),
-      notes: options.notes.map((note) => note.id),
-      channels: options.channels.map((channel) => ({
-        id: channel.id,
-        postCount: 5,
-      })),
-    };
-    fetchAssistantContextSize(campaignId, { preview: candidates })
-      .then((sized) => {
-        if (cancelled) return;
-        const map = new Map<string, number>();
-        const empty = new Set(
-          sized.unavailable
-            .filter((entry) => entry.reason === "empty")
-            .map((entry) => entry.key)
-        );
-        for (const key of empty) map.set(key, 0);
-        for (const item of sized.items) map.set(item.key, item.tokens);
-        setPreview(map);
-      })
-      .catch(() => {
-        if (!cancelled) setPreview("failed");
+    // The server keeps at most PREVIEW_LIMIT references per kind per
+    // request, so a long list goes in slices, one request after another.
+    const slices: AssistantContextChoice[] = [];
+    const longest = Math.max(
+      options.lore.length,
+      options.npcs.length,
+      options.locations.length,
+      options.notes.length,
+      options.channels.length,
+      1
+    );
+    for (let start = 0; start < longest; start += PREVIEW_LIMIT) {
+      const end = start + PREVIEW_LIMIT;
+      const itemsOf = (list: Array<{ id: string }>) =>
+        list.slice(start, end).map((entry) => ({ id: entry.id, includeGmParts: false }));
+      slices.push({
+        includeOutline: start === 0 && options.outlineAvailable,
+        lore: itemsOf(options.lore),
+        npcs: itemsOf(options.npcs),
+        locations: itemsOf(options.locations),
+        notes: options.notes.slice(start, end).map((note) => note.id),
+        channels: options.channels
+          .slice(start, end)
+          .map((channel) => ({ id: channel.id, postCount: 5 })),
       });
+    }
+    void (async () => {
+      const map = new Map<string, number>();
+      let answered = 0;
+      for (const slice of slices) {
+        if (cancelled) return;
+        try {
+          const sized = await fetchAssistantContextSize(campaignId, { preview: slice });
+          answered += 1;
+          for (const entry of sized.unavailable) {
+            if (entry.reason === "empty") map.set(entry.key, 0);
+          }
+          for (const item of sized.items) map.set(item.key, item.tokens);
+        } catch {
+          // A slice that fails leaves its candidates with a dash.
+        }
+      }
+      if (!cancelled) setPreview(answered === 0 ? "failed" : map);
+    })();
     return () => {
       cancelled = true;
     };
@@ -122,12 +139,24 @@ export function ContextTab(props: {
   }, [size]);
 
   /** "~N tokens" for a key: the saved choice's size, else the preview's. */
-  const sizeLabel = (key: string): string => {
+  const sizeLabel = (key: string): ReactNode => {
     const saved = sizeByKey.get(key);
     if (saved !== undefined) return `~${saved} tokens`;
-    if (preview === "loading") return "…";
+    if (preview === "loading") {
+      return (
+        <span role={"img"} aria-label={"Size loading"}>
+          …
+        </span>
+      );
+    }
     const previewed = preview === "failed" ? undefined : preview.get(key);
-    return previewed === undefined ? "–" : `~${previewed} tokens`;
+    return previewed === undefined ? (
+      <span role={"img"} aria-label={"Size unavailable"}>
+        –
+      </span>
+    ) : (
+      `~${previewed} tokens`
+    );
   };
 
   const toggleEntry = (
@@ -272,7 +301,7 @@ export function ContextTab(props: {
           label={
             <Typography variant={"body2"}>
               Include the outline
-              {options.outlineAvailable && ` (${sizeLabel("outline")})`}
+              {options.outlineAvailable && <> ({sizeLabel("outline")})</>}
             </Typography>
           }
         />

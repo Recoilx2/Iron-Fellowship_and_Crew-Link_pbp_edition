@@ -268,9 +268,52 @@ describe("ContextTab", () => {
       const row = keeper.closest("div[class*='MuiBox']")?.textContent ?? "";
       expect(row).toContain("–");
       expect(row).not.toContain("tokens");
+      expect(
+        keeper.closest("div[class*='MuiBox']")?.querySelector('[aria-label="Size unavailable"]')
+      ).not.toBeNull();
       expect(view.textContent).not.toContain("socket hang up");
       // The checklist still works.
       expect(view.textContent).toContain("Keeper");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("sizes more than 100 candidates of one kind in slices of at most 100", async () => {
+    vi.mocked(fetchAssistantContextOptions).mockResolvedValue({
+      worldId: "world-1",
+      outlineAvailable: false,
+      lore: Array.from({ length: 205 }, (_, i) => ({ id: `bulk-${i}`, name: `Entry ${i}` })),
+      npcs: [],
+      locations: [],
+      notes: [],
+      channels: [],
+    });
+    vi.mocked(fetchAssistantContextSize).mockImplementation(async (_id, options) => ({
+      items: (options?.preview?.lore ?? []).map((ref) => ({
+        key: `lore:${ref.id}`,
+        label: ref.id,
+        chars: 4,
+        tokens: 7,
+      })),
+      totalChars: 0,
+      totalTokens: 0,
+      instructionChars: 0,
+      instructionTokens: 0,
+      unavailable: [],
+    }));
+    const view = await render(() => {});
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    try {
+      const calls = vi.mocked(fetchAssistantContextSize).mock.calls;
+      expect(calls.map(([, o]) => o?.preview?.lore.length)).toEqual([100, 100, 5]);
+      const boxes = Array.from(
+        view.querySelectorAll('input[aria-label^="Include Entry "]')
+      ).map((input) => input.closest("div[class*='MuiBox']")?.textContent ?? "");
+      expect(boxes).toHaveLength(205);
+      expect(boxes.filter((text) => !text.includes("~7 tokens"))).toEqual([]);
     } finally {
       cleanup();
     }
