@@ -79,6 +79,8 @@ interface FakeOptions {
   models?: Array<Record<string, unknown>>;
   modelsStatus?: number;
   chatStatus?: number;
+  /** Status for the assistant_messages POST that saves the streamed reply. */
+  replySaveStatus?: number;
   chatChunks?: string[];
   stallChat?: boolean;
   failChatAfterChunks?: boolean;
@@ -146,6 +148,14 @@ function makeFake(options: FakeOptions = {}): {
         return Response.json(Number.isFinite(limit) && limit > 0 ? stored.slice(0, limit) : stored);
       }
       if (url.includes("assistant_messages") && call.method === "POST") {
+        const body = call.body as { role?: unknown } | null;
+        if (
+          options.replySaveStatus !== undefined &&
+          body?.role === "assistant"
+        ) {
+          // Only the reply save fails; the GM's own message saves fine.
+          return new Response("{}", { status: options.replySaveStatus });
+        }
         return Response.json([{ id: "new-message-id" }], { status: 201 });
       }
       if (url.includes("assistant_settings")) {
@@ -1049,5 +1059,34 @@ describe("gm assistant error logging (ticket #170)", () => {
     expect(lines[0]).toContain(body.ref);
     expect(lines[0]).toContain("unhandled TypeError");
     expect(lines[0]).not.toContain(GM_ID);
+  });
+
+  it("logs a failed reply save with a reference and no conversation id (ticket #183)", async () => {
+    const lines: string[] = [];
+    vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      lines.push(args.map((arg) => String(arg)).join(" "));
+    });
+    const token = gmToken();
+    const { fetchImpl } = makeFake({ rosterRole: "gm", replySaveStatus: 500 });
+    const handle = createGmAssistantHandler(baseEnv(), fetchImpl);
+    const res = await handle(
+      new Request("http://x/gm-assistant/chat", {
+        method: "POST",
+        headers: bearer(token),
+        body: chatBody(),
+      }),
+    );
+    // The stream itself succeeds; only the save of the finished reply
+    // fails, after the SSE body has already been read to the end.
+    expect(res.status).toBe(200);
+    const contents = await readSseContents(res);
+    expect(contents.join("")).toBe("Hello there");
+    await vi.waitFor(() => expect(lines).toHaveLength(1));
+    expect(lines[0]).toMatch(
+      /^\[gm-assistant\] ref=[0-9A-HJKLMNP-Z]{6} code=REPLY_SAVE_FAILED detail=assistant reply save failed$/,
+    );
+    for (const forbidden of [CONVERSATION_ID, GM_ID, token, API_KEY]) {
+      expect(lines[0]).not.toContain(forbidden);
+    }
   });
 });
