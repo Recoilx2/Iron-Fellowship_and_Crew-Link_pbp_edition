@@ -22,7 +22,7 @@ import {
   undoOutlineRevision,
 } from "api-calls/assistant/outlineVersions";
 import { listenToOutlineVersions } from "api-calls/assistant/listenToOutlineVersions";
-import { mintErrorReference } from "functions/errorReference";
+import { logFailureReference, mintErrorReference } from "functions/errorReference";
 import { referenceFor, withReference } from "./assistantFailure";
 import { useOutlineDocument } from "./useOutlineDocument";
 import { OutlineRevision } from "./OutlineRevision";
@@ -48,12 +48,14 @@ import { OutlineRevision } from "./OutlineRevision";
  */
 export function OutlineTab(props: { campaignId: string }) {
   const { campaignId } = props;
-  const { outlineId, bytes, text, loaded, failed, reload } =
+  const { outlineId, bytes, text, loaded, failed, error, reload } =
     useOutlineDocument(campaignId);
-  // One reference per failed open, stable across re-renders until a retry.
+  // One reference per failed open: the one already logged for the error
+  // (createApiFunction's for the wrapped open call), else one logged now
+  // for an unwrapped listener error. Stable until a retry.
   const failedRef = useMemo(
-    () => (failed ? mintErrorReference() : null),
-    [failed]
+    () => (failed && error ? referenceFor(error) : null),
+    [failed, error]
   );
   // The newest kept version: the Outline tab's Undo restores exactly this one.
   const [newestVersionId, setNewestVersionId] = useState<string | null>(null);
@@ -133,10 +135,12 @@ export function OutlineTab(props: { campaignId: string }) {
       });
       const proposed = extractOutlineProposal(result.text);
       if (!proposed) {
+        const ref = mintErrorReference();
+        logFailureReference(ref, "reply carried no marked outline revision");
         setRevisionError(
           withReference(
             "The assistant didn't return a marked revision. Try again with a plainer instruction.",
-            mintErrorReference()
+            ref
           )
         );
         return;
