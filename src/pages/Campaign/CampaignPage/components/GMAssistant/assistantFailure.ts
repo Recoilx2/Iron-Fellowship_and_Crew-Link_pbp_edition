@@ -1,26 +1,10 @@
 import { AssistantRequestError } from "api-calls/assistant/gmAssistantClient";
-import {
-  loggedReferenceOf,
-  logFailureReference,
-  referenceForLogging,
-} from "functions/errorReference";
+import { shownReference } from "functions/errorReference";
 
 export interface AssistantFailure {
   code: string;
   message: string;
   ref: string;
-}
-
-/**
- * The reference already logged for this error, else a new one that is
- * logged now, so a reference shown to the GM can always be found.
- */
-function loggedOrNew(error: unknown): string {
-  const known = loggedReferenceOf(error);
-  if (known) return known;
-  const ref = referenceForLogging(error);
-  logFailureReference(ref, error);
-  return ref;
 }
 
 const GENERIC_MESSAGE = "The assistant request failed.";
@@ -58,13 +42,13 @@ export function toAssistantFailure(error: unknown): AssistantFailure {
     return {
       code: error.code,
       message: messageForCode(error.code),
-      ref: error.ref ?? loggedOrNew(error),
+      ref: error.ref ?? shownReference(error, error),
     };
   }
   return {
     code: "UPSTREAM_ERROR",
     message: GENERIC_MESSAGE,
-    ref: loggedOrNew(error),
+    ref: shownReference(error, error),
   };
 }
 
@@ -75,7 +59,7 @@ export function toAssistantFailure(error: unknown): AssistantFailure {
 export function referenceFor(error: unknown): string {
   return error instanceof AssistantRequestError && error.ref
     ? error.ref
-    : loggedOrNew(error);
+    : shownReference(error, error);
 }
 
 /** `message (ref: ABC123)`, the shape every assistant error is shown in. */
