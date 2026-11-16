@@ -37,6 +37,8 @@ const PLAYER_CHARACTER_ID = "eeeeeeee-eeee-4222-8222-eeeeeeeeeeee";
 const OTHER_PLAYER_ID = "12121212-1212-4212-8212-121212121212";
 const OTHER_CAMPAIGN_ID = "ffffffff-ffff-4222-8222-ffffffffffff";
 const MISSING_LORE_ID = "cccccccc-cccc-4222-8222-cccccccccccc";
+const NPC_ID = "13131313-1313-4313-8313-131313131313";
+const LOCATION_ID = "14141414-1414-4414-8414-141414141414";
 const API_KEY = "sk-test-secret-KEY-abcdef123456";
 const JWT_SECRET = "test-jwt-secret-that-is-long-enough";
 
@@ -100,6 +102,10 @@ interface ContextFakeOptions {
   campaignWorldId?: string | null;
   /** The world the fake's lore row really belongs to. */
   loreWorldId?: string;
+  /** The world the fake's NPC row really belongs to. */
+  npcWorldId?: string;
+  /** The world the fake's location row really belongs to. */
+  locationWorldId?: string;
 }
 
 function makeContextFake(options: ContextFakeOptions = {}): {
@@ -112,6 +118,8 @@ function makeContextFake(options: ContextFakeOptions = {}): {
   const noteCampaignId = options.noteCampaignId ?? CAMPAIGN_ID;
   const campaignWorldId = options.campaignWorldId === undefined ? WORLD_ID : options.campaignWorldId;
   const loreWorldId = options.loreWorldId ?? WORLD_ID;
+  const npcWorldId = options.npcWorldId ?? WORLD_ID;
+  const locationWorldId = options.locationWorldId ?? WORLD_ID;
   const fetchImpl: UpstreamFetch = async (input, init = {}) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     let body: unknown;
@@ -167,6 +175,22 @@ function makeContextFake(options: ContextFakeOptions = {}): {
         if (url.includes(LORE_ID)) {
           return Response.json([
             { id: LORE_ID, name: "Old Vault", tags: ["ruin"], world_id: loreWorldId },
+          ]);
+        }
+        return Response.json([]);
+      }
+      if (url.includes("world_npcs?")) {
+        if (url.includes(NPC_ID)) {
+          return Response.json([
+            { id: NPC_ID, name: "Old Bonegnaw", world_id: npcWorldId },
+          ]);
+        }
+        return Response.json([]);
+      }
+      if (url.includes("world_locations?")) {
+        if (url.includes(LOCATION_ID)) {
+          return Response.json([
+            { id: LOCATION_ID, name: "Old Watchtower", world_id: locationWorldId },
           ]);
         }
         return Response.json([]);
@@ -440,8 +464,6 @@ describe("gm assistant context-size preview", () => {
 describe("world references follow the campaign's own world", () => {
   const worldTables = ["world_lore?", "world_npcs?", "world_locations?"];
   const OTHER_WORLD_ID = "abababab-abab-4bab-8bab-abababababab";
-  const NPC_ID = "13131313-1313-4313-8313-131313131313";
-  const LOCATION_ID = "14141414-1414-4414-8414-141414141414";
 
   function sizeRequest(): Request {
     return new Request(`http://x/gm-assistant/context-size?campaignId=${CAMPAIGN_ID}`, {
@@ -502,7 +524,11 @@ describe("world references follow the campaign's own world", () => {
   });
 
   it("ignores a reference from another world when the campaign has a world", async () => {
-    const { fetchImpl, calls } = makeContextFake({ loreWorldId: OTHER_WORLD_ID });
+    const { fetchImpl, calls } = makeContextFake({
+      loreWorldId: OTHER_WORLD_ID,
+      npcWorldId: OTHER_WORLD_ID,
+      locationWorldId: OTHER_WORLD_ID,
+    });
     const handle = createGmAssistantHandler(baseEnv(), fetchImpl);
 
     const chat = await handle(chatRequest({ conversationId: CONVERSATION_ID, message: "hi" }));
@@ -516,10 +542,17 @@ describe("world references follow the campaign's own world", () => {
       expect(body.items.some((item) => item.key.startsWith("lore:"))).toBe(false);
       expect(body.unavailable.map((entry) => entry.key)).toContain(`lore:${LORE_ID}`);
     }
+    // The same world check covers NPCs and locations, not just lore.
+    const preview = (await (await handle(previewRequest())).json()) as SizeBody;
+    expect(preview.unavailable.map((entry) => entry.key)).toEqual(
+      expect.arrayContaining([`npc:${NPC_ID}`, `location:${LOCATION_ID}`]),
+    );
 
-    const loreReads = calls.filter((call) => call.url.includes("world_lore?"));
-    expect(loreReads.length).toBeGreaterThan(0);
-    for (const call of loreReads) {
+    const worldReads = calls.filter((call) =>
+      worldTables.some((table) => call.url.includes(table))
+    );
+    expect(worldReads.length).toBeGreaterThan(0);
+    for (const call of worldReads) {
       expect(call.url).toContain(`world_id=eq.${WORLD_ID}`);
     }
   });
