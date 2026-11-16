@@ -47,39 +47,21 @@ export interface AssistantMessageWithId extends AssistantMessageDocument {
   conversationId: string;
 }
 
-export interface AssistantItemReference {
-  id: string;
-  includeGmParts: boolean;
-}
+// The context-reference types are shared with the server function through
+// `protocol.ts` (ticket #151): one source, so the two sides of the wire
+// cannot drift.
+import type { AssistantContextChoice } from "../../../supabase/functions/gm-assistant/protocol";
 
-export interface AssistantChannelReference {
-  id: string;
-  postCount: number;
-}
-
-export interface AssistantContextChoice {
-  includeOutline: boolean;
-  lore: AssistantItemReference[];
-  npcs: AssistantItemReference[];
-  locations: AssistantItemReference[];
-  notes: string[];
-  channels: AssistantChannelReference[];
-}
+export {
+  emptyAssistantContextChoice,
+  type AssistantChannelReference,
+  type AssistantContextChoice,
+  type AssistantItemReference,
+} from "../../../supabase/functions/gm-assistant/protocol";
 
 export interface AssistantSettingsDocument {
   /** The model the GM chose; null until they choose one. */
   model: string | null;
   context: AssistantContextChoice;
   updatedAt: string;
-}
-
-export function emptyAssistantContextChoice(): AssistantContextChoice {
-  return {
-    includeOutline: false,
-    lore: [],
-    npcs: [],
-    locations: [],
-    notes: [],
-    channels: [],
-  };
 }

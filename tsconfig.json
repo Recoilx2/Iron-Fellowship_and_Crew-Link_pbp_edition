@@ -14,6 +14,11 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
+    // The gm-assistant edge function and its shared protocol module are
+    // imported by src (the live tests and the browser client) and by Deno,
+    // whose relative imports must carry the ".ts" extension. noEmit makes
+    // that safe for the type-check.
+    "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "baseUrl": "src",
     "ignoreDeprecations": "5.0"

@@ -253,37 +253,35 @@ export function systemPrompt(gameSystem: string): string {
   );
 }
 
-/**
- * Markers wrapping a complete replacement outline in an outline-revision
- * reply (ticket #133). The server asks the model to put the replacement
- * between these markers on their own lines with nothing else outside, so
- * the client can pull it out reliably; `extractOutlineProposal` does the
- * pulling on both sides of the wire (the browser client duplicates it,
- * like the token estimate).
- */
-export const OUTLINE_PROPOSAL_BEGIN = "<<<OUTLINE-BEGIN>>>";
-export const OUTLINE_PROPOSAL_END = "<<<OUTLINE-END>>>";
+// The outline-proposal markers, `extractOutlineProposal`, the request mode,
+// the token estimate and the context-reference types are shared with the
+// browser client through `protocol.ts` (ticket #151): one source, so the
+// two sides of the wire cannot drift.
+export {
+  approximateTokensForChars,
+  extractOutlineProposal,
+  OUTLINE_PROPOSAL_BEGIN,
+  OUTLINE_PROPOSAL_END,
+  type AssistantItemReference,
+  type AssistantChannelReference,
+  type AssistantContextChoice,
+  type AssistantRequestMode,
+} from "./protocol.ts";
 
-/**
- * Pulls the proposed outline from an assistant reply: the text between
- * the first begin marker and the last end marker, trimmed. Null when the
- * reply carries no complete proposal (a marker missing or nothing
- * between them).
- */
-export function extractOutlineProposal(reply: string): string | null {
-  const start = reply.indexOf(OUTLINE_PROPOSAL_BEGIN);
-  const end = reply.lastIndexOf(OUTLINE_PROPOSAL_END);
-  if (start < 0 || end < 0 || end <= start + OUTLINE_PROPOSAL_BEGIN.length) {
-    return null;
-  }
-  const proposed = reply
-    .slice(start + OUTLINE_PROPOSAL_BEGIN.length, end)
-    .trim();
-  return proposed.length > 0 ? proposed : null;
-}
-
-/** What the GM asked for: a normal chat turn or a dedicated outline revision. */
-export type AssistantRequestMode = "chat" | "outline-revision";
+import {
+  approximateTokensForChars,
+  emptyAssistantContextChoice,
+  isGmAssistantPath,
+  GM_ASSISTANT_CHAT_PATH,
+  GM_ASSISTANT_CONTEXT_SIZE_PATH,
+  GM_ASSISTANT_MODELS_PATH,
+  OUTLINE_PROPOSAL_BEGIN,
+  OUTLINE_PROPOSAL_END,
+  type AssistantChannelReference,
+  type AssistantContextChoice,
+  type AssistantItemReference,
+  type AssistantRequestMode,
+} from "./protocol.ts";
 
 export function outlineRevisionInstruction(): string {
   return (
@@ -295,15 +293,10 @@ export function outlineRevisionInstruction(): string {
 }
 
 /**
- * Approximate tokens for a character count (ticket #132): four characters
- * per token, rounded up. The client duplicates this exact formula (see
- * `assistantContext.ts`), so the size bar and the server answer agree;
- * exact per-model tokenising is not needed.
+ * Approximate tokens for a character count: shared with the client through
+ * `protocol.ts` (re-exported above), so the size bar and the server answer
+ * agree.
  */
-export function approximateTokensForChars(chars: number): number {
-  if (!Number.isFinite(chars) || chars <= 0) return 0;
-  return Math.ceil(chars / 4);
-}
 
 const YJS_STRUCTURAL_TOKENS = new Set([
   "body",
@@ -604,24 +597,11 @@ async function readSavedModel(
   return typeof model === "string" && model.trim() ? model.trim() : null;
 }
 
-export interface AssistantItemReference {
-  id: string;
-  includeGmParts: boolean;
-}
-
-export interface AssistantChannelReference {
-  id: string;
-  postCount: number;
-}
-
-export interface AssistantContextChoice {
-  includeOutline: boolean;
-  lore: AssistantItemReference[];
-  npcs: AssistantItemReference[];
-  locations: AssistantItemReference[];
-  notes: string[];
-  channels: AssistantChannelReference[];
-}
+// The context-reference types (`AssistantItemReference`,
+// `AssistantChannelReference`, `AssistantContextChoice`) are shared with
+// the browser client through `protocol.ts` (re-exported above); the
+// per-item size and built-context shapes below are the server's answer,
+// which the client reads as plain JSON.
 
 export interface AssistantContextItem {
   key: string;
@@ -662,14 +642,7 @@ function normalizeChannelReference(entry: unknown): AssistantChannelReference | 
 }
 
 function normalizeContextChoice(raw: unknown): AssistantContextChoice {
-  const empty: AssistantContextChoice = {
-    includeOutline: false,
-    lore: [],
-    npcs: [],
-    locations: [],
-    notes: [],
-    channels: [],
-  };
+  const empty = emptyAssistantContextChoice();
   if (!raw || typeof raw !== "object") return empty;
   const record = raw as Record<string, unknown>;
   const listOf = (value: unknown, normalize: (entry: unknown) => { id: string } | null) => {
@@ -1585,7 +1558,7 @@ export function createGmAssistantHandler(
   return async (req: Request): Promise<Response> => {
     const url = new URL(req.url);
     if (req.method === "OPTIONS") {
-      if (url.pathname === "/gm-assistant/models" || url.pathname === "/gm-assistant/chat" || url.pathname === "/gm-assistant/context-size") {
+      if (isGmAssistantPath(url.pathname)) {
         const headers = corsHeaders(req, env);
         headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         headers.set(
@@ -1616,16 +1589,16 @@ export function createGmAssistantHandler(
       );
     }
     try {
-      if (req.method === "GET" && url.pathname === "/gm-assistant/models") {
+      if (req.method === "GET" && url.pathname === GM_ASSISTANT_MODELS_PATH) {
         return await handleModels(req, env, caller, callerToken, fetchImpl);
       }
       if (
         (req.method === "GET" || req.method === "POST") &&
-        url.pathname === "/gm-assistant/context-size"
+        url.pathname === GM_ASSISTANT_CONTEXT_SIZE_PATH
       ) {
         return await handleContextSize(req, env, caller, callerToken, fetchImpl);
       }
-      if (req.method === "POST" && url.pathname === "/gm-assistant/chat") {
+      if (req.method === "POST" && url.pathname === GM_ASSISTANT_CHAT_PATH) {
         return await handleChat(req, env, caller, callerToken, fetchImpl, options);
       }
     } catch (error) {

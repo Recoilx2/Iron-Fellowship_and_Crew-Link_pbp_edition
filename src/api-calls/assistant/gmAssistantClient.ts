@@ -5,6 +5,15 @@ import {
   rememberReference,
 } from "functions/errorReference";
 import type { AssistantContextChoice } from "./_assistant.type";
+// The wire protocol is shared with the server function (ticket #151): one
+// source for the route paths, the outline-proposal markers, the token
+// estimate and the request mode, so the two sides cannot drift.
+import {
+  GM_ASSISTANT_CHAT_PATH,
+  GM_ASSISTANT_CONTEXT_SIZE_PATH,
+  GM_ASSISTANT_MODELS_PATH,
+  type AssistantRequestMode,
+} from "../../../supabase/functions/gm-assistant/protocol";
 
 /**
  * Browser client for the GM assistant server function (spec #10). The
@@ -14,6 +23,15 @@ import type { AssistantContextChoice } from "./_assistant.type";
  * reference code (or a minted one when the network itself fails), so the
  * panel can show it without ever exposing internal details.
  */
+
+// Re-exported so panel code keeps one import site for the shared protocol.
+export {
+  approximateTokensForChars,
+  extractOutlineProposal,
+  OUTLINE_PROPOSAL_BEGIN,
+  OUTLINE_PROPOSAL_END,
+  type AssistantRequestMode,
+} from "../../../supabase/functions/gm-assistant/protocol";
 
 export interface AssistantModelOption {
   id: string;
@@ -47,47 +65,6 @@ export interface AssistantContextSize {
   unavailable: AssistantContextUnavailable[];
 }
 
-/**
- * Markers wrapping a complete replacement outline in an outline-revision
- * reply (ticket #133). Kept identical to the server function's markers in
- * `supabase/functions/gm-assistant/handler.ts`; the server asks the model
- * to put the replacement between them, and `extractOutlineProposal` pulls
- * it out for the side-by-side preview.
- */
-export const OUTLINE_PROPOSAL_BEGIN = "<<<OUTLINE-BEGIN>>>";
-export const OUTLINE_PROPOSAL_END = "<<<OUTLINE-END>>>";
-
-/**
- * Pulls the proposed outline from an assistant reply: the text between
- * the first begin marker and the last end marker, trimmed. Null when the
- * reply carries no complete proposal.
- */
-export function extractOutlineProposal(reply: string): string | null {
-  const start = reply.indexOf(OUTLINE_PROPOSAL_BEGIN);
-  const end = reply.lastIndexOf(OUTLINE_PROPOSAL_END);
-  if (start < 0 || end < 0 || end <= start + OUTLINE_PROPOSAL_BEGIN.length) {
-    return null;
-  }
-  const proposed = reply
-    .slice(start + OUTLINE_PROPOSAL_BEGIN.length, end)
-    .trim();
-  return proposed.length > 0 ? proposed : null;
-}
-
-/** What the GM asked for: a normal chat turn or a dedicated outline revision. */
-export type AssistantRequestMode = "chat" | "outline-revision";
-
-/**
- * Approximate tokens for a character count: four characters per token,
- * rounded up. Kept identical to the server function (handler.ts); exact
- * per-model tokenising is not needed. The panel uses it for the
- * conversation overhead beside the server-sized context and instructions.
- */
-export function approximateTokensForChars(chars: number): number {
-  if (!Number.isFinite(chars) || chars <= 0) return 0;
-  return Math.ceil(chars / 4);
-}
-
 export interface AssistantStreamResult {
   text: string;
   /** True when the caller aborted before the reply finished. */
@@ -115,9 +92,9 @@ export class AssistantRequestError extends Error {
   }
 }
 
-const MODELS_PATH = "/gm-assistant/models";
-const CONTEXT_SIZE_PATH = "/gm-assistant/context-size";
-const CHAT_PATH = "/gm-assistant/chat";
+const MODELS_PATH = GM_ASSISTANT_MODELS_PATH;
+const CONTEXT_SIZE_PATH = GM_ASSISTANT_CONTEXT_SIZE_PATH;
+const CHAT_PATH = GM_ASSISTANT_CHAT_PATH;
 
 /**
  * A network-level failure: a minted reference, logged once with the path.
