@@ -4,6 +4,7 @@
  * 29). Split out of `handler.ts` (ticket #151).
  */
 import type { GmAssistantEnv } from "./env.ts";
+import { logServerError } from "./log.ts";
 
 export function corsHeaders(req: Request, env: GmAssistantEnv): Headers {
   const headers = new Headers();
@@ -39,19 +40,14 @@ export function errorResponse(
   // One line per error response, so every reference a GM sees can be found
   // in the server log. Only the reference, code, status, method and path are
   // logged, plus the optional server-side detail: never the request body,
-  // headers, token, prompt text or user ids.
+  // headers, token, prompt text or user ids. The line is assembled by
+  // `logServerError`, which sanitizes every fragment (ticket #183).
   const path = new URL(req.url).pathname;
-  const detail = detailForLog
-    ? ` detail=${detailForLog
-        .replace(/\s+/g, " ")
-        // Stripping control characters from the log line is the point.
-        // eslint-disable-next-line no-control-regex
-        .replace(/[\x00-\x1f\x7f]/g, "")
-        .slice(0, 300)}`
-    : "";
-  console.error(
-    `[gm-assistant] ref=${ref} code=${code} status=${status} route=${req.method} ${path}${detail}`,
-  );
+  logServerError(code, detailForLog ?? "", {
+    status,
+    route: `${req.method} ${path}`,
+    ref,
+  });
   const headers = corsHeaders(req, env);
   headers.set("Content-Type", "application/json");
   return Response.json({ code, message, ref }, { status, headers });

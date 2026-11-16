@@ -18,6 +18,7 @@ import {
 import type { GmAssistantEnv, UpstreamFetch } from "./env.ts";
 import { systemPrompt } from "./env.ts";
 import { errorName, errorResponse, corsHeaders } from "./http.ts";
+import { logServerError } from "./log.ts";
 import { mintReference, UUID_PATTERN, type VerifiedCaller } from "./security.ts";
 import { postgrest } from "./postgrest.ts";
 import { fetchUpstreamModels } from "./upstream.ts";
@@ -366,7 +367,9 @@ export async function handleChat(
     ).then(
       (saved) => {
         if (!saved) {
-          console.error(`[gm-assistant] reply save failed for ${conversation.id}`);
+          // No conversation id here: the log line carries only the
+          // reference, code and fixed text (ticket #183).
+          logServerError("REPLY_SAVE_FAILED", "assistant reply save failed");
         }
       },
       () => undefined,

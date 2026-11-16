@@ -84,6 +84,50 @@ module.exports = {
       },
     },
     {
+      // The same ban for the Supabase edge functions (ticket #183): a bare
+      // console.error/warn there could log ids, URLs or secrets. Server
+      // error lines go through logServerError from gm-assistant/log, which
+      // mints a reference and sanitizes every fragment; the log helper
+      // itself is the only exempt file.
+      files: ["supabase/functions/**/*.ts"],
+      excludedFiles: [
+        "supabase/functions/gm-assistant/log.ts",
+        "supabase/functions/**/*.test.ts",
+      ],
+      rules: {
+        "no-restricted-syntax": [
+          "error",
+          {
+            selector:
+              "CallExpression[callee.object.name='console'][callee.property.name=/^(error|warn)$/]",
+            message:
+              "Use logServerError from gm-assistant/log instead of a bare console.error/console.warn.",
+          },
+          {
+            // The computed form too: console["error"](...) gets past a
+            // property-name match alone.
+            selector:
+              "CallExpression[callee.object.name='console'][callee.computed=true][callee.property.value=/^(error|warn)$/]",
+            message:
+              "Use logServerError from gm-assistant/log instead of a bare console.error/console.warn.",
+          },
+          {
+            selector:
+              "MemberExpression[object.name='console'][property.name=/^(error|warn)$/]:not(CallExpression > MemberExpression.callee)",
+            message:
+              "Do not pass console.error/console.warn as a callback; use logServerError from gm-assistant/log.",
+          },
+          {
+            // The computed form of the same, e.g. .catch(console["error"]).
+            selector:
+              "MemberExpression[object.name='console'][computed=true][property.value=/^(error|warn)$/]:not(CallExpression > MemberExpression.callee)",
+            message:
+              "Do not pass console.error/console.warn as a callback; use logServerError from gm-assistant/log.",
+          },
+        ],
+      },
+    },
+    {
       // The data layer may use Supabase, but Firebase stays banned
       // everywhere (spec #11 removed it completely). The browser tests
       // (spec #9, ticket #107) sign people in through the Auth Admin API
