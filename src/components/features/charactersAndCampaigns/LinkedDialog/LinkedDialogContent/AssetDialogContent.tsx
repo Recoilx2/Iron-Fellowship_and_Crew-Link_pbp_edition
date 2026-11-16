@@ -8,10 +8,12 @@ export interface AssetDialogContentProps {
   handleBack: () => void;
   handleClose: () => void;
   isLastItem: boolean;
+  /** The id the dialog is named by, when its container is not an MUI Dialog. */
+  titleId?: string;
 }
 
 export function AssetDialogContent(props: AssetDialogContentProps) {
-  const { id, handleBack, handleClose, isLastItem } = props;
+  const { id, handleBack, handleClose, isLastItem, titleId } = props;
 
   const assets = useStore((store) => store.rules.assetMaps.assetMap);
 
@@ -25,6 +27,7 @@ export function AssetDialogContent(props: AssetDialogContentProps) {
           handleBack={handleBack}
           handleClose={handleClose}
           isLastItem={isLastItem}
+          titleId={titleId}
         >
           Asset Not Found
         </LinkedDialogContentTitle>
@@ -40,6 +43,7 @@ export function AssetDialogContent(props: AssetDialogContentProps) {
         handleBack={handleBack}
         handleClose={handleClose}
         isLastItem={isLastItem}
+        titleId={titleId}
       >
         {asset.name}
       </LinkedDialogContentTitle>

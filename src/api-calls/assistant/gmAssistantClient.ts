@@ -192,7 +192,7 @@ export async function fetchAssistantModels(
   try {
     const headers = await authHeaders();
     response = await fetch(
-      `${functionsBaseUrl()}/gm-assistant/models?campaignId=${encodeURIComponent(campaignId)}`,
+      `${functionsBaseUrl()}${MODELS_PATH}?campaignId=${encodeURIComponent(campaignId)}`,
       { headers, signal: options?.signal }
     );
   } catch (error) {
@@ -244,7 +244,7 @@ export async function fetchAssistantContextSize(
     if (options?.preview) {
       // A preview list of references is sized in one batched POST.
       headers.set("Content-Type", "application/json");
-      response = await fetch(`${functionsBaseUrl()}/gm-assistant/context-size`, {
+      response = await fetch(`${functionsBaseUrl()}${CONTEXT_SIZE_PATH}`, {
         method: "POST",
         headers,
         body: JSON.stringify({ campaignId, context: options.preview }),
@@ -252,12 +252,17 @@ export async function fetchAssistantContextSize(
       });
     } else {
       response = await fetch(
-        `${functionsBaseUrl()}/gm-assistant/context-size?campaignId=${encodeURIComponent(campaignId)}`,
+        `${functionsBaseUrl()}${CONTEXT_SIZE_PATH}?campaignId=${encodeURIComponent(campaignId)}`,
         { headers, signal: options?.signal }
       );
     }
   } catch (error) {
     if (error instanceof AssistantRequestError) {
+      throw error;
+    }
+    // An aborted preview (the Context tab closed) is not a failure: rethrow
+    // without minting or logging a reference, like the chat path.
+    if (error instanceof DOMException && error.name === "AbortError") {
       throw error;
     }
     throw networkFailure(CONTEXT_SIZE_PATH);
@@ -328,7 +333,7 @@ export async function streamAssistantChat(args: {
   try {
     const headers = await authHeaders();
     headers.set("Content-Type", "application/json");
-    response = await fetch(`${functionsBaseUrl()}/gm-assistant/chat`, {
+    response = await fetch(`${functionsBaseUrl()}${CHAT_PATH}`, {
       method: "POST",
       headers,
       body: JSON.stringify({

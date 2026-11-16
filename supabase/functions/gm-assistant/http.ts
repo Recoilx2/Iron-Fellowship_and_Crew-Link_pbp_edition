@@ -17,12 +17,13 @@ export function corsHeaders(req: Request, env: GmAssistantEnv): Headers {
 
 /**
  * Only the error's class name is ever logged: thrown fetch errors carry the
- * full request URL, which can hold user ids or an API key. Anything whose
- * name is not a short plain word — including a non-Error throw — reads as
- * "Error", so a hostile name cannot smuggle text into the log.
+ * full request URL, which can hold user ids or an API key. A name that is
+ * not a short plain word reads as "Error", so a hostile name cannot smuggle
+ * text into the log; a non-Error throw keeps its old "unknown" label.
  */
 export function errorName(error: unknown): string {
-  const name = error instanceof Error ? error.name : "";
+  if (!(error instanceof Error)) return "unknown";
+  const name = error.name;
   return /^[A-Za-z]{1,40}$/.test(name) ? name : "Error";
 }
 
@@ -41,7 +42,12 @@ export function errorResponse(
   // headers, token, prompt text or user ids.
   const path = new URL(req.url).pathname;
   const detail = detailForLog
-    ? ` detail=${detailForLog.replace(/\s+/g, " ").replace(/[\x00-\x1f\x7f]/g, "").slice(0, 300)}`
+    ? ` detail=${detailForLog
+        .replace(/\s+/g, " ")
+        // Stripping control characters from the log line is the point.
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\x00-\x1f\x7f]/g, "")
+        .slice(0, 300)}`
     : "";
   console.error(
     `[gm-assistant] ref=${ref} code=${code} status=${status} route=${req.method} ${path}${detail}`,

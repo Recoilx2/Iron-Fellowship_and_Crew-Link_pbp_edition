@@ -283,7 +283,11 @@ describe("ContextTab", () => {
     }
   });
 
-  it("sizes more than 100 candidates of one kind in slices of at most 100", async () => {
+  // Under load the three sequential slice requests can outlive the default
+  // 5 s test timeout (the #177 review asked for an explicit one here).
+  it(
+    "sizes more than 100 candidates of one kind in slices of at most 100",
+    async () => {
     vi.mocked(fetchAssistantContextOptions).mockResolvedValue({
       worldId: "world-1",
       outlineAvailable: false,
@@ -324,7 +328,8 @@ describe("ContextTab", () => {
     } finally {
       cleanup();
     }
-  });
+  },
+  15_000);
 
   it("shows a dash only for the rows of a slice that failed", async () => {
     vi.mocked(fetchAssistantContextOptions).mockResolvedValue({

@@ -31,9 +31,6 @@ Deno.serve((req: Request): Promise<Response> => {
   if (req.method === "OPTIONS" && pathname.startsWith("/gm-assistant/")) {
     return handleGmAssistant(req);
   }
-  if (req.method === "OPTIONS" && pathname.startsWith("/gm-assistant/")) {
-    return handleGmAssistant(req);
-  }
   return Promise.resolve(
     Response.json(
       {

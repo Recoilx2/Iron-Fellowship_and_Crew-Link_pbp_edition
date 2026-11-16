@@ -42,7 +42,9 @@ export const createRulesSlice: CreateSliceType<RulesSlice> = (
         store.rules.expansionIds = expansionIds;
       });
       getState().rules.rebuildRules();
-      getState().rules.loadIncludedExpansions(expansionIds).catch((e) => logError("rules.slice", e));
+      getState()
+        .rules.loadIncludedExpansions(expansionIds)
+        .catch((e) => logError("rules.slice", e));
     },
 
     loadBaseRuleset: async () => {

@@ -148,9 +148,27 @@ function AssistantSurface(props: {
       {createPortal(
         <Box
           ref={regionRef}
-          role={"complementary"}
-          aria-label={"GM assistant"}
+          // On a phone the Dialog is already the landmark named "GM
+          // assistant"; a complementary landmark with the same label
+          // nested inside it would say the panel twice.
+          role={isPhone ? undefined : "complementary"}
+          aria-label={isPhone ? undefined : "GM assistant"}
           tabIndex={-1}
+          // Escape closing the phone dialog is asserted by a test, but the
+          // path a keydown takes from inside the portalled panel to MUI's
+          // Modal root is subtle (the host div has no fiber, so the
+          // synthetic path re-enters the Dialog's tree at its host Box).
+          // Handling Escape here as well keeps that behaviour explicit and
+          // independent of where the host node lives.
+          onKeyDown={
+            isPhone
+              ? (event) => {
+                  if (event.key === "Escape") {
+                    onClose();
+                  }
+                }
+              : undefined
+          }
           sx={{ height: "100%", outline: "none" }}
         >
           <GMAssistantPanel campaignId={campaignId} onClose={onClose} />

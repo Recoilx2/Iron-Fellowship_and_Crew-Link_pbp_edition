@@ -122,7 +122,7 @@ function startPosts(channelId: string, set: ChatSet, get: ChatGet): void {
       },
     },
     (error) => {
-      logError("chat.slice", error);
+      logError("chat.slice posts subscription", error);
       set((store) => {
         store.chat.postsLoading = false;
         store.chat.postsError = "Failed to load posts.";
@@ -163,7 +163,7 @@ export const createChatSlice: CreateSliceType<ChatSlice> = (set, get) => ({
         onLoaded: () => {},
       },
       (error) => {
-        logError("chat.slice", error);
+        logError("chat.slice members subscription", error);
       }
     );
     const stopChannels = listenToCampaignChannels(
@@ -195,7 +195,7 @@ export const createChatSlice: CreateSliceType<ChatSlice> = (set, get) => ({
         },
       },
       (error) => {
-        logError("chat.slice", error);
+        logError("chat.slice channels subscription", error);
         set((store) => {
           store.chat.loading = false;
           store.chat.error = "Failed to load channels.";
@@ -256,7 +256,7 @@ export const createChatSlice: CreateSliceType<ChatSlice> = (set, get) => ({
         store.chat.hasOlderByChannel[channelId] = page.hasOlder;
       });
     } catch (error) {
-      logError("chat.slice", error);
+      logError("chat.slice loadOlderPosts", error);
       set((store) => {
         store.chat.postsError = "Failed to load older posts.";
       });

@@ -192,7 +192,17 @@ async function handleContextSize(
     try {
       raw = await readBodyCapped(req, MAX_PREVIEW_BODY_BYTES);
     } catch {
-      raw = null;
+      // A failed body read (a stream error or a client abort) is a bad
+      // request, as it was before the cap: only a read that stopped past
+      // the 64 KB cap answers 413.
+      return errorResponse(
+        req,
+        env,
+        400,
+        "INVALID_REQUEST",
+        "That request was not valid.",
+        mintReference()
+      );
     }
     if (raw === null) return tooLarge();
     try {

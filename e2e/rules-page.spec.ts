@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
-import type { Locator, Page } from "@playwright/test";import {
+import type { Locator, Page } from "@playwright/test";
+import {
   createPerson,
   deletePerson,
   signInAs,

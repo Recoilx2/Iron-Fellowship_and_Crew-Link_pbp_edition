@@ -10,7 +10,7 @@
  * the Deno wiring, real row-level security and the real upstream.
  */
 import { createHmac } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as Y from "yjs";
 
 import {
@@ -181,6 +181,11 @@ function makeContextFake(options: ContextFakeOptions = {}): {
       }
       if (url.includes("world_npcs?")) {
         if (url.includes(NPC_ID)) {
+          // Like PostgREST: a world filter that does not match reads
+          // nothing, so an NPC from another world is never named.
+          if (url.includes("world_id=eq.") && !url.includes(`world_id=eq.${npcWorldId}`)) {
+            return Response.json([]);
+          }
           return Response.json([
             { id: NPC_ID, name: "Old Bonegnaw", world_id: npcWorldId },
           ]);
@@ -274,6 +279,13 @@ function makeContextFake(options: ContextFakeOptions = {}): {
               author_id: GM_ID,
               speaker_character_id: PLAYER_CHARACTER_ID,
               speaker_npc_id: null,
+            },
+            {
+              text: "The wolf speaks.",
+              created_at: "2026-11-13T23:57:00Z",
+              author_id: OTHER_PLAYER_ID,
+              speaker_character_id: null,
+              speaker_npc_id: NPC_ID,
             },
           ]);
         }
@@ -554,6 +566,68 @@ describe("world references follow the campaign's own world", () => {
     expect(worldReads.length).toBeGreaterThan(0);
     for (const call of worldReads) {
       expect(call.url).toContain(`world_id=eq.${WORLD_ID}`);
+    }
+  });
+
+  it("names an NPC speaker only within the campaign's own world", async () => {
+    const { fetchImpl, calls } = makeContextFake({ npcWorldId: OTHER_WORLD_ID });
+    const handle = createGmAssistantHandler(baseEnv(), fetchImpl);
+    const res = await handle(chatRequest({ conversationId: CONVERSATION_ID, message: "hi" }));
+    expect(res.status).toBe(200);
+    await res.text();
+
+    const text = upstreamText(calls);
+    // The NPC's name never reaches the model; the speaker falls back to the
+    // neutral label.
+    expect(text).not.toContain("Old Bonegnaw");
+    expect(text).toContain("Player 2: The wolf speaks.");
+    // The NPC-name read is filtered to the campaign's own world.
+    const npcReads = calls.filter((call) => call.url.includes("world_npcs?"));
+    expect(npcReads.length).toBeGreaterThan(0);
+    for (const call of npcReads) {
+      expect(call.url).toContain(`world_id=eq.${WORLD_ID}`);
+    }
+  });
+});
+
+describe("a failed campaign-world read", () => {
+  it("logs one line with a reference and no ids, and still builds the rest", async () => {
+    const base = makeContextFake();
+    const failing: UpstreamFetch = async (input, init = {}) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("/rest/v1/campaigns?")) {
+        return new Response("boom", { status: 500 });
+      }
+      return base.fetchImpl(input, init);
+    };
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      lines.push(args.map((arg) => String(arg)).join(" "));
+    });
+    try {
+      const handle = createGmAssistantHandler(baseEnv(), failing);
+      const res = await handle(chatRequest({ conversationId: CONVERSATION_ID, message: "hi" }));
+      expect(res.status).toBe(200);
+      await res.text();
+
+      const worldLine = lines.find((line) => line.includes("code=WORLD_READ_FAILED"));
+      expect(worldLine).toBeDefined();
+      expect(worldLine).toContain("status=500");
+      expect(worldLine).toMatch(/ref=[0-9A-Z]{6}/);
+      // The line names the failed read, never a row id.
+      expect(worldLine).not.toContain(CAMPAIGN_ID);
+      expect(worldLine).not.toContain(GM_ID);
+      expect(worldLine).not.toContain(PLAYER_ID);
+      // The failure is not fatal: world references are skipped, and the
+      // rest of the context still reaches the model.
+      const text = base.calls
+        .filter((call) => call.url.endsWith("/chat/completions"))
+        .map((call) => JSON.stringify(call.body))
+        .join("\n");
+      expect(text).toContain("The bell rings.");
+      expect(text).not.toContain("The vault holds old coins.");
+    } finally {
+      spy.mockRestore();
     }
   });
 });

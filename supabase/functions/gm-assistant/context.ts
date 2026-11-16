@@ -17,7 +17,6 @@ import {
 } from "./protocol.ts";
 import type { UpstreamFetch } from "./env.ts";
 import type { GmAssistantEnv } from "./env.ts";
-import { errorName } from "./http.ts";
 import { mintReference, UUID_PATTERN } from "./security.ts";
 import { postgrest } from "./postgrest.ts";
 import { yjsBase64ToPlainText } from "./yjsText.ts";

@@ -89,20 +89,38 @@ function summariseError(
 /**
  * Summarises a value the caller KNOWS is the error, whatever its shape (an
  * Error, a postgrest-js `{message}` body, a plain `{error: {...}}`
- * rejection, a string). Objects reduce to name, code, status and a capped
- * message; primitives become a capped string. Nothing else is kept, so
- * `details`, `hint`, `stack`, `cause` and any unknown field never reach a
- * log. Use this where position says "this is the error"; shape-based
- * detection (`isErrorLike`) is only for extra detail arguments.
+ * rejection, a string). A whole `{data, error}` / `{error: {...}}` value
+ * is unwrapped one level, so the inner error's name, code, status and
+ * message are what gets logged. Objects reduce the same way; primitives
+ * become a capped string. Nothing else is kept, so `details`, `hint`,
+ * `stack`, `cause` and any unknown field never reach a log. Use this where
+ * position says "this is the error"; shape-based detection
+ * (`isErrorLike`) is only for extra detail arguments.
  */
 export function summariseErrorValue(value: unknown): unknown {
   if (typeof value === "object" && value !== null) {
-    return summariseError(value as Record<string, unknown>);
+    const record = value as Record<string, unknown>;
+    // A whole `{data, error}` / `{error: {...}}` rejection: the useful
+    // fields live on the inner error.
+    if (
+      "error" in record &&
+      record.error !== null &&
+      typeof record.error === "object"
+    ) {
+      return summariseError(record.error as Record<string, unknown>);
+    }
+    return summariseError(record);
   }
   return capped(String(value));
 }
 
-/** Detail objects are copied only when a nested error had to be summarised. */
+/**
+ * Detail objects are copied only when a nested error had to be summarised.
+ * Arrays pass through unchanged: they are caller-built lists of scalars
+ * (ids, counts, labels), and no caller nests an error inside one -- an
+ * error in detail position is an object under a key, which the loop below
+ * summarises.
+ */
 function safeObjectToLog(detail: object): object {
   if (Array.isArray(detail)) return detail;
   const entries = Object.entries(detail);
