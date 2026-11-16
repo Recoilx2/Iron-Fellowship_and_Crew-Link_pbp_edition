@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ThemeProvider, createTheme } from "@mui/material";
 import * as Y from "yjs";
+import { logFailureReference, rememberReference } from "functions/errorReference";
 
 vi.mock("api-calls/notes/campaignOutline", () => ({
   getOrCreateCampaignOutline: vi.fn(),
@@ -446,6 +447,62 @@ describe("OutlineTab", () => {
     expect(view.textContent).toContain("couldn't be undone");
     expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
     expect(view.textContent).not.toContain("row violates policy");
+  });
+
+  it("shows the wrapped call's logged reference when opening fails, logging once in total", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const failure = new Error("no access");
+    // Stands in for createApiFunction: it logs and remembers one reference.
+    vi.mocked(getOrCreateCampaignOutline).mockImplementationOnce(async () => {
+      rememberReference(failure, "WRAP01");
+      logFailureReference("WRAP01", failure);
+      throw failure;
+    });
+    const view = render();
+    await flush();
+
+    expect(view.textContent).toContain("(ref: WRAP01)");
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    consoleSpy.mockRestore();
+  });
+
+  it("logs one reference, and shows it, when the outline listener fails", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(listenToNoteContent).mockImplementationOnce(
+      (_campaignId, _characterId, _noteId, _onContent, onError) => {
+        onError(new Error("subscription dropped"));
+        return () => {};
+      }
+    );
+    const view = render();
+    await flush();
+
+    const shown = /\(ref: ([A-Z0-9]{6})\)/.exec(view.textContent ?? "")?.[1];
+    expect(shown).toBeDefined();
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    expect(String(consoleSpy.mock.calls[0][0])).toContain(`ref: ${shown}`);
+    consoleSpy.mockRestore();
+  });
+
+  it("logs the reference shown when the reply carries no marked revision", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(streamAssistantChat).mockResolvedValueOnce({
+      text: "Just some chat with no proposal.",
+      aborted: false,
+    });
+    const view = render();
+    await flush();
+    requestRevisionFrom(view);
+    await flush();
+
+    const shown = /\(ref: ([A-Z0-9]{6})\)/.exec(view.textContent ?? "")?.[1];
+    expect(shown).toBeDefined();
+    expect(
+      consoleSpy.mock.calls.filter((call) =>
+        String(call[0]).includes(`ref: ${shown}`)
+      )
+    ).toHaveLength(1);
+    consoleSpy.mockRestore();
   });
 
   it("shows a reference when opening the outline fails", async () => {

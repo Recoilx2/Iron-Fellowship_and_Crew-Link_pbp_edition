@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { toAssistantFailure } from "pages/Campaign/CampaignPage/components/GMAssistant/assistantFailure";
 import {
   AssistantRequestError,
   approximateTokensForChars,
@@ -287,6 +288,81 @@ describe("fetchAssistantContextSize", () => {
     expect(failure).toBeInstanceOf(AssistantRequestError);
     expect((failure as AssistantRequestError).code).toBe("FORBIDDEN");
     expect((failure as AssistantRequestError).ref).toBe("QQ1Q22");
+  });
+
+  it("logs the reference it mints for a gateway body without one, and shows that same reference", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    globalThis.fetch = (async () =>
+      new Response("<html>502 Bad Gateway upstream-host</html>", {
+        status: 502,
+      })) as unknown as typeof fetch;
+
+    const failure = await fetchAssistantModels("campaign-1").catch(
+      (error: unknown) => error
+    );
+    const shown = toAssistantFailure(failure);
+
+    expect(shown.ref).toMatch(/^[A-Z0-9]{6}$/);
+    const logs = consoleSpy.mock.calls.filter((call) =>
+      String(call[0]).includes(`ref: ${shown.ref}`)
+    );
+    expect(logs).toHaveLength(1);
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    expect(String(logs[0][1])).toContain("/gm-assistant/models");
+    expect(String(logs[0][1])).toContain("502");
+    expect(String(logs[0][2])).toContain("Bad Gateway");
+    expect(shown.message).not.toContain("Gateway");
+    consoleSpy.mockRestore();
+  });
+
+  it("truncates the logged gateway body and never logs the token", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    globalThis.fetch = (async () =>
+      new Response("x".repeat(2000), { status: 500 })) as unknown as typeof fetch;
+
+    await fetchAssistantContextSize("campaign-1").catch(() => {});
+
+    expect(String(consoleSpy.mock.calls[0][2]).length).toBe(500);
+    expect(JSON.stringify(consoleSpy.mock.calls)).not.toContain(sessionToken);
+    consoleSpy.mockRestore();
+  });
+
+  it("logs the reference it mints for a network error, and shows that same reference", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    globalThis.fetch = (async () => {
+      throw new TypeError("Failed to fetch");
+    }) as unknown as typeof fetch;
+
+    const failure = await streamAssistantChat({
+      conversationId: "convo-1",
+      message: "private draft text",
+      signal: new AbortController().signal,
+      onChunk: () => {},
+    }).catch((error: unknown) => error);
+    const shown = toAssistantFailure(failure);
+
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    expect(String(consoleSpy.mock.calls[0][0])).toContain(`ref: ${shown.ref}`);
+    expect(String(consoleSpy.mock.calls[0][1])).toContain("/gm-assistant/chat");
+    expect(JSON.stringify(consoleSpy.mock.calls)).not.toContain("private draft");
+    consoleSpy.mockRestore();
+  });
+
+  it("never passes server or gateway error text through to the error", async () => {
+    globalThis.fetch = (async () =>
+      jsonResponse(502, {
+        code: "UPSTREAM_ERROR",
+        message: "connect ECONNREFUSED 10.0.0.5:8080 secret-host",
+        ref: "ZZ9Q12",
+      })) as unknown as typeof fetch;
+
+    const failure = (await fetchAssistantModels("campaign-1").catch(
+      (error: unknown) => error
+    )) as AssistantRequestError;
+
+    expect(failure.message).toBe("The assistant request failed.");
+    expect(failure.message).not.toContain("ECONNREFUSED");
+    expect(failure.ref).toBe("ZZ9Q12");
   });
 });
 

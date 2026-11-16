@@ -12,10 +12,19 @@ import { decodeOutlineBytes } from "api-calls/assistant/outlineText";
  * subscription, so an Apply or Undo from any of the campaign's GMs moves
  * the text everywhere without a reload.
  */
+function asObject(caught: unknown): object {
+  return typeof caught === "object" && caught !== null
+    ? caught
+    : new Error("Outline failed.");
+}
+
 export function useOutlineDocument(campaignId: string) {
   const [outlineId, setOutlineId] = useState<string | null>(null);
   const [bytes, setBytes] = useState<Uint8Array | null | undefined>(undefined);
   const [failed, setFailed] = useState(false);
+  // The caught error, so the panel can show the reference already logged
+  // for it. Always an object, so that reference sticks to it.
+  const [error, setError] = useState<object | null>(null);
   const [reloads, setReloads] = useState(0);
 
   useEffect(() => {
@@ -23,14 +32,16 @@ export function useOutlineDocument(campaignId: string) {
     setOutlineId(null);
     setBytes(undefined);
     setFailed(false);
+    setError(null);
     getOrCreateCampaignOutline({ campaignId })
       .then((id) => {
         if (!cancelled) {
           setOutlineId(id);
         }
       })
-      .catch(() => {
+      .catch((caught: unknown) => {
         if (!cancelled) {
+          setError(asObject(caught));
           setFailed(true);
         }
       });
@@ -48,7 +59,10 @@ export function useOutlineDocument(campaignId: string) {
       undefined,
       outlineId,
       (content) => setBytes(content ?? null),
-      () => setFailed(true)
+      (caught: unknown) => {
+        setError(asObject(caught));
+        setFailed(true);
+      }
     );
   }, [campaignId, outlineId, reloads]);
 
@@ -58,6 +72,7 @@ export function useOutlineDocument(campaignId: string) {
     text: bytes ? decodeOutlineBytes(bytes) : "",
     loaded: outlineId !== null && bytes !== undefined,
     failed,
+    error,
     reload: () => setReloads((n) => n + 1),
   };
 }

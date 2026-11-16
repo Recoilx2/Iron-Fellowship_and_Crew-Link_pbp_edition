@@ -1,5 +1,9 @@
 import { AssistantRequestError } from "api-calls/assistant/gmAssistantClient";
-import { mintErrorReference } from "functions/errorReference";
+import {
+  loggedReferenceOf,
+  logFailureReference,
+  referenceForLogging,
+} from "functions/errorReference";
 
 export interface AssistantFailure {
   code: string;
@@ -8,34 +12,70 @@ export interface AssistantFailure {
 }
 
 /**
+ * The reference already logged for this error, else a new one that is
+ * logged now, so a reference shown to the GM can always be found.
+ */
+function loggedOrNew(error: unknown): string {
+  const known = loggedReferenceOf(error);
+  if (known) return known;
+  const ref = referenceForLogging(error);
+  logFailureReference(ref, error);
+  return ref;
+}
+
+const GENERIC_MESSAGE = "The assistant request failed.";
+
+/**
+ * Fixed client text per server code, covering every code the gm-assistant
+ * function sends. Server or gateway wording never reaches the screen.
+ */
+const MESSAGES_BY_CODE: Record<string, string> = {
+  NOT_SET_UP: "The assistant isn't set up on this server.",
+  FORBIDDEN: "Only a GM of this campaign can use the assistant.",
+  UNAUTHORIZED: "Sign in again and retry.",
+  INVALID_REQUEST: "The assistant couldn't handle that request.",
+  CONVERSATION_NOT_FOUND: "That conversation wasn't found.",
+  UPSTREAM_ERROR: GENERIC_MESSAGE,
+  PAYLOAD_TOO_LARGE: "That request was too large.",
+};
+
+function messageForCode(code: string): string {
+  return Object.prototype.hasOwnProperty.call(MESSAGES_BY_CODE, code)
+    ? MESSAGES_BY_CODE[code]
+    : GENERIC_MESSAGE;
+}
+
+/**
  * Turns anything thrown on an assistant path into what the GM may see (story
- * 38): a generic message plus a reference. An AssistantRequestError already
- * carries a generic message (the server's or a fixed one) and the server's
- * reference, so both are kept; the server's `ref` is never replaced by a
- * newly minted one. Any other failure (for example "Failed to fetch") gets
- * the generic message and a minted reference; its own text never reaches
- * the screen.
+ * 38): fixed client text plus a reference. The text comes from the error's
+ * code, never from the error's own message; an AssistantRequestError keeps
+ * the server's `ref`. Any other failure (for example "Failed to fetch")
+ * gets the generic message. The reference is the one already logged for
+ * the error when there is one (see `createApiFunction`), else a new one.
  */
 export function toAssistantFailure(error: unknown): AssistantFailure {
   if (error instanceof AssistantRequestError) {
     return {
       code: error.code,
-      message: error.message,
-      ref: error.ref ?? mintErrorReference(),
+      message: messageForCode(error.code),
+      ref: error.ref ?? loggedOrNew(error),
     };
   }
   return {
     code: "UPSTREAM_ERROR",
-    message: "The assistant request failed.",
-    ref: mintErrorReference(),
+    message: GENERIC_MESSAGE,
+    ref: loggedOrNew(error),
   };
 }
 
-/** The reference of a thrown error when the server gave one, else a new one. */
+/**
+ * The reference to show for a thrown error: the server's when it gave one,
+ * else the one already logged for it, else a new one.
+ */
 export function referenceFor(error: unknown): string {
   return error instanceof AssistantRequestError && error.ref
     ? error.ref
-    : mintErrorReference();
+    : loggedOrNew(error);
 }
 
 /** `message (ref: ABC123)`, the shape every assistant error is shown in. */
