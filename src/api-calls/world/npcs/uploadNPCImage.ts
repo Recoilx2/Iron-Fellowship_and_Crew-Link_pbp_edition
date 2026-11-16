@@ -4,6 +4,7 @@ import {
 } from "api-calls/world/worldImageStorage";
 import { updateNPC } from "./updateNPC";
 import { createApiFunction } from "api-calls/createApiFunction";
+import { logError } from "functions/errorReference";
 
 /**
  * Uploads an NPC image, shrinking it in the browser first. The new file
@@ -28,7 +29,7 @@ export const uploadNPCImage = createApiFunction<
   });
   if (oldImageFilename && oldImageFilename !== filename) {
     await removeWorldImageFile(worldId, npcId, oldImageFilename).catch((e) =>
-      console.error(e)
+      logError("uploadNPCImage", e)
     );
   }
 }, "Failed to upload image");

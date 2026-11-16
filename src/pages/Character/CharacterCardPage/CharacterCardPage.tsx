@@ -11,6 +11,7 @@ import { RollCard } from "./components/RollCard";
 import { useSearchParams } from "react-router-dom";
 import { useInitiativeStatusText } from "components/features/characters/InitiativeStatusChip/useInitiativeStatusText";
 import { InitiativeStatus } from "api-calls/character/_character.type";
+import { logError } from "functions/errorReference";
 
 export function CharacterCardPage() {
   const [params] = useSearchParams();
@@ -36,7 +37,7 @@ export function CharacterCardPage() {
           setIsRollVisible(true);
         },
         onError: (error) => {
-          console.error(error);
+          logError("CharacterCardPage", error);
         },
       });
     }

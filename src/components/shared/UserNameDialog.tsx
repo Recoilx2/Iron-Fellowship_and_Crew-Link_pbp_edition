@@ -15,6 +15,7 @@ import { useState } from "react";
 import { useStore } from "stores/store";
 import { UserAvatar } from "./UserAvatar";
 import { DialogTitleWithCloseButton } from "./DialogTitleWithCloseButton";
+import { logError } from "functions/errorReference";
 
 export interface UserNameDialogProps {
   open: boolean;
@@ -41,7 +42,7 @@ export function UserNameDialog(props: UserNameDialogProps) {
           handleClose();
         })
         .catch((e) => {
-          console.error(e);
+          logError("UserNameDialog", e);
           error("Failed to update name");
           handleClose();
         })

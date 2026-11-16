@@ -1,5 +1,9 @@
 import { createErrorSnackbar } from "providers/SnackbarProvider/useSnackbar";
-import { logFailureReference, referenceForLogging } from "functions/errorReference";
+import {
+  logFailureReference,
+  referenceForLogging,
+  summariseErrorValue,
+} from "functions/errorReference";
 
 export type ApiFunction<Params, ReturnType> = (
   params: Params
@@ -19,7 +23,7 @@ export function createApiFunction<Params, Result>(
           // The code is remembered against the error so a panel showing the
           // same failure reports the logged one, not a new one.
           const referenceCode = referenceForLogging(e);
-          logFailureReference(referenceCode, e);
+          logFailureReference(referenceCode, summariseErrorValue(e));
           try {
             createErrorSnackbar(
               `${friendlyErrorMessage} (ref: ${referenceCode})`

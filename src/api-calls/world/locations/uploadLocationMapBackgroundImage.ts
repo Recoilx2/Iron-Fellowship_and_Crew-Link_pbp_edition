@@ -4,6 +4,7 @@ import {
 } from "api-calls/world/worldImageStorage";
 import { updateLocation } from "./updateLocation";
 import { createApiFunction } from "api-calls/createApiFunction";
+import { logError } from "functions/errorReference";
 
 /**
  * Uploads a location's map background image, shrinking it in the browser
@@ -27,7 +28,7 @@ export const uploadLocationMapBackgroundImage = createApiFunction<
   });
   if (oldImageFilename && oldImageFilename !== filename) {
     await removeWorldImageFile(worldId, locationId, oldImageFilename).catch(
-      (e) => console.error(e)
+      (e) => logError("uploadLocationMapBackgroundImage", e)
     );
   }
 }, "Failed to upload image");

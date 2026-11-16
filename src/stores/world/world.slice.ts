@@ -9,6 +9,7 @@ import { deleteWorld } from "api-calls/world/deleteWorld";
 import { updateWorldGuide } from "api-calls/world/updateWorldGuide";
 import { getSystem } from "hooks/useGameSystem";
 import { GAME_SYSTEMS } from "types/GameSystems.type";
+import { logError } from "functions/errorReference";
 
 export const createWorldSlice: CreateSliceType<WorldSlice> = (...params) => {
   const [set] = params;
@@ -46,7 +47,7 @@ export const createWorldSlice: CreateSliceType<WorldSlice> = (...params) => {
           },
         },
         (error) => {
-          console.error(error);
+          logError("world.slice", error);
           set((store) => {
             store.worlds.error = "Failed to load worlds.";
           });
@@ -77,7 +78,7 @@ export const createWorldSlice: CreateSliceType<WorldSlice> = (...params) => {
             });
           },
           (error) => {
-            console.error(error);
+            logError("world.slice", error);
           }
         )
       );

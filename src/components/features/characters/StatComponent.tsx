@@ -11,6 +11,7 @@ import { useIsMobile } from "hooks/useIsMobile";
 import { useRoller } from "stores/appState/useRoller";
 import { ScreenReaderOnly } from "components/shared/ScreenReaderOnly";
 import { formatSignedValue } from "functions/trackValueText";
+import { logError } from "functions/errorReference";
 
 export interface StatComponentProps {
   label: string;
@@ -51,7 +52,7 @@ export function StatComponent(props: StatComponentProps) {
     const intVal = !stringVal ? 0 : parseInt(stringVal);
     if (updateTrack && !isNaN(intVal)) {
       updateTrack(intVal).catch((e) => {
-        console.error(e);
+        logError("StatComponent", e);
       });
     }
   };

@@ -8,6 +8,7 @@ import {
   getHocuspocusToken,
   getHocuspocusUrl,
 } from "config/hocuspocus.config";
+import { logError } from "functions/errorReference";
 
 export interface RtcRichTextEditorProps {
   id: string;
@@ -71,7 +72,7 @@ export function RtcRichTextEditor(props: RtcRichTextEditorProps) {
         setSaving(true);
         onSave(idToPass, notes, isBeaconRequest, title)
           .catch((e) => {
-            console.error(e);
+            logError("RtcRichTextEditor", e);
           })
           .finally(() => {
             setSaving(false);
@@ -106,9 +107,7 @@ export function RtcRichTextEditor(props: RtcRichTextEditorProps) {
       onSynced: () => setSynced(true),
       onUnsyncedChanges: () => setSynced(false),
       onAuthenticationFailed: ({ reason }) => {
-        console.error(
-          `Note ${documentName} is not available live: ${reason ?? "not authorized"}`
-        );
+        logError(`Note ${documentName} is not available live: ${reason ?? "not authorized"}`);
       },
     });
 

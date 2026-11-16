@@ -10,12 +10,10 @@ describe("createApiFunction without a SnackbarProvider", () => {
     const failure = new Error("denied");
     const wrapped = createApiFunction<undefined, never>(
       () => Promise.reject(failure),
-      "Something went wrong",
+      "Something went wrong"
     );
 
-    const consoleSpy = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       await expect(wrapped(undefined)).rejects.toBe(failure);
     } finally {
@@ -26,7 +24,7 @@ describe("createApiFunction without a SnackbarProvider", () => {
   it("resolves with the wrapped value when the wrapped call succeeds", async () => {
     const wrapped = createApiFunction<undefined, number>(
       () => Promise.resolve(42),
-      "Something went wrong",
+      "Something went wrong"
     );
 
     await expect(wrapped(undefined)).resolves.toBe(42);
@@ -35,11 +33,9 @@ describe("createApiFunction without a SnackbarProvider", () => {
   it("keeps non-object rejections working", async () => {
     const wrapped = createApiFunction<undefined, never>(
       () => Promise.reject("plain string"),
-      "Something went wrong",
+      "Something went wrong"
     );
-    const consoleSpy = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       await expect(wrapped(undefined)).rejects.toBe("plain string");
     } finally {
@@ -49,36 +45,34 @@ describe("createApiFunction without a SnackbarProvider", () => {
 });
 
 describe("createApiFunction failure log", () => {
+  // The logged second argument is the error summary object.
   async function rejectAndCapture(failure: unknown) {
-    const consoleSpy = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       const wrapped = createApiFunction<undefined, never>(
         () => Promise.reject(failure),
-        "Something went wrong",
+        "Something went wrong"
       );
       await expect(wrapped(undefined)).rejects.toBe(failure);
-      return JSON.stringify(consoleSpy.mock.calls);
+      return consoleSpy.mock.calls[0];
     } finally {
       consoleSpy.mockRestore();
     }
   }
 
   it("logs a PostgrestError-like failure without its row details", async () => {
-    const logged = await rejectAndCapture({
-      name: "PostgrestError",
+    // The real postgrest-js `{data, error}` error has no `name`.
+    const [message, summary] = await rejectAndCapture({
       code: "23514",
       message: 'new row violates check constraint "chat_posts_text_or_images"',
       details: "Failing row contains (secret post text)",
       hint: "secret hint",
     });
-    expect(logged).not.toContain("secret post text");
-    expect(logged).not.toContain("secret hint");
-    expect(logged).toContain("API call failed (ref: ");
-    expect(logged).toContain("PostgrestError");
-    expect(logged).toContain("23514");
-    expect(logged).toContain("chat_posts_text_or_images");
+    expect(message).toMatch(/^API call failed \(ref: /);
+    expect(summary).toEqual({
+      code: "23514",
+      message: 'new row violates check constraint "chat_posts_text_or_images"',
+    });
   });
 
   it("does not log an Error's cause or stack", async () => {
@@ -86,9 +80,23 @@ describe("createApiFunction failure log", () => {
       cause: new Error("secret cause text"),
     });
     failure.stack = "Error: outer failure\n at secret stack frame";
-    const logged = await rejectAndCapture(failure);
-    expect(logged).not.toContain("secret cause text");
-    expect(logged).not.toContain("secret stack frame");
-    expect(logged).toContain("outer failure");
+    const [, summary] = await rejectAndCapture(failure);
+    expect(summary).toEqual({ name: "Error", message: "outer failure" });
+  });
+
+  it("summarises an error-shaped object with no code", async () => {
+    const [, summary] = await rejectAndCapture({
+      message: "not json",
+      extra: "secret body",
+    });
+    expect(summary).toEqual({ message: "not json" });
+  });
+
+  it("pins the cap to the exact capped string", async () => {
+    const [, summary] = await rejectAndCapture(new Error("x".repeat(2000)));
+    expect(summary).toEqual({
+      name: "Error",
+      message: "x".repeat(500) + "...",
+    });
   });
 });

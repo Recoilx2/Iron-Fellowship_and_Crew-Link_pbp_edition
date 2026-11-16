@@ -1,5 +1,6 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { Profile } from "./_profile.type";
+import { logError } from "functions/errorReference";
 
 interface ProfileRow {
   id: string;
@@ -27,7 +28,7 @@ export async function getProfile(params: {
         return null;
       }
     }
-    console.error(error);
+    logError("getProfile", error);
     throw "Failed to load display name.";
   }
   const row = data as unknown as ProfileRow;

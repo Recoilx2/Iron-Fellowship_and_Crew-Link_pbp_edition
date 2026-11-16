@@ -4,6 +4,7 @@ import {
 } from "api-calls/world/worldImageStorage";
 import { updateLore } from "./updateLore";
 import { createApiFunction } from "api-calls/createApiFunction";
+import { logError } from "functions/errorReference";
 
 /**
  * Uploads a lore image, shrinking it in the browser first. The new file
@@ -28,7 +29,7 @@ export const uploadLoreImage = createApiFunction<
   });
   if (oldImageFilename && oldImageFilename !== filename) {
     await removeWorldImageFile(worldId, loreId, oldImageFilename).catch(
-      (e) => console.error(e)
+      (e) => logError("uploadLoreImage", e)
     );
   }
 }, "Failed to upload image");

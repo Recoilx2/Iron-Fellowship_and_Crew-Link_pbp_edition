@@ -4,6 +4,7 @@ import Link from "@tiptap/extension-link";
 import { Markdown } from "tiptap-markdown";
 import { yDocToProsemirrorJSON } from "y-prosemirror";
 import * as Y from "yjs";
+import { logError } from "functions/errorReference";
 
 const FRAGMENT_FIELD = "default";
 
@@ -25,7 +26,7 @@ export function yjsUpdateToMarkdown(update: Uint8Array | undefined | null): stri
   try {
     Y.applyUpdate(yDoc, update);
   } catch (err) {
-    console.error("yjsUpdateToMarkdown: failed to apply Y.Doc update", err);
+    logError("yjsUpdateToMarkdown: failed to apply Y.Doc update", err);
     return "";
   }
 
@@ -33,7 +34,7 @@ export function yjsUpdateToMarkdown(update: Uint8Array | undefined | null): stri
   try {
     pmJson = yDocToProsemirrorJSON(yDoc, FRAGMENT_FIELD);
   } catch (err) {
-    console.error("yjsUpdateToMarkdown: failed to convert Y.Doc to PM JSON", err);
+    logError("yjsUpdateToMarkdown: failed to convert Y.Doc to PM JSON", err);
     yDoc.destroy();
     return "";
   }

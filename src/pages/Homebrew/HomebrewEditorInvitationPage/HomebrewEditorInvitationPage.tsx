@@ -11,6 +11,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useListenToHomebrewContent } from "stores/homebrew/useListenToHomebrewContent";
 import { useStore } from "stores/store";
 import { constructHomebrewEditorPath } from "../routes";
+import { logError } from "functions/errorReference";
 
 export function HomebrewEditorInvitationPage() {
   const { editorInviteKey } = useParams<{ editorInviteKey: string }>();
@@ -22,7 +23,7 @@ export function HomebrewEditorInvitationPage() {
         .then((parsedHomebrewId) => {
           setHomebrewId(parsedHomebrewId ?? undefined);
         })
-        .catch((e) => console.error(e));
+        .catch((e) => logError("HomebrewEditorInvitationPage", e));
     } else {
       setHomebrewId(undefined);
     }

@@ -1,5 +1,6 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { Profile } from "./_profile.type";
+import { logError } from "functions/errorReference";
 
 /**
  * Writes the person's own display name row. The access rules reject anyone
@@ -17,7 +18,7 @@ export async function upsertProfile(params: {
     );
 
   if (error) {
-    console.error(error);
+    logError("upsertProfile", error);
     throw "Failed to save display name.";
   }
   const row = data as unknown as {

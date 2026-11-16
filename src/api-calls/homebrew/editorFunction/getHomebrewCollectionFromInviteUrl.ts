@@ -2,6 +2,7 @@ import {
   ClientOption,
   resolveClient,
 } from "api-calls/homebrew/_supabase";
+import { logError } from "functions/errorReference";
 
 /**
  * Looks up the collection behind an editor invite key. Anyone signed in can
@@ -18,7 +19,7 @@ export function getHomebrewCollectionFromInviteUrl(
       { p_key: inviteKey }
     );
     if (error) {
-      console.error(error);
+      logError("getHomebrewCollectionFromInviteUrl", error);
       throw error;
     }
     return (data as string | null) ?? null;
