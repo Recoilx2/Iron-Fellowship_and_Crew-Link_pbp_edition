@@ -251,7 +251,10 @@ export class OutlineVersionGoneError extends Error {
  * through the note server, then drops that version row. Undo is by id, so
  * an older reply's Undo restores what its own Apply replaced and never
  * reverts a later Apply by a co-GM. Throws OutlineVersionGoneError, without
- * changing anything, when the version was already undone or pruned. When
+ * changing anything, when the version was already gone before the restore.
+ * If the version row is gone only by the time it is deleted (a concurrent
+ * Undo of the same version), the outline already holds the restored text and
+ * the other Undo removed the row, so this Undo counts as done. When
  * someone else changed the outline during the restore it throws and keeps
  * the version.
  */
@@ -299,14 +302,16 @@ export const undoOutlineRevision = createApiFunction<
     session.close();
   }
 
-  const { data: deleted, error: deleteError } = await client
+  const { error: deleteError } = await client
     .from(ASSISTANT_OUTLINE_VERSIONS_TABLE)
     .delete()
     .eq("id", version.id)
     .eq("campaign_id", campaignId)
     .select("id");
-  if (deleteError || !deleted || deleted.length === 0) {
-    throw deleteError ?? new OutlineVersionGoneError();
+  if (deleteError) {
+    throw deleteError;
   }
+  // No row deleted: a concurrent Undo of this version removed it after we
+  // restored the same text, so the outcome is the same as success.
   return version.content;
 }, "Failed to undo the outline revision.");

@@ -58,10 +58,12 @@ export function OutlineRevision(props: {
   const [undoing, setUndoing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const remember = async (next: ProposalOutcome): Promise<void> => {
+  /** Resolves true when the outcome was saved (or there is nothing to save). */
+  const remember = async (next: ProposalOutcome): Promise<boolean> => {
     setOutcome(next);
     try {
       await onProposalChange?.(next);
+      return true;
     } catch (error) {
       setError(
         withReference(
@@ -69,6 +71,7 @@ export function OutlineRevision(props: {
           referenceFor(error)
         )
       );
+      return false;
     }
   };
 
@@ -131,7 +134,13 @@ export function OutlineRevision(props: {
   };
 
   const discard = async (): Promise<void> => {
-    await remember({ state: "dismissed", appliedVersionId: null });
+    setError(null);
+    const saved = await remember({ state: "dismissed", appliedVersionId: null });
+    if (!saved) {
+      // Keep the proposal visible with the error; it isn't dismissed yet.
+      setOutcome(outcome);
+      return;
+    }
     onDiscard();
   };
 

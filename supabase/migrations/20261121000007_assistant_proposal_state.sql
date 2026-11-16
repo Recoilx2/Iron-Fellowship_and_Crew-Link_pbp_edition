@@ -6,7 +6,11 @@
 -- outline version instead of the one the reply's Apply kept.
 --
 -- The outcome is recorded on the assistant message that carried the proposal:
---   proposal_state      NULL (no outcome yet, or undone), 'applied' or 'dismissed'
+--   proposal_state      NULL (no outcome yet, or undone from the reply),
+--                       'applied' or 'dismissed'. An Undo from the Outline tab,
+--                       a co-GM's Undo or a prune leaves 'applied' with a NULL
+--                       applied_version_id (the reply then offers neither
+--                       Apply nor Undo).
 --   applied_version_id  the outline version that reply's Apply kept, for Undo
 --
 -- applied_version_id references the kept version and is cleared by the

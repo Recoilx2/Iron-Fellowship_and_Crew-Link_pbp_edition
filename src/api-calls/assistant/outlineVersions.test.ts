@@ -443,6 +443,24 @@ describe("outline versions", () => {
     expect(state.deleted).toEqual([{ column: "id", value: "version-1" }]);
   });
 
+  it("undo whose row delete misses after the restore counts as done", async () => {
+    // A concurrent Undo of the same version removed the row first.
+    state.versionRows = [
+      versionRow("version-1", "First plan.", "2026-11-14T00:01:00Z"),
+    ];
+    state.deleteResult = [];
+    seedServer("campaign-notes/outline-1", "Third plan, live.");
+
+    const restored = await undoOutlineRevision({
+      campaignId: "campaign-1",
+      outlineId: "outline-1",
+      versionId: "version-1",
+    });
+
+    expect(restored).toBe("First plan.");
+    expect(serverText("campaign-notes/outline-1")).toBe("First plan.");
+  });
+
   it("undo of a version already pruned or undone changes nothing", async () => {
     state.versionRows = [
       versionRow("version-2", "Second plan.", "2026-11-14T00:02:00Z"),

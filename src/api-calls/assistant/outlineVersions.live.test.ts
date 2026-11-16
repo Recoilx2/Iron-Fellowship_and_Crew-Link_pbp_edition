@@ -470,4 +470,46 @@ describe.skipIf(!config)("assistant outline versions end to end (#133)", () => {
       await signOut();
     }
   );
+
+  // Ticket #148: the FK's ON DELETE SET NULL is a referential action, so it
+  // crosses RLS: a co-GM's Undo clears the owning GM's reply.
+  it(
+    "clears the owning GM's reply when a co-GM undoes the version",
+    { timeout: 180000 },
+    async () => {
+      const { gm, coGm, campaignId, outlineId } = await setUpCampaign();
+      await signInAs(gm);
+      const conversationId = await createConversation({ campaignId });
+      const messageId = await addAssistantMessage({
+        conversationId,
+        role: "assistant",
+        content: "Here is a plan.",
+      });
+      const versionId = (await applyOutlineRevision({
+        campaignId,
+        outlineId,
+        proposedText: "Plan B.",
+      })) as string;
+      await saveProposalState({
+        messageId,
+        state: "applied",
+        appliedVersionId: versionId,
+      });
+      await signOut();
+
+      await signInAs(coGm);
+      await undoOutlineRevision({ campaignId, outlineId, versionId });
+      await signOut();
+
+      const { data, error } = await gm.client
+        .from(ASSISTANT_MESSAGES_TABLE)
+        .select("proposal_state,applied_version_id")
+        .eq("id", messageId);
+      expect(error).toBeNull();
+      expect(data?.[0]).toEqual({
+        proposal_state: "applied",
+        applied_version_id: null,
+      });
+    }
+  );
 });

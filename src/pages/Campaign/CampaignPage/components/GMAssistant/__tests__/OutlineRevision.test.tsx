@@ -305,6 +305,22 @@ describe("OutlineRevision", () => {
     expect(onDiscard).toHaveBeenCalled();
   });
 
+  it("a discard that could not be remembered keeps the proposal and shows a reference", async () => {
+    const onProposalChange = vi.fn().mockRejectedValue(new Error("rls"));
+    const onDiscard = vi.fn();
+    const view = render({ onProposalChange, onDiscard });
+
+    click(view, "Discard");
+    await settle();
+
+    expect(onDiscard).not.toHaveBeenCalled();
+    expect(view.textContent).toContain("couldn't remember");
+    expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
+    expect(view.textContent).not.toContain("rls");
+    expect(labels(view)).toContain("Apply to outline");
+    expect(labels(view)).toContain("Discard");
+  });
+
   it("an apply that could not be remembered still shows applied, with a reference", async () => {
     vi.mocked(applyOutlineRevision).mockResolvedValue("version-1");
     const onProposalChange = vi.fn().mockRejectedValue(new Error("rls"));
