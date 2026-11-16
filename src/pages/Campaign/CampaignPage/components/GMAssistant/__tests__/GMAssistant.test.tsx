@@ -196,6 +196,7 @@ describe("GMAssistant model picker", () => {
       text: "Act one: the bell rings.",
       loaded: true,
       failed: false,
+      error: null,
       reload: () => {},
     });
     mockViewport(1400);
@@ -386,6 +387,7 @@ describe("GMAssistant gating", () => {
       text: "Act one: the bell rings.",
       loaded: true,
       failed: false,
+      error: null,
       reload: () => {},
     });
     mockViewport(1400);
@@ -563,6 +565,7 @@ describe("GMAssistant chat thread", () => {
       text: "Act one: the bell rings.",
       loaded: true,
       failed: false,
+      error: null,
       reload: () => {},
     });
     mockViewport(1400);
@@ -833,6 +836,7 @@ describe("GMAssistant streaming", () => {
       text: "Act one: the bell rings.",
       loaded: true,
       failed: false,
+      error: null,
       reload: () => {},
     });
     mockViewport(1400);
@@ -1136,6 +1140,7 @@ describe("GMAssistant outline revisions", () => {
       text: "Act one: the bell rings.",
       loaded: true,
       failed: false,
+      error: null,
       reload: () => {},
     });
     mockViewport(1400);

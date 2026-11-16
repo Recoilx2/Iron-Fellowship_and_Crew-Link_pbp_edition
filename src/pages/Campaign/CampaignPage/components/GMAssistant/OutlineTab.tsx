@@ -48,17 +48,15 @@ import { OutlineRevision } from "./OutlineRevision";
  */
 export function OutlineTab(props: { campaignId: string }) {
   const { campaignId } = props;
-  const { outlineId, bytes, text, loaded, failed, reload } =
+  const { outlineId, bytes, text, loaded, failed, error, reload } =
     useOutlineDocument(campaignId);
-  // One reference per failed open, stable across re-renders until a retry.
+  // One reference per failed open: the one already logged for the error
+  // (createApiFunction's for the wrapped open call), else one logged now
+  // for an unwrapped listener error. Stable until a retry.
   const failedRef = useMemo(
-    () => (failed ? mintErrorReference() : null),
-    [failed]
+    () => (failed && error ? referenceFor(error) : null),
+    [failed, error]
   );
-  // The reference shown is also logged, once per failed open.
-  useEffect(() => {
-    if (failedRef) logFailureReference(failedRef, "outline failed to open");
-  }, [failedRef]);
   // The newest kept version: the Outline tab's Undo restores exactly this one.
   const [newestVersionId, setNewestVersionId] = useState<string | null>(null);
   const [undoing, setUndoing] = useState(false);

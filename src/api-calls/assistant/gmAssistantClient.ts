@@ -119,7 +119,11 @@ const MODELS_PATH = "/gm-assistant/models";
 const CONTEXT_SIZE_PATH = "/gm-assistant/context-size";
 const CHAT_PATH = "/gm-assistant/chat";
 
-/** A network-level failure: a minted reference, logged once with the path. */
+/**
+ * A network-level failure: a minted reference, logged once with the path.
+ * This already logs, so wrapping its callers in `createApiFunction` would
+ * log the same reference twice.
+ */
 function networkFailure(path: string): AssistantRequestError {
   const ref = mintErrorReference();
   logFailureReference(ref, `${path} network failure (status 0)`);
@@ -157,6 +161,8 @@ interface ErrorBody {
   ref?: unknown;
 }
 
+// Logs the reference it mints itself (see `networkFailure`): do not wrap
+// its callers in `createApiFunction`, or the same reference is logged twice.
 async function throwForStatus(
   response: Response,
   path: string,

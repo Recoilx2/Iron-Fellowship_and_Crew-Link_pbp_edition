@@ -117,6 +117,7 @@ describe("toAssistantFailure", () => {
       "Failed to do it."
     );
     await expect(wrapped(undefined)).rejects.toBe(error);
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
     for (const call of consoleSpy.mock.calls) {
       expect(String(call[0])).toContain("CLI123");
     }
