@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ThemeProvider, createTheme } from "@mui/material";
 
@@ -77,11 +77,22 @@ vi.mock("hooks/useCampaignType", () => ({
 }));
 vi.mock("components/shared/UserAvatar", () => ({ UserAvatar: () => null }));
 vi.mock("../GMAssistantPanel", () => ({
-  GMAssistantPanel: (props: { onClose: () => void }) => (
-    <div data-testid={"panel"}>
-      <button aria-label={"Close assistant"} onClick={props.onClose} />
-    </div>
-  ),
+  // Local state like the real panel's, to prove it survives moves.
+  GMAssistantPanel: function MockPanel(props: { onClose: () => void }) {
+    const [tab, setTab] = useState("chat");
+    const [input, setInput] = useState("");
+    return (
+      <div data-testid={"panel"} data-tab={tab}>
+        <button aria-label={"Close assistant"} onClick={props.onClose} />
+        <button aria-label={"Show context"} onClick={() => setTab("context")} />
+        <input
+          aria-label={"Prompt"}
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+        />
+      </div>
+    );
+  },
 }));
 
 import { ChatTab } from "../../Tabs/ChatTab";
@@ -151,6 +162,30 @@ describe("GM assistant docking", () => {
     return container;
   }
 
+  function renderToggleable() {
+    function Harness() {
+      const [chatOn, setChatOn] = useState(true);
+      return (
+        <GMAssistantDockProvider>
+          <GMAssistant />
+          <button data-testid={"toggle-chat"} onClick={() => setChatOn(!chatOn)} />
+          {chatOn && <ChatTab openInviteDialog={() => {}} />}
+        </GMAssistantDockProvider>
+      );
+    }
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <ThemeProvider theme={theme}>
+          <Harness />
+        </ThemeProvider>
+      );
+    });
+    return container;
+  }
+
   const trigger = (view: HTMLElement) =>
     Array.from(view.querySelectorAll("button")).find(
       (button) => button.textContent === "Assistant"
@@ -202,5 +237,62 @@ describe("GM assistant docking", () => {
     const dialog = document.querySelector('[role="dialog"]');
     expect(dialog?.querySelector('[data-testid="panel"]')).not.toBeNull();
     expect(document.querySelector(".MuiDialog-paperFullScreen")).not.toBeNull();
+  });
+
+  it("keeps the panel's state when the Chat tab goes away and comes back", () => {
+    mockViewport(1400);
+    const view = renderToggleable();
+    click(trigger(view));
+    const input = () =>
+      view.querySelector('input[aria-label="Prompt"]') as HTMLInputElement;
+    const panel = () => view.querySelector('[data-testid="panel"]');
+
+    // React tracks the value through the native setter.
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value"
+    )?.set;
+    act(() => {
+      setter?.call(input(), "What happens next?");
+      input().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    click(view.querySelector('button[aria-label="Show context"]') as Element);
+    expect(panel()?.getAttribute("data-tab")).toBe("context");
+    const before = panel();
+
+    // Chat tab off (another campaign tab): the drawer fallback hosts it.
+    click(view.querySelector('[data-testid="toggle-chat"]') as Element);
+    expect(view.querySelector('[data-testid="assistant-dock"]')).toBeNull();
+    expect(panel()).toBe(before);
+    expect(input().value).toBe("What happens next?");
+    expect(panel()?.getAttribute("data-tab")).toBe("context");
+
+    // Chat tab back: docked again, same nodes, focus not stolen.
+    const outside = document.createElement("button");
+    document.body.appendChild(outside);
+    outside.focus();
+    click(view.querySelector('[data-testid="toggle-chat"]') as Element);
+    const dock = view.querySelector('[data-testid="assistant-dock"]');
+    expect(dock?.querySelector('[data-testid="panel"]')).toBe(before);
+    expect(input().value).toBe("What happens next?");
+    expect(panel()?.getAttribute("data-tab")).toBe("context");
+    expect(document.activeElement).toBe(outside);
+    outside.remove();
+  });
+
+  it("keeps the side pane's selected tab across the assistant opening and closing", () => {
+    mockViewport(1400);
+    const view = render();
+    const tracks = () =>
+      Array.from(view.querySelectorAll('[role="tab"]')).find(
+        (tab) => tab.textContent === "Tracks"
+      ) as HTMLElement;
+    click(tracks());
+    expect(tracks().getAttribute("aria-selected")).toBe("true");
+
+    click(trigger(view));
+    click(view.querySelector('button[aria-label="Close assistant"]') as Element);
+
+    expect(tracks().getAttribute("aria-selected")).toBe("true");
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Box,
@@ -95,9 +95,13 @@ export function GMAssistant() {
 }
 
 /**
- * The desktop panel: portalled into the Chat side pane's slot when there
- * is one, otherwise a floating drawer. Focus moves into the panel when it
- * opens.
+ * The desktop panel. The panel's React element lives at one stable
+ * position, portalled into a host node that this component owns; only the
+ * host node moves, into the Chat side pane's slot when there is one and
+ * otherwise into a floating drawer. Moving the node keeps the panel's
+ * state (tab, conversation, typed prompt, streamed reply) across campaign
+ * tab switches, which unmount and remount the Chat pane. Focus moves into
+ * the panel only when it first opens.
  */
 function DesktopPanel(props: {
   campaignId: string;
@@ -106,42 +110,53 @@ function DesktopPanel(props: {
   waitForSlot: boolean;
 }) {
   const { campaignId, onClose, slot, waitForSlot } = props;
+  const [host] = useState(() => document.createElement("div"));
+  const [drawerEl, setDrawerEl] = useState<HTMLElement | null>(null);
   const regionRef = useRef<HTMLDivElement>(null);
-  const placed = slot !== null || !waitForSlot;
-  useEffect(() => {
-    if (placed) {
-      regionRef.current?.focus();
+  const focused = useRef(false);
+  // While the Chat pane is on screen but its slot has not mounted yet, the
+  // host waits unattached instead of flashing the drawer.
+  const target = slot ?? (waitForSlot ? null : drawerEl);
+
+  useLayoutEffect(() => {
+    host.style.height = "100%";
+    if (target) {
+      target.appendChild(host);
+      if (!focused.current) {
+        focused.current = true;
+        regionRef.current?.focus();
+      }
+    } else {
+      host.remove();
     }
-  }, [placed]);
+  }, [host, target]);
 
-  // The Chat pane is on screen but its slot has not mounted yet.
-  if (!placed) {
-    return null;
-  }
+  useLayoutEffect(() => () => host.remove(), [host]);
 
-  const region = (
-    <Box
-      ref={regionRef}
-      role={"complementary"}
-      aria-label={"GM assistant"}
-      tabIndex={-1}
-      sx={{ height: "100%", outline: "none" }}
-    >
-      <GMAssistantPanel campaignId={campaignId} onClose={onClose} />
-    </Box>
-  );
-
-  if (slot) {
-    return createPortal(region, slot);
-  }
   return (
-    <Drawer
-      anchor={"right"}
-      variant={"persistent"}
-      open
-      PaperProps={{ sx: { width: 400, maxWidth: "90vw" } }}
-    >
-      {region}
-    </Drawer>
+    <>
+      {createPortal(
+        <Box
+          ref={regionRef}
+          role={"complementary"}
+          aria-label={"GM assistant"}
+          tabIndex={-1}
+          sx={{ height: "100%", outline: "none" }}
+        >
+          <GMAssistantPanel campaignId={campaignId} onClose={onClose} />
+        </Box>,
+        host
+      )}
+      {!slot && !waitForSlot && (
+        <Drawer
+          anchor={"right"}
+          variant={"persistent"}
+          open
+          PaperProps={{ sx: { width: 400, maxWidth: "90vw" } }}
+        >
+          <Box ref={setDrawerEl} sx={{ height: "100%" }} />
+        </Drawer>
+      )}
+    </>
   );
 }

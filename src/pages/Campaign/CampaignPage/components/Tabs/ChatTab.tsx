@@ -146,6 +146,8 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
 
   const [showArchived, setShowArchived] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
+  // Kept here, not in the pane, so it survives the assistant docking over it.
+  const [sideTab, setSideTab] = useState("Character");
   const [phoneScreen, setPhoneScreen] = useState<PhoneScreen>("Chat");
   const [createKind, setCreateKind] = useState<ChannelKind | undefined>(
     undefined
@@ -349,7 +351,11 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
             overflowY: "auto",
           }}
         >
-          <CampaignScreens openInviteDialog={openInviteDialog} />
+          <CampaignScreens
+            openInviteDialog={openInviteDialog}
+            tab={sideTab}
+            setTab={setSideTab}
+          />
         </Box>
       )}
       <Drawer open={peopleOpen} onClose={() => setPeopleOpen(false)}>
@@ -891,8 +897,12 @@ function RenameChannelDialog(props: {
   );
 }
 
-function CampaignScreens(props: { openInviteDialog: () => void }) {
-  const [tab, setTab] = useState("Character");
+function CampaignScreens(props: {
+  openInviteDialog: () => void;
+  tab: string;
+  setTab: (tab: string) => void;
+}) {
+  const { tab, setTab } = props;
   return (
     <>
       <StyledTabs

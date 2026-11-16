@@ -56,6 +56,23 @@ function resolveEnvFile(value: string): string {
   return resolve(dirname(__dirname), "supabase", basename(value));
 }
 
+/** Waits until two consecutive bounding-box reads are identical. */
+async function settled(locator: Locator): Promise<void> {
+  let previous = "";
+  await expect
+    .poll(
+      async () => {
+        const box = await locator.boundingBox();
+        const current = JSON.stringify(box);
+        const equal = box !== null && current === previous;
+        previous = current;
+        return equal;
+      },
+      { timeout: 5000, intervals: [100, 100, 250, 250, 500] }
+    )
+    .toBe(true);
+}
+
 async function boxOf(
   locator: Locator
 ): Promise<{ x: number; y: number; width: number; height: number }> {
@@ -209,11 +226,14 @@ test.describe("gm assistant panel", () => {
       await expect(gmPage.getByRole("tab", { name: "Chat" })).toBeVisible();
 
       const sidePane = gmPage.getByTestId("chat-side-pane");
-      const feedPane = gmPage.getByRole("textbox", { name: /Post in #/ });
+      // The post list itself, not the composer under it.
+      const feedPane = gmPage.getByLabel(/^Posts in #/);
       await expect(sidePane).toBeVisible();
       await expect(feedPane).toBeVisible();
+      await settled(sidePane);
+      await settled(feedPane);
       const sideBefore = await boxOf(sidePane);
-      const composerBefore = await boxOf(feedPane);
+      const feedBefore = await boxOf(feedPane);
 
       const trigger = gmPage.getByRole("button", {
         name: "Assistant",
@@ -234,23 +254,25 @@ test.describe("gm assistant panel", () => {
         gmPage.getByRole("combobox", { name: "Model" })
       ).toBeVisible();
 
-      // Layout settles once the panel and the feed have stopped moving.
-      await expect
-        .poll(async () => (await boxOf(dock)).width, { timeout: 5000 })
-        .toBeGreaterThan(0);
+      // Layout settles once the dock and the feed report the same box on
+      // two consecutive reads.
+      await settled(dock);
+      await settled(feedPane);
       const dockBox = await boxOf(dock);
-      const composerAfter = await boxOf(feedPane);
+      const feedAfter = await boxOf(feedPane);
 
       // Same slot as the side pane it replaced.
       expect(Math.abs(dockBox.x - sideBefore.x)).toBeLessThanOrEqual(1);
       expect(Math.abs(dockBox.width - sideBefore.width)).toBeLessThanOrEqual(1);
       // The chat feed's column ends where the panel begins: no overlap.
-      expect(composerAfter.x + composerAfter.width).toBeLessThanOrEqual(
+      expect(feedAfter.x + feedAfter.width).toBeLessThanOrEqual(
         dockBox.x + 1
       );
-      expect(composerAfter.x).toBeGreaterThanOrEqual(composerBefore.x - 1);
+      expect(feedAfter.x).toBeGreaterThanOrEqual(feedBefore.x - 1);
       // Nothing floats over the page.
-      await expect(gmPage.locator(".MuiDrawer-paper")).toHaveCount(0);
+      await expect(
+        panel.locator("xpath=ancestor::*[contains(@class,'MuiDrawer-')]")
+      ).toHaveCount(0);
 
       // Closing brings the side pane back and focus returns to the button.
       await gmPage.getByRole("button", { name: "Close assistant" }).click();
