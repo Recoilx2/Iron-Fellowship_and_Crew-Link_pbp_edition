@@ -132,7 +132,6 @@ async function authHeaders(init?: RequestInit): Promise<Headers> {
 
 interface ErrorBody {
   code?: unknown;
-  message?: unknown;
   ref?: unknown;
 }
 
@@ -141,15 +140,11 @@ async function throwForStatus(
   fallbackMessage: string
 ): Promise<never> {
   let code = "UPSTREAM_ERROR";
-  let message = fallbackMessage;
   let ref: string | null = null;
   try {
     const parsed = (await response.json()) as ErrorBody;
     if (typeof parsed.code === "string" && parsed.code) {
       code = parsed.code;
-    }
-    if (typeof parsed.message === "string" && parsed.message) {
-      message = parsed.message;
     }
     if (typeof parsed.ref === "string" && parsed.ref) {
       ref = parsed.ref;
@@ -159,9 +154,11 @@ async function throwForStatus(
     ref = mintErrorReference();
   }
   if (!ref && response.status !== 401) {
-    ref = ref ?? mintErrorReference();
+    ref = mintErrorReference();
   }
-  throw new AssistantRequestError(code, message, {
+  // The server's or gateway's own text is never carried: the message is
+  // always the fixed client text, and the panel maps the code to its own.
+  throw new AssistantRequestError(code, fallbackMessage, {
     status: response.status,
     ref,
   });

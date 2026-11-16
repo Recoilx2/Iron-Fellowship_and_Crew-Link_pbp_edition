@@ -288,6 +288,23 @@ describe("fetchAssistantContextSize", () => {
     expect((failure as AssistantRequestError).code).toBe("FORBIDDEN");
     expect((failure as AssistantRequestError).ref).toBe("QQ1Q22");
   });
+
+  it("never passes server or gateway error text through to the error", async () => {
+    globalThis.fetch = (async () =>
+      jsonResponse(502, {
+        code: "UPSTREAM_ERROR",
+        message: "connect ECONNREFUSED 10.0.0.5:8080 secret-host",
+        ref: "ZZ9Q12",
+      })) as unknown as typeof fetch;
+
+    const failure = (await fetchAssistantModels("campaign-1").catch(
+      (error: unknown) => error
+    )) as AssistantRequestError;
+
+    expect(failure.message).toBe("The assistant request failed.");
+    expect(failure.message).not.toContain("ECONNREFUSED");
+    expect(failure.ref).toBe("ZZ9Q12");
+  });
 });
 
 // Seam under test: the outline-revision request mode. A revision sends in

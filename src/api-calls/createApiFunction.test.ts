@@ -31,4 +31,19 @@ describe("createApiFunction without a SnackbarProvider", () => {
 
     await expect(wrapped(undefined)).resolves.toBe(42);
   });
+
+  it("keeps non-object rejections working", async () => {
+    const wrapped = createApiFunction<undefined, never>(
+      () => Promise.reject("plain string"),
+      "Something went wrong",
+    );
+    const consoleSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    try {
+      await expect(wrapped(undefined)).rejects.toBe("plain string");
+    } finally {
+      consoleSpy.mockRestore();
+    }
+  });
 });

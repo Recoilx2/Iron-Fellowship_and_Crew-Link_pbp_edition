@@ -95,6 +95,11 @@ export function GMAssistantPanel(props: {
   const [conversationTokens, setConversationTokens] = useState(0);
   const [failure, setFailure] = useState<ModelsFailure | null>(null);
   const [reloads, setReloads] = useState(0);
+  // A settings save that failed: the choice is put back and the GM is told
+  // (story 29) with a short generic message and a reference.
+  const [settingsError, setSettingsError] = useState<ModelsFailure | null>(
+    null
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -155,6 +160,7 @@ export function GMAssistantPanel(props: {
 
   const saveContext = (context: AssistantContextChoice): void => {
     const previous = settings;
+    setSettingsError(null);
     const next: AssistantSettingsDocument = {
       model: settings?.model ?? null,
       context,
@@ -165,13 +171,15 @@ export function GMAssistantPanel(props: {
       campaignId,
       model: next.model,
       context: next.context,
-    }).catch(() => {
+    }).catch((error: unknown) => {
       setSettings(previous);
+      setSettingsError(toAssistantFailure(error));
     });
   };
 
   const pickModel = (id: string): void => {
     const previous = settings;
+    setSettingsError(null);
     const next: AssistantSettingsDocument = {
       model: id,
       context: settings?.context ?? emptyAssistantContextChoice(),
@@ -182,8 +190,9 @@ export function GMAssistantPanel(props: {
       campaignId,
       model: id,
       context: next.context,
-    }).catch(() => {
+    }).catch((error: unknown) => {
       setSettings(previous);
+      setSettingsError(toAssistantFailure(error));
     });
   };
 
@@ -231,6 +240,14 @@ export function GMAssistantPanel(props: {
         budgetTokens={budgetTokens}
         onEdit={() => setTab("context")}
       />
+      {settingsError && (
+        <Box sx={{ px: 1, pb: 1 }}>
+          <Alert severity={"error"} onClose={() => setSettingsError(null)}>
+            {settingsError.message}
+            {settingsError.ref ? ` (ref: ${settingsError.ref})` : ""}
+          </Alert>
+        </Box>
+      )}
       <Tabs
         value={tab}
         onChange={(_, next: AssistantTab) => setTab(next)}
@@ -345,7 +362,7 @@ function ConversationThread(props: { campaignId: string; currentModel: string; e
   );
   const [input, setInput] = useState("");
   const [streamingText, setStreamingText] = useState<string | null>(null);
-  const [sendError, setSendError] = useState<ModelsFailure | null>(null);
+  const [threadError, setThreadError] = useState<ModelsFailure | null>(null);
   // Dedicated outline-revision mode for the next message: the server
   // includes the current outline and asks for a marked complete
   // replacement, which previews side by side below. Never guessed from
@@ -415,9 +432,11 @@ function ConversationThread(props: { campaignId: string; currentModel: string; e
   const selected = conversations.find((entry) => entry.id === selectedId);
 
   const startConversation = async (): Promise<void> => {
-    const id = await createConversation({ campaignId }).catch(() => null);
-    if (id) {
-      setSelectedId(id);
+    setThreadError(null);
+    try {
+      setSelectedId(await createConversation({ campaignId }));
+    } catch (error) {
+      setThreadError(toAssistantFailure(error));
     }
   };
 
@@ -427,10 +446,11 @@ function ConversationThread(props: { campaignId: string; currentModel: string; e
     }
     const gone = selectedId;
     const kept = conversations.filter((entry) => entry.id !== gone);
-    const deleted = await deleteConversation({ conversationId: gone })
-      .then(() => true)
-      .catch(() => false);
-    if (!deleted) {
+    setThreadError(null);
+    try {
+      await deleteConversation({ conversationId: gone });
+    } catch (error) {
+      setThreadError(toAssistantFailure(error));
       return;
     }
     setConversations(kept);
@@ -459,12 +479,11 @@ function ConversationThread(props: { campaignId: string; currentModel: string; e
     }
     let targetId = selectedId;
     if (!targetId) {
+      setThreadError(null);
       try {
         targetId = await createConversation({ campaignId });
-      } catch {
-        targetId = null;
-      }
-      if (!targetId) {
+      } catch (error) {
+        setThreadError(toAssistantFailure(error));
         return;
       }
       setSelectedId(targetId);
@@ -472,7 +491,7 @@ function ConversationThread(props: { campaignId: string; currentModel: string; e
     const controller = new AbortController();
     abortRef.current = controller;
     setStreamingText("");
-    setSendError(null);
+    setThreadError(null);
     setInput("");
     try {
       await streamAssistantChat({
@@ -486,7 +505,7 @@ function ConversationThread(props: { campaignId: string; currentModel: string; e
       // The finished reply arrives through the message listener, which
       // also carries the stopped marker when the GM stopped it partway.
     } catch (error) {
-      setSendError(toAssistantFailure(error));
+      setThreadError(toAssistantFailure(error));
     } finally {
       abortRef.current = null;
       setStreamingText(null);
@@ -711,11 +730,11 @@ function ConversationThread(props: { campaignId: string; currentModel: string; e
         </Stack>
         <div ref={endRef} />
       </Box>
-      {sendError && (
+      {threadError && (
         <Box sx={{ px: 1, pb: 1 }}>
-          <Alert severity={"error"} onClose={() => setSendError(null)}>
-            {sendError.message}
-            {sendError.ref ? ` (ref: ${sendError.ref})` : ""}
+          <Alert severity={"error"} onClose={() => setThreadError(null)}>
+            {threadError.message}
+            {threadError.ref ? ` (ref: ${threadError.ref})` : ""}
           </Alert>
         </Box>
       )}

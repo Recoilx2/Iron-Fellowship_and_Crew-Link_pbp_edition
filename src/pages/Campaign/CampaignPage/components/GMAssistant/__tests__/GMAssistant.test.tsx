@@ -264,6 +264,20 @@ describe("GMAssistant model picker", () => {
     return view;
   }
 
+  it("shows a generic error with a reference when saving settings fails", async () => {
+    vi.mocked(saveAssistantSettings).mockRejectedValue(
+      new Error("row-level security policy violated")
+    );
+    const view = await renderAndOpen();
+
+    selectModel(view, "m1");
+    await flush();
+
+    expect(view.textContent).toContain("The assistant request failed.");
+    expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
+    expect(view.textContent).not.toContain("row-level security");
+  });
+
   it("shows the saved model and saves a change beside the saved context", async () => {
     const view = await renderAndOpen();
 
@@ -626,6 +640,43 @@ describe("GMAssistant chat thread", () => {
     expect(view.textContent).toContain("New conversation");
   });
 
+  it("shows a generic error with a reference when starting a conversation fails", async () => {
+    vi.mocked(createConversation).mockRejectedValue(
+      new Error("duplicate key value violates constraint")
+    );
+    const view = await renderAndOpen();
+
+    act(() => {
+      buttonByLabel(view, "New conversation").dispatchEvent(
+        new MouseEvent("click", { bubbles: true })
+      );
+    });
+    await flush();
+
+    expect(view.textContent).toContain("The assistant request failed.");
+    expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
+    expect(view.textContent).not.toContain("duplicate key");
+  });
+
+  it("shows a generic error with a reference when deleting a conversation fails", async () => {
+    vi.mocked(deleteConversation).mockRejectedValue(
+      new Error("permission denied for table")
+    );
+    const view = await renderAndOpen();
+
+    act(() => {
+      buttonByLabel(view, "Delete conversation").dispatchEvent(
+        new MouseEvent("click", { bubbles: true })
+      );
+    });
+    await flush();
+
+    expect(view.textContent).toContain("The assistant request failed.");
+    expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
+    expect(view.textContent).not.toContain("permission denied");
+    expect(view.textContent).toContain("First plan");
+  });
+
   it("deletes the open conversation and moves to the next one", async () => {
     const view = await renderAndOpen();
 
@@ -884,6 +935,35 @@ describe("GMAssistant streaming", () => {
 
     expect(view.textContent).toContain("The assistant request failed.");
     expect(view.textContent).toContain("Q7X2KD");
+  });
+
+  it("shows a generic error with a reference when starting a conversation on send fails", async () => {
+    vi.mocked(listenToConversations).mockImplementation(
+      (_campaignId, handlers) => {
+        handlers.onConversations([]);
+        handlers.onLoaded();
+        return () => {};
+      }
+    );
+    vi.mocked(createConversation).mockRejectedValue(
+      new Error("duplicate key value violates constraint")
+    );
+    const { streamAssistantChat } = await import(
+      "api-calls/assistant/gmAssistantClient"
+    );
+    const view = await renderAndOpen();
+    typeMessage(view, "What happens next?");
+    act(() => {
+      buttonByLabel(view, "Send to assistant").dispatchEvent(
+        new MouseEvent("click", { bubbles: true })
+      );
+    });
+    await flush();
+
+    expect(streamAssistantChat).not.toHaveBeenCalled();
+    expect(view.textContent).toContain("The assistant request failed.");
+    expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
+    expect(view.textContent).not.toContain("duplicate key");
   });
 
   it("says which endpoint and model the material goes to", async () => {
