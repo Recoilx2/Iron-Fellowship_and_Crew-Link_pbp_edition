@@ -33,6 +33,7 @@ describe("campaign outline migration (#131)", () => {
     // versions) sort later by design, so they are excluded here.
     const landedLater = new Set([
       "20261121000006_assistant_outline_versions.sql",
+      "20261121000007_assistant_proposal_state.sql",
     ]);
     // The outline is the latest migration on the branch: nothing landed
     // after it, so nothing is excluded here. A later migration re-adds

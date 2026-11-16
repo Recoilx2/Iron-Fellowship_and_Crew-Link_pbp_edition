@@ -81,9 +81,16 @@ vi.mock("api-calls/assistant/deleteConversation", () => ({
 vi.mock("../useOutlineDocument", () => ({
   useOutlineDocument: vi.fn(),
 }));
-vi.mock("api-calls/assistant/outlineVersions", () => ({
-  applyOutlineRevision: vi.fn(),
-  undoOutlineRevision: vi.fn(),
+vi.mock("api-calls/assistant/outlineVersions", () => {
+  class OutlineVersionGoneError extends Error {}
+  return {
+    applyOutlineRevision: vi.fn(),
+    undoOutlineRevision: vi.fn(),
+    OutlineVersionGoneError,
+  };
+});
+vi.mock("api-calls/assistant/saveProposalState", () => ({
+  saveProposalState: vi.fn(),
 }));
 
 import { GMAssistant } from "../GMAssistant";
@@ -107,6 +114,7 @@ import {
   applyOutlineRevision,
   undoOutlineRevision,
 } from "api-calls/assistant/outlineVersions";
+import { saveProposalState } from "api-calls/assistant/saveProposalState";
 
 const theme = createTheme();
 
@@ -471,6 +479,8 @@ describe("GMAssistant chat thread", () => {
       role: "user" as const,
       content: "What happens next?",
       stoppedPartway: false,
+      proposalState: null,
+      appliedVersionId: null,
       createdAt: "2026-11-14T00:00:00Z",
     },
     {
@@ -479,6 +489,8 @@ describe("GMAssistant chat thread", () => {
       role: "assistant" as const,
       content: "The bell rings twice.",
       stoppedPartway: false,
+      proposalState: null,
+      appliedVersionId: null,
       createdAt: "2026-11-14T00:00:01Z",
     },
   ];
@@ -673,6 +685,8 @@ describe("GMAssistant streaming", () => {
       role: "user" as const,
       content: "What happens next?",
       stoppedPartway: false,
+      proposalState: null,
+      appliedVersionId: null,
       createdAt: "2026-11-14T00:00:00Z",
     },
     {
@@ -681,6 +695,8 @@ describe("GMAssistant streaming", () => {
       role: "assistant" as const,
       content: replyText,
       stoppedPartway: false,
+      proposalState: null,
+      appliedVersionId: null,
       createdAt: "2026-11-14T00:00:01Z",
     },
   ];
@@ -943,6 +959,8 @@ describe("GMAssistant outline revisions", () => {
       role: "user" as const,
       content: "Tighten act one.",
       stoppedPartway: false,
+      proposalState: null,
+      appliedVersionId: null,
       createdAt: "2026-11-14T00:00:00Z",
     },
     {
@@ -951,6 +969,8 @@ describe("GMAssistant outline revisions", () => {
       role: "assistant" as const,
       content: markedReply,
       stoppedPartway: false,
+      proposalState: null,
+      appliedVersionId: null,
       createdAt: "2026-11-14T00:00:01Z",
     },
   ];
@@ -1001,6 +1021,7 @@ describe("GMAssistant outline revisions", () => {
         return () => {};
       }
     );
+    vi.mocked(saveProposalState).mockResolvedValue(undefined);
     vi.mocked(applyOutlineRevision).mockResolvedValue("version-9");
     vi.mocked(undoOutlineRevision).mockResolvedValue(
       "Act one: the bell rings."
@@ -1140,5 +1161,104 @@ describe("GMAssistant outline revisions", () => {
 
     expect(applyOutlineRevision).not.toHaveBeenCalled();
     expect(view.textContent).not.toContain("Proposed outline");
+  });
+
+  function clickText(view: HTMLDivElement, label: string) {
+    act(() => {
+      Array.from(view.querySelectorAll("button"))
+        .find((entry) => entry.textContent === label)
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+  }
+
+  function labelsOf(view: HTMLDivElement): string[] {
+    return Array.from(view.querySelectorAll("button")).map(
+      (entry) => entry.textContent ?? ""
+    );
+  }
+
+  // The thread as it reloads from the database, with the saved outcome on
+  // the reply that carried the proposal.
+  function reloadWith(outcome: {
+    proposalState: "applied" | "dismissed" | null;
+    appliedVersionId: string | null;
+  }) {
+    vi.mocked(listenToMessages).mockImplementation(
+      (_conversationId, handlers) => {
+        handlers.onMessages([
+          threadMessages[0],
+          { ...threadMessages[1], ...outcome },
+        ]);
+        handlers.onLoaded();
+        return () => {};
+      }
+    );
+  }
+
+  it("remembers an apply on the reply, with the version it kept", async () => {
+    const view = await renderAndOpen();
+
+    clickText(view, "Apply to outline");
+    clickText(view, "Confirm replace");
+    await flush();
+
+    expect(saveProposalState).toHaveBeenCalledWith({
+      messageId: "m-a",
+      state: "applied",
+      appliedVersionId: "version-9",
+    });
+  });
+
+  it("remembers a dismissal on the reply", async () => {
+    const view = await renderAndOpen();
+
+    clickText(view, "Discard");
+    await flush();
+
+    expect(saveProposalState).toHaveBeenCalledWith({
+      messageId: "m-a",
+      state: "dismissed",
+      appliedVersionId: null,
+    });
+  });
+
+  it("after a reload an applied proposal offers no Apply and undoes its own version", async () => {
+    reloadWith({ proposalState: "applied", appliedVersionId: "version-3" });
+    const view = await renderAndOpen();
+
+    expect(labelsOf(view)).not.toContain("Apply to outline");
+    expect(view.textContent).toContain("Applied");
+    clickText(view, "Undo");
+    await flush();
+
+    expect(undoOutlineRevision).toHaveBeenCalledWith({
+      campaignId: "campaign-1",
+      outlineId: "outline-1",
+      versionId: "version-3",
+    });
+    expect(saveProposalState).toHaveBeenCalledWith({
+      messageId: "m-a",
+      state: null,
+      appliedVersionId: null,
+    });
+  });
+
+  it("after a reload an applied proposal whose version is gone offers no Undo either", async () => {
+    reloadWith({ proposalState: "applied", appliedVersionId: null });
+    const view = await renderAndOpen();
+
+    expect(view.textContent).toContain("Applied");
+    expect(labelsOf(view)).not.toContain("Apply to outline");
+    expect(labelsOf(view)).not.toContain("Undo");
+  });
+
+  it("after a reload a dismissed proposal offers nothing", async () => {
+    reloadWith({ proposalState: "dismissed", appliedVersionId: null });
+    const view = await renderAndOpen();
+
+    expect(view.textContent).not.toContain("Proposed outline");
+    expect(labelsOf(view)).not.toContain("Apply to outline");
+    expect(labelsOf(view)).not.toContain("Undo");
+    expect(view.textContent).toContain("dismissed");
   });
 });

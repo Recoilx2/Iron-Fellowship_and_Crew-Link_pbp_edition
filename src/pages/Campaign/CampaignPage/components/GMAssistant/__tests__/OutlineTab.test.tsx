@@ -459,9 +459,10 @@ describe("OutlineTab", () => {
     expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
   });
 
-  it("offers undo while a version is kept and undoes on click", async () => {
+  it("offers undo while a version is kept and undoes the newest one on click", async () => {
     vi.mocked(listenToOutlineVersions).mockImplementation(
       (_campaignId, handlers) => {
+        // Deliberately not newest first: the tab picks by time.
         handlers.onVersions([
           {
             id: "version-1",
@@ -469,6 +470,13 @@ describe("OutlineTab", () => {
             content: "Act one: the bell rings.",
             createdBy: "gm-1",
             createdAt: "2026-11-14T00:00:00Z",
+          },
+          {
+            id: "version-2",
+            campaignId: "campaign-1",
+            content: "Act one: the bell cracks.",
+            createdBy: "gm-1",
+            createdAt: "2026-11-14T00:05:00Z",
           },
         ]);
         handlers.onLoaded();
@@ -493,6 +501,7 @@ describe("OutlineTab", () => {
     expect(undoOutlineRevision).toHaveBeenCalledWith({
       campaignId: "campaign-1",
       outlineId: "outline-1",
+      versionId: "version-2",
     });
   });
 

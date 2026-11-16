@@ -18,6 +18,11 @@ export function OutlineRevisionPreview(props: {
   applying: boolean;
   applyError: string | null;
   undoing: boolean;
+  /**
+   * Whether an Undo is on offer once applied: false when Apply kept no
+   * version, or the one it kept is gone.
+   */
+  canUndo?: boolean;
   onApply: () => void;
   onDiscard: () => void;
   onUndo: () => void;
@@ -29,6 +34,7 @@ export function OutlineRevisionPreview(props: {
     applying,
     applyError,
     undoing,
+    canUndo = true,
     onApply,
     onDiscard,
     onUndo,
@@ -76,16 +82,20 @@ export function OutlineRevisionPreview(props: {
       {applied ? (
         <Stack direction={"row"} spacing={1} alignItems={"center"} sx={{ mt: 1 }}>
           <Alert severity={"success"} sx={{ flexGrow: 1 }}>
-            Applied. The previous version is kept for Undo.
+            {canUndo
+              ? "Applied. The previous version is kept for Undo."
+              : "Applied."}
           </Alert>
-          <Button
-            size={"small"}
-            disabled={undoing}
-            onClick={onUndo}
-            aria-label={"Undo outline revision"}
-          >
-            Undo
-          </Button>
+          {canUndo && (
+            <Button
+              size={"small"}
+              disabled={undoing}
+              onClick={onUndo}
+              aria-label={"Undo outline revision"}
+            >
+              Undo
+            </Button>
+          )}
         </Stack>
       ) : confirming ? (
         <Box sx={{ mt: 1 }}>
@@ -97,7 +107,10 @@ export function OutlineRevisionPreview(props: {
               size={"small"}
               variant={"contained"}
               disabled={applying}
-              onClick={onApply}
+              onClick={() => {
+                setConfirming(false);
+                onApply();
+              }}
               aria-label={"Confirm replace outline"}
             >
               Confirm replace

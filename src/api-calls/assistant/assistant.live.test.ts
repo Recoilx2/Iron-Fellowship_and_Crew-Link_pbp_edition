@@ -14,6 +14,7 @@ import { createConversation } from "api-calls/assistant/createConversation";
 import { renameConversation } from "api-calls/assistant/renameConversation";
 import { deleteConversation } from "api-calls/assistant/deleteConversation";
 import { addAssistantMessage } from "api-calls/assistant/addAssistantMessage";
+import { saveProposalState } from "api-calls/assistant/saveProposalState";
 import {
   fetchAssistantSettings,
   saveAssistantSettings,
@@ -542,6 +543,95 @@ describe.skipIf(!config)("gm assistant data layer end to end", () => {
     expect(
       await readRowsAs(gm, ASSISTANT_CONVERSATIONS_TABLE, "id", gmConversationId)
     ).toHaveLength(1);
+    await signOut();
+  });
+
+  // Ticket #148: the GM's outcome for an outline proposal is saved on the
+  // reply that carried it, under the same owner-GM-only rules as the reply.
+  it("lets only the owning GM set a reply's proposal state", { timeout: 120000 }, async () => {
+    const { gm, coGm, player, outsider, campaignId } = await setUpCampaign();
+    await signInAs(gm);
+    const conversationId = await createConversation({ campaignId });
+    const replyId = await addAssistantMessage({
+      conversationId,
+      role: "assistant",
+      content: "A proposal.",
+    });
+    const questionId = await addAssistantMessage({
+      conversationId,
+      role: "user",
+      content: "A question.",
+    });
+
+    await saveProposalState({
+      messageId: replyId,
+      state: "dismissed",
+      appliedVersionId: null,
+    });
+    const stateOf = async (id: string) => {
+      const { data, error } = await gm.client
+        .from(ASSISTANT_MESSAGES_TABLE)
+        .select("proposal_state,applied_version_id")
+        .eq("id", id);
+      expect(error).toBeNull();
+      return data?.[0];
+    };
+    expect(await stateOf(replyId)).toEqual({
+      proposal_state: "dismissed",
+      applied_version_id: null,
+    });
+    await saveProposalState({
+      messageId: replyId,
+      state: null,
+      appliedVersionId: null,
+    });
+    expect(await stateOf(replyId)).toEqual({
+      proposal_state: null,
+      applied_version_id: null,
+    });
+    await saveProposalState({
+      messageId: replyId,
+      state: "applied",
+      appliedVersionId: null,
+    });
+
+    // Only an assistant reply carries a proposal state, and only an applied
+    // one a version.
+    const onQuestion = await gm.client
+      .from(ASSISTANT_MESSAGES_TABLE)
+      .update({ proposal_state: "dismissed" })
+      .eq("id", questionId)
+      .select("id");
+    expect(onQuestion.error).not.toBeNull();
+    const versionOnDismissed = await gm.client
+      .from(ASSISTANT_MESSAGES_TABLE)
+      .update({
+        proposal_state: "dismissed",
+        applied_version_id: crypto.randomUUID(),
+      })
+      .eq("id", replyId)
+      .select("id");
+    expect(versionOnDismissed.error).not.toBeNull();
+    await signOut();
+
+    for (const person of [coGm, player, outsider]) {
+      await signInAs(person);
+      await expect(
+        saveProposalState({
+          messageId: replyId,
+          state: "dismissed",
+          appliedVersionId: null,
+        })
+      ).rejects.toBeTruthy();
+      await signOut();
+    }
+
+    // The refused writes changed nothing.
+    await signInAs(gm);
+    expect(await stateOf(replyId)).toEqual({
+      proposal_state: "applied",
+      applied_version_id: null,
+    });
     await signOut();
   });
 });

@@ -235,19 +235,42 @@ export const applyOutlineRevision = createApiFunction<
 }, "Failed to apply the outline revision.");
 
 /**
- * Undoes the latest Apply: restores the newest kept text to the outline
- * and drops that version row. Throws when no version is kept.
+ * Thrown by Undo when the named version no longer exists: it was already
+ * undone or pruned past the retention cap. Nothing is changed; callers show
+ * a generic message with a reference.
+ */
+export class OutlineVersionGoneError extends Error {
+  constructor() {
+    super("That outline version is gone.");
+    this.name = "OutlineVersionGoneError";
+  }
+}
+
+/**
+ * Undoes one Apply: restores the named version's text to the outline
+ * through the note server, then drops that version row. Undo is by id, so
+ * an older reply's Undo restores what its own Apply replaced and never
+ * reverts a later Apply by a co-GM. Throws OutlineVersionGoneError, without
+ * changing anything, when the version was already gone before the restore.
+ * If the version row is gone only by the time it is deleted (a concurrent
+ * Undo of the same version), the outline already holds the restored text and
+ * the other Undo removed the row, so this Undo counts as done. When
+ * someone else changed the outline during the restore it throws and keeps
+ * the version.
  */
 export const undoOutlineRevision = createApiFunction<
-  { campaignId: string; outlineId: string },
+  { campaignId: string; outlineId: string; versionId: string },
   string
 >(async (params) => {
-  const { campaignId, outlineId } = params;
+  const { campaignId, outlineId, versionId } = params;
   if (!campaignId || campaignId.trim().length === 0) {
     throw new Error("A campaign is required to undo an outline revision.");
   }
   if (!outlineId || outlineId.trim().length === 0) {
     throw new Error("An outline is required to undo a revision.");
+  }
+  if (!versionId || versionId.trim().length === 0) {
+    throw new Error("An outline version is required to undo a revision.");
   }
   await signedInGmId();
   const client = getSupabaseClient();
@@ -255,34 +278,40 @@ export const undoOutlineRevision = createApiFunction<
   const { data, error } = await client
     .from(ASSISTANT_OUTLINE_VERSIONS_TABLE)
     .select("*")
-    .eq("campaign_id", campaignId)
-    .order("created_at", { ascending: false })
-    .limit(1);
+    .eq("id", versionId)
+    .eq("campaign_id", campaignId);
   if (error) {
     throw error;
   }
-  const latest = (data ?? [])[0] as unknown as
+  const version = (data ?? [])[0] as unknown as
     | AssistantOutlineVersionRow
     | undefined;
-  if (!latest) {
-    throw new Error("There is nothing to undo.");
+  if (!version) {
+    throw new OutlineVersionGoneError();
   }
 
   const session = await openOutlineSession(outlineId);
   try {
-    await session.replace(latest.content);
+    await session.replace(version.content);
+    if (session.text().trim() !== version.content.trim()) {
+      throw new Error(
+        "The outline changed while the revision was undone. Check the outline."
+      );
+    }
   } finally {
     session.close();
   }
 
-  const { data: deleted, error: deleteError } = await client
+  const { error: deleteError } = await client
     .from(ASSISTANT_OUTLINE_VERSIONS_TABLE)
     .delete()
-    .eq("id", latest.id)
+    .eq("id", version.id)
     .eq("campaign_id", campaignId)
     .select("id");
-  if (deleteError || !deleted || deleted.length === 0) {
-    throw deleteError ?? new Error("That outline version is gone.");
+  if (deleteError) {
+    throw deleteError;
   }
-  return latest.content;
+  // No row deleted: a concurrent Undo of this version removed it after we
+  // restored the same text, so the outcome is the same as success.
+  return version.content;
 }, "Failed to undo the outline revision.");
