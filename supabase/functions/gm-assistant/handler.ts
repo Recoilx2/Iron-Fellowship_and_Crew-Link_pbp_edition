@@ -188,6 +188,14 @@ function corsHeaders(req: Request, env: GmAssistantEnv): Headers {
   return headers;
 }
 
+/**
+ * Only the error's class name is ever logged: thrown fetch errors carry the
+ * full request URL, which can hold user ids or an API key.
+ */
+function errorName(error: unknown): string {
+  return error instanceof Error ? error.name : "unknown";
+}
+
 function errorResponse(
   req: Request,
   env: GmAssistantEnv,
@@ -203,7 +211,7 @@ function errorResponse(
   // headers, token, prompt text or user ids.
   const path = new URL(req.url).pathname;
   const detail = detailForLog
-    ? ` detail=${detailForLog.replace(/\s+/g, " ").slice(0, 300)}`
+    ? ` detail=${detailForLog.replace(/\s+/g, " ").replace(/[\x00-\x1f\x7f]/g, "").slice(0, 300)}`
     : "";
   console.error(
     `[gm-assistant] ref=${ref} code=${code} status=${status} route=${req.method} ${path}${detail}`,
@@ -462,7 +470,7 @@ async function fetchUpstreamModels(
   } catch (error) {
     return {
       ok: false,
-      detail: `models request failed: ${error instanceof Error ? error.message : "network error"}`,
+      detail: `models request failed (${errorName(error)})`,
     };
   }
   if (!response.ok) {
@@ -1099,7 +1107,7 @@ async function handleModels(
     gm = await isCampaignGm(env, callerToken, caller.sub, campaignId, fetchImpl);
   } catch (error) {
     const ref = mintReference();
-    return errorResponse(req, env, 502, "UPSTREAM_ERROR", "The assistant request failed.", ref, `gm check failed: ${error instanceof Error ? error.message : "unknown"}`);
+    return errorResponse(req, env, 502, "UPSTREAM_ERROR", "The assistant request failed.", ref, `gm check failed (${errorName(error)})`);
   }
   if (!gm) {
     return errorResponse(
@@ -1183,7 +1191,7 @@ async function handleContextSize(
     gm = await isCampaignGm(env, callerToken, caller.sub, campaignId, fetchImpl);
   } catch (error) {
     const ref = mintReference();
-    return errorResponse(req, env, 502, "UPSTREAM_ERROR", "The assistant request failed.", ref, `gm check failed: ${error instanceof Error ? error.message : "unknown"}`);
+    return errorResponse(req, env, 502, "UPSTREAM_ERROR", "The assistant request failed.", ref, `gm check failed (${errorName(error)})`);
   }
   if (!gm) {
     return errorResponse(
@@ -1218,7 +1226,7 @@ async function handleContextSize(
     );
   } catch (error) {
     const ref = mintReference();
-    return errorResponse(req, env, 502, "UPSTREAM_ERROR", "The assistant request failed.", ref, `context build failed: ${error instanceof Error ? error.message : "unknown"}`);
+    return errorResponse(req, env, 502, "UPSTREAM_ERROR", "The assistant request failed.", ref, `context build failed (${errorName(error)})`);
   }
 }
 
@@ -1357,7 +1365,7 @@ async function handleChat(
     built = await buildAssistantContext(env, callerToken, caller.sub, conversation.campaignId, choice, fetchImpl);
   } catch (error) {
     const ref = mintReference();
-    return errorResponse(req, env, 502, "UPSTREAM_ERROR", "The assistant request failed.", ref, `context build failed: ${error instanceof Error ? error.message : "unknown"}`);
+    return errorResponse(req, env, 502, "UPSTREAM_ERROR", "The assistant request failed.", ref, `context build failed (${errorName(error)})`);
   }
 
   const outgoing = [
@@ -1409,7 +1417,7 @@ async function handleChat(
       "UPSTREAM_ERROR",
       "The assistant request failed.",
       ref,
-      `upstream chat failed: ${error instanceof Error ? error.message : "network error"}`,
+      `upstream chat failed (${errorName(error)})`,
     );
   }
   if (!upstream.ok || !upstream.body) {
@@ -1587,6 +1595,8 @@ export function createGmAssistantHandler(
         headers.set("Access-Control-Max-Age", "86400");
         return new Response(null, { status: 204, headers });
       }
+      // Deliberately exempt from the one-line error log: a bodyless CORS
+      // preflight refusal has no reference to show anyone.
       return new Response(null, { status: 404 });
     }
     const callerToken = (() => {
@@ -1605,17 +1615,29 @@ export function createGmAssistantHandler(
         mintReference(),
       );
     }
-    if (req.method === "GET" && url.pathname === "/gm-assistant/models") {
-      return handleModels(req, env, caller, callerToken, fetchImpl);
-    }
-    if (
-      (req.method === "GET" || req.method === "POST") &&
-      url.pathname === "/gm-assistant/context-size"
-    ) {
-      return handleContextSize(req, env, caller, callerToken, fetchImpl);
-    }
-    if (req.method === "POST" && url.pathname === "/gm-assistant/chat") {
-      return handleChat(req, env, caller, callerToken, fetchImpl, options);
+    try {
+      if (req.method === "GET" && url.pathname === "/gm-assistant/models") {
+        return await handleModels(req, env, caller, callerToken, fetchImpl);
+      }
+      if (
+        (req.method === "GET" || req.method === "POST") &&
+        url.pathname === "/gm-assistant/context-size"
+      ) {
+        return await handleContextSize(req, env, caller, callerToken, fetchImpl);
+      }
+      if (req.method === "POST" && url.pathname === "/gm-assistant/chat") {
+        return await handleChat(req, env, caller, callerToken, fetchImpl, options);
+      }
+    } catch (error) {
+      return errorResponse(
+        req,
+        env,
+        502,
+        "UPSTREAM_ERROR",
+        "The assistant request failed.",
+        mintReference(),
+        `unhandled ${errorName(error)}`,
+      );
     }
     return errorResponse(
       req,

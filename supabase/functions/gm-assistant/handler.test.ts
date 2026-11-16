@@ -918,7 +918,9 @@ describe("gm assistant error logging (ticket #170)", () => {
     {
       code: "FUNCTIONS_NOT_CONFIGURED",
       status: 404,
-      request: (token) => new Request("http://x/smoke-probe", { headers: bearer(token) }),
+      // The handler's wrong-method 404 (the production unknown-route answer
+      // lives in main/index.ts).
+      request: (token) => new Request("http://x/gm-assistant/chat", { headers: bearer(token) }),
     },
   ];
 
@@ -951,9 +953,98 @@ describe("gm assistant error logging (ticket #170)", () => {
       expect(matching[0]).toContain(new URL(scenario.request(token).url).pathname);
 
       const all = lines.join("\n");
-      for (const forbidden of [token, GM_ID, API_KEY, SECRET_MESSAGE, SECRET_FIELD, "Bearer"]) {
+      for (const forbidden of [token, GM_ID, CAMPAIGN_ID, API_KEY, SECRET_MESSAGE, SECRET_FIELD, "Bearer"]) {
         expect(all).not.toContain(forbidden);
+      }
+      expect(all).not.toContain("?");
+    },
+  );
+
+  const throwingScenarios: Array<{ name: string; shouldThrow: (url: string) => boolean; request: (token: string) => Request }> = [
+    {
+      name: "a PostgREST URL carrying the user id",
+      shouldThrow: (url) => url.includes("/rest/v1/campaign_members"),
+      request: (token) =>
+        new Request(`http://x/gm-assistant/models?campaignId=${CAMPAIGN_ID}`, { headers: bearer(token) }),
+    },
+    {
+      name: "the model endpoint with a key in the query string",
+      shouldThrow: (url) => url.includes("llm.test"),
+      request: (token) =>
+        new Request("http://x/gm-assistant/chat", { method: "POST", headers: bearer(token), body: chatBody() }),
+    },
+    {
+      name: "the model list endpoint with a key in the query string",
+      shouldThrow: (url) => url.includes("llm.test"),
+      request: (token) =>
+        new Request(`http://x/gm-assistant/models?campaignId=${CAMPAIGN_ID}`, { headers: bearer(token) }),
+    },
+    {
+      name: "the saved-context read carrying the user id",
+      shouldThrow: (url) => url.includes("/rest/v1/") && !url.includes("campaign_members"),
+      request: (token) =>
+        new Request(`http://x/gm-assistant/context-size?campaignId=${CAMPAIGN_ID}`, { headers: bearer(token) }),
+    },
+  ];
+
+  it.each(throwingScenarios.map((s) => [s.name, s] as const))(
+    "never logs the URL of a thrown fetch error: %s",
+    async (_name, scenario) => {
+      const lines: string[] = [];
+      vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+        lines.push(args.map((arg) => String(arg)).join(" "));
+      });
+      const token = gmToken();
+      const { fetchImpl: inner } = makeFake({ rosterRole: "gm" });
+      const fetchImpl: UpstreamFetch = async (input, init) => {
+        const raw = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        if (scenario.shouldThrow(raw)) {
+          const url = raw.includes("llm.test") ? `${raw}?key=${API_KEY}` : `${raw}&user_id=eq.${GM_ID}`;
+          throw new TypeError(`error sending request for url (${url})`);
+        }
+        return inner(input, init);
+      };
+      const handle = createGmAssistantHandler(baseEnv(), fetchImpl);
+      const res = await handle(scenario.request(token));
+      expect(res.status).toBe(502);
+      const body = (await res.json()) as { ref: string };
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain(body.ref);
+      expect(lines[0]).toContain("TypeError");
+      for (const forbidden of [GM_ID, API_KEY, token, "error sending request"]) {
+        expect(lines[0]).not.toContain(forbidden);
       }
     },
   );
+
+  it("answers an uncaught exception with a reference and one log line", async () => {
+    const lines: string[] = [];
+    vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      lines.push(args.map((arg) => String(arg)).join(" "));
+    });
+    const { fetchImpl: inner } = makeFake();
+    const fetchImpl: UpstreamFetch = async (input, init) => {
+      const raw = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (raw.includes("assistant_conversations")) {
+        throw new TypeError(`error sending request for url (${raw}&u=${GM_ID})`);
+      }
+      return inner(input, init);
+    };
+    const handle = createGmAssistantHandler(baseEnv(), fetchImpl);
+    const res = await handle(
+      new Request("http://x/gm-assistant/chat", {
+        method: "POST",
+        headers: bearer(gmToken()),
+        body: chatBody(),
+      }),
+    );
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { code: string; ref: string };
+    expect(body.code).toBe("UPSTREAM_ERROR");
+    expect(body.ref).toMatch(/^[0-9A-Z]{6}$/);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain(body.ref);
+    expect(lines[0]).toContain("unhandled TypeError");
+    expect(lines[0]).not.toContain(GM_ID);
+  });
 });
