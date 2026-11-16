@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator } from "@playwright/test";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 import {
   campaignUrl,
@@ -54,6 +54,16 @@ function resolveEnvFile(value: string): string {
     return value;
   }
   return resolve(dirname(__dirname), "supabase", basename(value));
+}
+
+async function boxOf(
+  locator: Locator
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  const box = await locator.boundingBox();
+  if (!box) {
+    throw new Error("e2e: element has no bounding box");
+  }
+  return box;
 }
 
 test.describe("gm assistant panel", () => {
@@ -182,6 +192,71 @@ test.describe("gm assistant panel", () => {
           (post.text ?? "").includes("Hello traveller")
         )
       ).toBe(false);
+    } finally {
+      await gmContext.close().catch(() => undefined);
+    }
+  });
+
+  test("on desktop the assistant takes the side pane's place and leaves the chat feed uncovered", async ({
+    browser,
+  }) => {
+    const gmContext = await browser.newContext({
+      viewport: { width: 1400, height: 900 },
+    });
+    const gmPage = await gmContext.newPage();
+    try {
+      await signInAs(gmPage, config, gm, campaignUrl(campaignId));
+      await expect(gmPage.getByRole("tab", { name: "Chat" })).toBeVisible();
+
+      const sidePane = gmPage.getByTestId("chat-side-pane");
+      const feedPane = gmPage.getByRole("textbox", { name: /Post in #/ });
+      await expect(sidePane).toBeVisible();
+      await expect(feedPane).toBeVisible();
+      const sideBefore = await boxOf(sidePane);
+      const composerBefore = await boxOf(feedPane);
+
+      const trigger = gmPage.getByRole("button", {
+        name: "Assistant",
+        exact: true,
+      });
+      await trigger.click();
+
+      // The side pane is swapped out, not covered.
+      const dock = gmPage.getByTestId("assistant-dock");
+      await expect(dock).toBeVisible();
+      await expect(sidePane).toHaveCount(0);
+      const panel = gmPage.getByRole("complementary", {
+        name: "GM assistant",
+        exact: true,
+      });
+      await expect(panel).toBeFocused();
+      await expect(
+        gmPage.getByRole("combobox", { name: "Model" })
+      ).toBeVisible();
+
+      // Layout settles once the panel and the feed have stopped moving.
+      await expect
+        .poll(async () => (await boxOf(dock)).width, { timeout: 5000 })
+        .toBeGreaterThan(0);
+      const dockBox = await boxOf(dock);
+      const composerAfter = await boxOf(feedPane);
+
+      // Same slot as the side pane it replaced.
+      expect(Math.abs(dockBox.x - sideBefore.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(dockBox.width - sideBefore.width)).toBeLessThanOrEqual(1);
+      // The chat feed's column ends where the panel begins: no overlap.
+      expect(composerAfter.x + composerAfter.width).toBeLessThanOrEqual(
+        dockBox.x + 1
+      );
+      expect(composerAfter.x).toBeGreaterThanOrEqual(composerBefore.x - 1);
+      // Nothing floats over the page.
+      await expect(gmPage.locator(".MuiDrawer-paper")).toHaveCount(0);
+
+      // Closing brings the side pane back and focus returns to the button.
+      await gmPage.getByRole("button", { name: "Close assistant" }).click();
+      await expect(dock).toHaveCount(0);
+      await expect(sidePane).toBeVisible();
+      await expect(trigger).toBeFocused();
     } finally {
       await gmContext.close().catch(() => undefined);
     }

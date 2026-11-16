@@ -15,7 +15,7 @@ import { CampaignType } from "api-calls/campaign/_campaign.type";
 import { CampaignSettingsMenu } from "./components/CampaignSettingsMenu";
 import { CampaignMoveOracleButtons } from "./components/CampaignMoveOracleButtons";
 import { InviteUsersDialog } from "./components/InviteUsersDialog";
-import { GMAssistant } from "./components/GMAssistant";
+import { GMAssistant, GMAssistantDockProvider } from "./components/GMAssistant";
 
 export function CampaignPage() {
   useSyncStore();
@@ -87,7 +87,7 @@ export function CampaignPage() {
   );
 
   return (
-    <>
+    <GMAssistantDockProvider>
       <Head
         title={campaignName ?? ""}
         description={`Campaign ${campaignName ?? ""}`}
@@ -144,6 +144,6 @@ export function CampaignPage() {
         open={inviteUsersDialogOpen}
         onClose={() => setInviteUsersDialogOpen(false)}
       />
-    </>
+    </GMAssistantDockProvider>
   );
 }
