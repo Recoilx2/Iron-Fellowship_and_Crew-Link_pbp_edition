@@ -21,7 +21,25 @@ import type { ChannelKind } from "api-calls/chat/_chat.type";
 import type { ChannelWithId } from "api-calls/chat/listenToCampaignChannels";
 import { createPost } from "api-calls/chat/createPost";
 import { validateChatImageFile } from "api-calls/chat/chatImageLimits";
-import { mintErrorReference } from "functions/errorReference";
+import {
+  loggedReferenceOf,
+  logFailureReference,
+  referenceForLogging,
+} from "functions/errorReference";
+
+/**
+ * The reference to show for a failure: the one `createApiFunction` already
+ * logged for this error, else a new one logged now, so a reference a player
+ * reports always matches exactly one log line. Details never include post
+ * text, image data or tokens.
+ */
+function loggedReference(error: unknown, ...details: unknown[]): string {
+  const known = loggedReferenceOf(error);
+  if (known) return known;
+  const ref = referenceForLogging(error);
+  logFailureReference(ref, ...details);
+  return ref;
+}
 import {
   removeChatImage,
   uploadChatImage,
@@ -233,14 +251,19 @@ export function ChatComposer(props: {
             )
           );
         },
-        () => {
+        (error: unknown) => {
+          // File name and size only: never the image's content.
+          const ref = loggedReference(error, error, {
+            fileName: file.name,
+            fileSize: file.size,
+          });
           cancelledKeysRef.current.delete(key);
           revokePreviewUrl(previewUrl);
           setAttachments((current) =>
             current.filter((attachment) => attachment.key !== key)
           );
           setAttachError(
-            `Could not attach that image. Try again. (ref: ${mintErrorReference()})`
+            `Could not attach that image. Try again. (ref: ${ref})`
           );
         }
       );
@@ -370,7 +393,8 @@ export function ChatComposer(props: {
         pendingPostIdRef.current = undefined;
         setAttachError(undefined);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        const ref = loggedReference(error, error);
         for (const path of paths) {
           sentPathsRef.current.delete(path);
           // The post never landed, so its staged uploads are orphans:
@@ -381,7 +405,7 @@ export function ChatComposer(props: {
         // spent: the user sees a generic error with a reference and can
         // retry the same send.
         setSendError(
-          `Could not send that post. Try again. (ref: ${mintErrorReference()})`
+          `Could not send that post. Try again. (ref: ${ref})`
         );
       })
       .finally(() => {
