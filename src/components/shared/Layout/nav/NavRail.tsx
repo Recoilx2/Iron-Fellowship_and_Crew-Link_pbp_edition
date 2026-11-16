@@ -8,6 +8,7 @@ import CharacterIcon from "@mui/icons-material/Person";
 import CampaignIcon from "@mui/icons-material/Groups";
 import WorldIcon from "@mui/icons-material/Public";
 import HomebrewIcon from "@mui/icons-material/Brush";
+import RulesIcon from "@mui/icons-material/MenuBook";
 import { NAV_ROUTES, useActiveNavRoute } from "hooks/useActiveNavRoute";
 import { SettingsMenu } from "./SettingsMenu";
 import { useStore } from "stores/store";
@@ -123,6 +124,13 @@ export function NavRail() {
                   onMouseEnter={() => setSelectedMenu(NAV_ROUTES.HOMEBREW)}
                   onHover={() => setIsMenuOpen(true)}
                   onClick={() => setIsMenuOpen(false)}
+                />
+                <NavItem
+                  href={basePaths[BASE_ROUTES.RULES]}
+                  label={"Rules"}
+                  icon={<RulesIcon />}
+                  active={activeRoute === NAV_ROUTES.RULES}
+                  onMouseEnter={() => setIsMenuOpen(false)}
                 />
               </>
             ) : (

@@ -9,6 +9,8 @@ export interface SectionHeadingProps {
   floating?: boolean;
   /** The heading element. Sections of a page are h2; nest deeper ones. */
   headingComponent?: "h2" | "h3" | "h4";
+  /** An id on the heading, so a list below it can be named by it. */
+  headingId?: string;
 }
 
 export function SectionHeading(props: SectionHeadingProps) {
@@ -19,6 +21,7 @@ export function SectionHeading(props: SectionHeadingProps) {
     floating,
     sx,
     headingComponent = "h2",
+    headingId,
   } = props;
 
   return (
@@ -55,6 +58,7 @@ export function SectionHeading(props: SectionHeadingProps) {
       <Typography
         variant={"h6"}
         component={headingComponent}
+        id={headingId}
         fontFamily={(theme) => theme.fontFamilyTitle}
         color={(theme) => theme.palette.text.secondary}
       >

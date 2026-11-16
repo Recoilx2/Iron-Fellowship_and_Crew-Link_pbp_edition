@@ -8,6 +8,7 @@ export enum BASE_ROUTES {
   SIGNUP,
   HOME,
   HOMEBREW,
+  RULES,
 }
 
 export const CHARACTER_PREFIX = "characters";
@@ -20,6 +21,7 @@ export const basePaths: { [key in BASE_ROUTES]: string } = {
   [BASE_ROUTES.CAMPAIGN]: "/campaigns",
   [BASE_ROUTES.WORLD]: "/worlds",
   [BASE_ROUTES.HOMEBREW]: "/homebrew",
+  [BASE_ROUTES.RULES]: "/rules",
   [BASE_ROUTES.LOGIN]: "/login",
   [BASE_ROUTES.SIGNUP]: "/join",
   [BASE_ROUTES.HOME]: "/",

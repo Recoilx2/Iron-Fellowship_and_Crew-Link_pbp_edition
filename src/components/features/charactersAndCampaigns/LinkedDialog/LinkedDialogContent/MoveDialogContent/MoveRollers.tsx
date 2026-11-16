@@ -3,6 +3,7 @@ import { Box, Chip, Stack } from "@mui/material";
 import { StatComponent } from "components/features/characters/StatComponent";
 import { useStore } from "stores/store";
 import { MoveAssetControl } from "./MoveAssetControl";
+import { useReferenceMode } from "hooks/useReferenceMode";
 
 export interface MoveRollersProps {
   move: Datasworn.Move;
@@ -10,6 +11,7 @@ export interface MoveRollersProps {
 
 export function MoveRollers(props: MoveRollersProps) {
   const { move } = props;
+  const isReferenceMode = useReferenceMode();
 
   const statRules = useStore((store) => store.rules.stats);
   const conditionMeterRules = useStore((store) => store.rules.conditionMeters);
@@ -17,19 +19,25 @@ export function MoveRollers(props: MoveRollersProps) {
   const isInCampaign = useStore(
     (store) => !!store.characters.currentCharacter.currentCharacter?.campaignId
   );
-  const characterStats = useStore(
-    (store) => store.characters.currentCharacter.currentCharacter?.stats
+  // In reference mode no character's values are shown, so the stats and
+  // meters a move uses appear by name only, like for someone without one.
+  const characterStats = useStore((store) =>
+    isReferenceMode
+      ? undefined
+      : store.characters.currentCharacter.currentCharacter?.stats
   );
-  const characterConditionMeters = useStore(
-    (store) =>
-      store.characters.currentCharacter.currentCharacter?.conditionMeters
+  const characterConditionMeters = useStore((store) =>
+    isReferenceMode
+      ? undefined
+      : store.characters.currentCharacter.currentCharacter?.conditionMeters
   );
   const campaignConditionMeters = useStore(
     (store) => store.campaigns.currentCampaign.currentCampaign?.conditionMeters
   );
 
   const hasCharacter = useStore(
-    (store) => !!store.characters.currentCharacter.currentCharacter
+    (store) =>
+      !isReferenceMode && !!store.characters.currentCharacter.currentCharacter
   );
   const adds = useStore(
     (store) => store.characters.currentCharacter.currentCharacter?.adds ?? 0

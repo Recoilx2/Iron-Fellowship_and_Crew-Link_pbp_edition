@@ -1,5 +1,6 @@
 import { Datasworn } from "@datasworn-community/core";
 import { Box, Stack, Typography } from "@mui/material";
+import { useReferenceMode } from "hooks/useReferenceMode";
 import { OracleButton } from "../charactersAndCampaigns/OracleSection/OracleButton";
 import { MoveOracleContent } from "./MoveOracleContent";
 import {
@@ -23,6 +24,7 @@ export interface MoveOraclesProps {
  */
 export function MoveOracles(props: MoveOraclesProps) {
   const { move } = props;
+  const isReferenceMode = useReferenceMode();
 
   const alreadyRendered = getTableIdsRenderedInMarkdown(move.text);
   const oracles = Object.entries(move.oracles ?? {}).filter(
@@ -36,7 +38,7 @@ export function MoveOracles(props: MoveOraclesProps) {
   return (
     <Box mt={2}>
       <Typography variant={"overline"}>
-        Roll Oracle{oracles.length > 1 ? "s" : ""}
+        {isReferenceMode ? "" : "Roll "}Oracle{oracles.length > 1 ? "s" : ""}
       </Typography>
       <Stack spacing={2}>
         {oracles.map(([key, oracle]) => (
