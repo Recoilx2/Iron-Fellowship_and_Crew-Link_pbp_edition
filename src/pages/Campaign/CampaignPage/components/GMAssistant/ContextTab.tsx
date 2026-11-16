@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Alert,
   Box,
@@ -19,8 +19,14 @@ import {
   type AssistantContextOptions,
 } from "api-calls/assistant/assistantContextOptions";
 import type { AssistantContextChoice } from "api-calls/assistant/_assistant.type";
-import type { AssistantContextSize } from "api-calls/assistant/gmAssistantClient";
+import {
+  fetchAssistantContextSize,
+  type AssistantContextSize,
+} from "api-calls/assistant/gmAssistantClient";
 import { referenceFor, withReference } from "./assistantFailure";
+
+/** The server's cap on references per kind in one sizing request. */
+const PREVIEW_LIMIT = 100;
 
 /**
  * The GM assistant's Context tab (spec #10, ticket #132): the checklist of
@@ -32,6 +38,13 @@ import { referenceFor, withReference } from "./assistantFailure";
  * change saves the choice (references only, never text) to
  * assistant_settings for this GM in this campaign; the server builds the
  * actual text at request time.
+ *
+ * Every candidate shows a size before it is ticked (ticket #149): once the
+ * options load, the whole candidate list goes to the server in one batched
+ * preview request (GM-only parts left out, channels at the default post
+ * count). A ticked entry keeps the size of its saved choice. While the
+ * preview loads a candidate shows an ellipsis; if it fails, or the server
+ * has no size for it, a dash. No error text is shown for it.
  */
 export function ContextTab(props: {
   campaignId: string;
@@ -61,11 +74,90 @@ export function ContextTab(props: {
     };
   }, [campaignId, reloads]);
 
+  // One batched request sizes every candidate; the answer is keyed by the
+  // same item keys the saved-context size uses.
+  const [preview, setPreview] = useState<
+    "loading" | "failed" | Map<string, number>
+  >("loading");
+  useEffect(() => {
+    setPreview("loading");
+    if (!options) return;
+    let cancelled = false;
+    // The server keeps at most PREVIEW_LIMIT references per kind per
+    // request, so a long list goes in slices, one request after another.
+    const slices: AssistantContextChoice[] = [];
+    const longest = Math.max(
+      options.lore.length,
+      options.npcs.length,
+      options.locations.length,
+      options.notes.length,
+      options.channels.length,
+      1
+    );
+    for (let start = 0; start < longest; start += PREVIEW_LIMIT) {
+      const end = start + PREVIEW_LIMIT;
+      const itemsOf = (list: Array<{ id: string }>) =>
+        list.slice(start, end).map((entry) => ({ id: entry.id, includeGmParts: false }));
+      slices.push({
+        includeOutline: start === 0 && options.outlineAvailable,
+        lore: itemsOf(options.lore),
+        npcs: itemsOf(options.npcs),
+        locations: itemsOf(options.locations),
+        notes: options.notes.slice(start, end).map((note) => note.id),
+        channels: options.channels
+          .slice(start, end)
+          .map((channel) => ({ id: channel.id, postCount: 5 })),
+      });
+    }
+    void (async () => {
+      const map = new Map<string, number>();
+      let answered = 0;
+      for (const slice of slices) {
+        if (cancelled) return;
+        try {
+          const sized = await fetchAssistantContextSize(campaignId, { preview: slice });
+          answered += 1;
+          for (const entry of sized.unavailable) {
+            if (entry.reason === "empty") map.set(entry.key, 0);
+          }
+          for (const item of sized.items) map.set(item.key, item.tokens);
+        } catch {
+          // A slice that fails leaves its candidates with a dash.
+        }
+      }
+      if (!cancelled) setPreview(answered === 0 ? "failed" : map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId, options]);
+
   const sizeByKey = useMemo(() => {
     const map = new Map<string, number>();
     for (const item of size?.items ?? []) map.set(item.key, item.tokens);
     return map;
   }, [size]);
+
+  /** "~N tokens" for a key: the saved choice's size, else the preview's. */
+  const sizeLabel = (key: string): ReactNode => {
+    const saved = sizeByKey.get(key);
+    if (saved !== undefined) return `~${saved} tokens`;
+    if (preview === "loading") {
+      return (
+        <span role={"img"} aria-label={"Size loading"}>
+          …
+        </span>
+      );
+    }
+    const previewed = preview === "failed" ? undefined : preview.get(key);
+    return previewed === undefined ? (
+      <span role={"img"} aria-label={"Size unavailable"}>
+        –
+      </span>
+    ) : (
+      `~${previewed} tokens`
+    );
+  };
 
   const toggleEntry = (
     list: "lore" | "npcs" | "locations",
@@ -163,17 +255,11 @@ export function ContextTab(props: {
           <VisibilityOffIcon fontSize={"small"} />
         )}
       </IconButton>
-      {sizeByKey.has(`${list === "npcs" ? "npc" : list === "locations" ? "location" : "lore"}:${id}`) && (
-        <Typography variant={"caption"} color={"text.secondary"} sx={{ pr: 1 }}>
-          ~
-          {
-            sizeByKey.get(
-              `${list === "npcs" ? "npc" : list === "locations" ? "location" : "lore"}:${id}`
-            )
-          }{" "}
-          tokens
-        </Typography>
-      )}
+      <Typography variant={"caption"} color={"text.secondary"} sx={{ pr: 1 }}>
+        {sizeLabel(
+          `${list === "npcs" ? "npc" : list === "locations" ? "location" : "lore"}:${id}`
+        )}
+      </Typography>
     </Box>
   );
 
@@ -215,7 +301,7 @@ export function ContextTab(props: {
           label={
             <Typography variant={"body2"}>
               Include the outline
-              {sizeByKey.has("outline") && ` (~${sizeByKey.get("outline")} tokens)`}
+              {options.outlineAvailable && <> ({sizeLabel("outline")})</>}
             </Typography>
           }
         />
@@ -279,11 +365,9 @@ export function ContextTab(props: {
                 }
                 label={<Typography variant={"body2"}>{note.title}</Typography>}
               />
-              {sizeByKey.has(`note:${note.id}`) && (
-                <Typography variant={"caption"} color={"text.secondary"} sx={{ pr: 1 }}>
-                  ~{sizeByKey.get(`note:${note.id}`)} tokens
-                </Typography>
-              )}
+              <Typography variant={"caption"} color={"text.secondary"} sx={{ pr: 1 }}>
+                {sizeLabel(`note:${note.id}`)}
+              </Typography>
             </Box>
           );
         })
@@ -328,11 +412,9 @@ export function ContextTab(props: {
                   </Typography>
                 }
               />
-              {sizeByKey.has(`channel:${channel.id}`) && (
-                <Typography variant={"caption"} color={"text.secondary"}>
-                  ~{sizeByKey.get(`channel:${channel.id}`)} tokens
-                </Typography>
-              )}
+              <Typography variant={"caption"} color={"text.secondary"}>
+                {sizeLabel(`channel:${channel.id}`)}
+              </Typography>
               <TextField
                 size={"small"}
                 type={"number"}

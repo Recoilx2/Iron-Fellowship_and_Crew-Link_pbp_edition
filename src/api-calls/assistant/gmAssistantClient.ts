@@ -1,5 +1,6 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { mintErrorReference } from "functions/errorReference";
+import type { AssistantContextChoice } from "./_assistant.type";
 
 /**
  * Browser client for the GM assistant server function (spec #10). The
@@ -222,19 +223,32 @@ export async function fetchAssistantModels(
  * Asks the server how big the GM's saved context is for a campaign:
  * per-item sizes built by the same code the chat path uses, plus the
  * instruction overhead and the saved references it had to skip. Throws
- * AssistantRequestError with the server code otherwise.
+ * AssistantRequestError with the server code otherwise. With `preview`,
+ * sizes that list of references instead (one batched request; nothing is
+ * saved), so every candidate can show a size before it is ticked.
  */
 export async function fetchAssistantContextSize(
   campaignId: string,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; preview?: AssistantContextChoice }
 ): Promise<AssistantContextSize> {
   let response: Response;
   try {
     const headers = await authHeaders();
-    response = await fetch(
-      `${functionsBaseUrl()}/gm-assistant/context-size?campaignId=${encodeURIComponent(campaignId)}`,
-      { headers, signal: options?.signal }
-    );
+    if (options?.preview) {
+      // A preview list of references is sized in one batched POST.
+      headers.set("Content-Type", "application/json");
+      response = await fetch(`${functionsBaseUrl()}/gm-assistant/context-size`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ campaignId, context: options.preview }),
+        signal: options.signal,
+      });
+    } else {
+      response = await fetch(
+        `${functionsBaseUrl()}/gm-assistant/context-size?campaignId=${encodeURIComponent(campaignId)}`,
+        { headers, signal: options?.signal }
+      );
+    }
   } catch (error) {
     if (error instanceof AssistantRequestError) {
       throw error;
