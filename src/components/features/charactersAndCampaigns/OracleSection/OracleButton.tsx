@@ -45,7 +45,7 @@ export function OracleButton(props: OracleButtonProps) {
     <Button
       {...buttonProps}
       onClick={() => rollOracleTable(oracleId, true, shouldOracleRollBeGMSOnly)}
-      endIcon={<RollIcon />}
+      endIcon={<RollIcon data-testid="CasinoIcon" />}
     >
       {children ?? oracle.name}
     </Button>
