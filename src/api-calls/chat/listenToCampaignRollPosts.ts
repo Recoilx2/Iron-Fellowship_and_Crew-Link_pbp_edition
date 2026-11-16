@@ -14,6 +14,7 @@ import {
   postRowToLogRoll,
   type PostRow,
 } from "./_postRef";
+import { logError } from "functions/errorReference";
 
 /**
  * The campaign roll log as a view of roll posts (spec #9, ticket #30).
@@ -174,7 +175,7 @@ export function listenToCampaignRollPosts(params: {
       previousIds = seen;
     },
     onError: (error) => {
-      console.error(error);
+      logError("listenToCampaignRollPosts", error);
       onError("Error getting new logs.");
     },
   });

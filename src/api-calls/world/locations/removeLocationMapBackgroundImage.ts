@@ -1,6 +1,7 @@
 import { createApiFunction } from "api-calls/createApiFunction";
 import { removeWorldImageFile } from "api-calls/world/worldImageStorage";
 import { updateLocation } from "./updateLocation";
+import { logError } from "functions/errorReference";
 
 /**
  * Removes a location's map background image. Only world GMs may write;
@@ -21,6 +22,6 @@ export const removeLocationMapBackgroundImage = createApiFunction<
     location: { mapBackgroundImageFilename: null },
   });
   await removeWorldImageFile(worldId, locationId, filename).catch((e) =>
-    console.error(e)
+    logError("removeLocationMapBackgroundImage", e)
   );
 }, "Failed to delete location image.");

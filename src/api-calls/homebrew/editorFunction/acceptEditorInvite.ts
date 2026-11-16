@@ -2,6 +2,7 @@ import {
   ClientOption,
   resolveClient,
 } from "api-calls/homebrew/_supabase";
+import { logError } from "functions/errorReference";
 
 /**
  * Accepts an editor invite: adds the caller as an editor and spends the key,
@@ -23,7 +24,7 @@ export function acceptEditorInvite(
       }
     );
     if (error) {
-      console.error(error);
+      logError("acceptEditorInvite", error);
       throw error;
     }
     return (data as boolean | null) ?? false;

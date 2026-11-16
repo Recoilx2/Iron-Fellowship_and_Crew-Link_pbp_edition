@@ -1,6 +1,7 @@
 import { createApiFunction } from "api-calls/createApiFunction";
 import { removeWorldImageFile } from "api-calls/world/worldImageStorage";
 import { updateNPC } from "./updateNPC";
+import { logError } from "functions/errorReference";
 
 /**
  * Removes an NPC image, clearing the NPC's image list. Only world GMs may
@@ -21,6 +22,6 @@ export const removeNPCImage = createApiFunction<
     npc: { imageFilenames: [] },
   });
   await removeWorldImageFile(worldId, npcId, filename).catch((e) =>
-    console.error(e)
+    logError("removeNPCImage", e)
   );
 }, "Failed to delete npc image.");

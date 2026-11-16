@@ -3,6 +3,7 @@ import { listenToCharacter } from "api-calls/character/listenToCharacter";
 import { Unsubscribe } from "api-calls/helpers.type";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { logError } from "functions/errorReference";
 
 export function useListenToCharacter() {
   const { characterId } = useParams();
@@ -14,7 +15,7 @@ export function useListenToCharacter() {
       unsubscribe = listenToCharacter(
         characterId,
         (character) => setCharacter(character),
-        (error) => console.error(error)
+        (error) => logError("useListenToCharacter", error)
       );
     }
     return () => {

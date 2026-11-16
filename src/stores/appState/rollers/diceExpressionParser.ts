@@ -1,3 +1,4 @@
+import { logError } from "functions/errorReference";
 /**
  * FROM DATASWORN ---
  * A simple dice roll expression with an optional modifer.
@@ -34,13 +35,13 @@ export function parseDiceExpression(diceExpression: string):
   }
 
   if (isNaN(diceCount)) {
-    console.error("DICE COUNT WAS NaN. ORIGINAL EXPERSSION:", diceExpression);
+    logError("DICE COUNT WAS NaN. ORIGINAL EXPERSSION:", diceExpression);
   }
   if (isNaN(typeOfDice)) {
-    console.error("TYPE OF DICE WAS NaN. ORIGINAL EXPERSSION:", diceExpression);
+    logError("TYPE OF DICE WAS NaN. ORIGINAL EXPERSSION:", diceExpression);
   }
   if (isNaN(modifier)) {
-    console.error("MODIFIER WAS NaN. ORIGINAL EXPERSSION:", diceExpression);
+    logError("MODIFIER WAS NaN. ORIGINAL EXPERSSION:", diceExpression);
   }
 
   return { diceCount, typeOfDice, modifier };

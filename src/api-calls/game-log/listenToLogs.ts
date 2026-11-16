@@ -11,6 +11,7 @@ import {
   type CharacterRollRow,
 } from "./_getRef";
 import { Roll } from "types/DieRolls.type";
+import { logError } from "functions/errorReference";
 
 export function listenToLogs(params: {
   isGM: boolean;
@@ -104,7 +105,7 @@ export function listenToLogs(params: {
       previousIds = seen;
     },
     onError: (error) => {
-      console.error(error);
+      logError("listenToLogs", error);
       onError("Error getting new logs.");
     },
   });

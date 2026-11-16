@@ -3,6 +3,7 @@ import { removeCharacterFromCampaign } from "api-calls/campaign/removeCharacterF
 import { getSupabaseClient } from "config/supabase.config";
 import { CHARACTERS_TABLE } from "./_getRef";
 import { removePortraitFile } from "./portraitStorage";
+import { logError } from "functions/errorReference";
 
 export const deleteCharacter = createApiFunction<
   {
@@ -38,7 +39,7 @@ export const deleteCharacter = createApiFunction<
     .eq("id", characterId)
     .select("id");
   if (error || !deleted || deleted.length === 0) {
-    console.error(error);
+    logError("deleteCharacter", error);
     throw error ?? new Error("Character not found");
   }
 }, "Failed to delete character.");

@@ -7,6 +7,7 @@ import { getProfile } from "api-calls/profiles/getProfile";
 import { upsertProfile } from "api-calls/profiles/upsertProfile";
 import { applyDocumentUpdate } from "api-calls/applyDocumentUpdate";
 import { UserDocument } from "api-calls/user/_user.type";
+import { logError } from "functions/errorReference";
 
 // Device preferences (sidebar side, update-dialog version, dice animation
 // choice) used to live in the Firebase user document. They are per-device
@@ -23,7 +24,7 @@ function readStoredUserDoc(uid: string): UserDocument | undefined {
     const raw = localStorage.getItem(userDocStorageKey(uid));
     return raw ? (JSON.parse(raw) as UserDocument) : undefined;
   } catch (e) {
-    console.error(e);
+    logError("auth.slice", e);
     return undefined;
   }
 }
@@ -35,7 +36,7 @@ function writeStoredUserDoc(uid: string, doc: UserDocument): void {
   try {
     localStorage.setItem(userDocStorageKey(uid), JSON.stringify(doc));
   } catch (e) {
-    console.error(e);
+    logError("auth.slice", e);
   }
 }
 
@@ -74,7 +75,7 @@ export const createAuthSlice: CreateSliceType<AuthSlice> = (set, getState) => ({
 
             if (!profile && displayName) {
               upsertProfile({ uid: user.uid, displayName }).catch((e) => {
-                console.error(e);
+                logError("auth.slice", e);
               });
             }
 
@@ -85,7 +86,7 @@ export const createAuthSlice: CreateSliceType<AuthSlice> = (set, getState) => ({
             });
           })
           .catch((e) => {
-            console.error(e);
+            logError("auth.slice", e);
             set((state) => {
               state.auth.user = undefined;
               state.auth.uid = "";
@@ -94,7 +95,7 @@ export const createAuthSlice: CreateSliceType<AuthSlice> = (set, getState) => ({
           });
       },
       onError: (error) => {
-        console.error(error);
+        logError("auth.slice", error);
         set((state) => {
           state.auth.user = undefined;
           state.auth.uid = "";

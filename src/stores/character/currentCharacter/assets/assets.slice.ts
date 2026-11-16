@@ -6,6 +6,7 @@ import { addAsset } from "api-calls/assets/addAsset";
 import { removeAsset } from "api-calls/assets/removeAsset";
 import { updateAssetCheckbox } from "api-calls/assets/updateAssetCheckbox";
 import { updateAsset } from "api-calls/assets/updateAsset";
+import { logError } from "functions/errorReference";
 
 export const createAssetsSlice: CreateSliceType<AssetSlice> = (
   set,
@@ -28,7 +29,7 @@ export const createAssetsSlice: CreateSliceType<AssetSlice> = (
         });
       },
       (error) => {
-        console.error(error);
+        logError("assets.slice", error);
         set((store) => {
           store.characters.currentCharacter.assets.loading = false;
           store.characters.currentCharacter.assets.error = error;

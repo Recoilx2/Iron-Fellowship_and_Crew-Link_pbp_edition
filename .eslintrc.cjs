@@ -41,6 +41,34 @@ module.exports = {
   },
   overrides: [
     {
+      // A bare console.error/warn logs whole error objects (a PostgrestError's
+      // `details` can hold post text). Use logError/logWarning from
+      // functions/errorReference, which log a safe summary (ticket #176).
+      files: ["src/**/*.{ts,tsx}"],
+      excludedFiles: [
+        "src/functions/errorReference.ts",
+        "src/**/*.test.{ts,tsx}",
+        "src/**/__tests__/**",
+      ],
+      rules: {
+        "no-restricted-syntax": [
+          "error",
+          {
+            selector:
+              "CallExpression[callee.object.name='console'][callee.property.name=/^(error|warn)$/]",
+            message:
+              "Use logError/logWarning from functions/errorReference instead of a bare console.error/console.warn.",
+          },
+          {
+            selector:
+              "MemberExpression[object.name='console'][property.name=/^(error|warn)$/]:not(CallExpression > MemberExpression.callee)",
+            message:
+              "Do not pass console.error/console.warn as a callback; use logError/logWarning from functions/errorReference.",
+          },
+        ],
+      },
+    },
+    {
       // The data layer may use Supabase, but Firebase stays banned
       // everywhere (spec #11 removed it completely). The browser tests
       // (spec #9, ticket #107) sign people in through the Auth Admin API

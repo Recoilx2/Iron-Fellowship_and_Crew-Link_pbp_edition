@@ -1,5 +1,6 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { AppUser, toAppUser } from "./appUser";
+import { logError } from "functions/errorReference";
 
 /**
  * The currently signed-in person, or null. Sessions persist in the browser
@@ -9,7 +10,7 @@ import { AppUser, toAppUser } from "./appUser";
 export async function getUser(): Promise<AppUser | null> {
   const { data, error } = await getSupabaseClient().auth.getSession();
   if (error) {
-    console.error(error);
+    logError("getUser", error);
     return null;
   }
   const user = data.session?.user;
