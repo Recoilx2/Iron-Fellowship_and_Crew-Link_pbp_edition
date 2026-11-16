@@ -69,69 +69,79 @@ export function GMAssistant() {
       >
         Assistant
       </Button>
-      {open &&
-        (isPhone ? (
-          <Dialog
-            fullScreen
-            open
-            onClose={() => setOpen(false)}
-            aria-label={"GM assistant"}
-          >
-            <GMAssistantPanel
-              campaignId={campaignId}
-              onClose={() => setOpen(false)}
-            />
-          </Dialog>
-        ) : (
-          <DesktopPanel
-            campaignId={campaignId}
-            onClose={() => setOpen(false)}
-            slot={dock?.hosted ? dock.slot : null}
-            waitForSlot={!!dock?.hosted}
-          />
-        ))}
+      {open && (
+        <AssistantSurface
+          campaignId={campaignId}
+          onClose={() => setOpen(false)}
+          isPhone={isPhone}
+          slot={dock?.hosted ? dock.slot : null}
+          waitForSlot={!!dock?.hosted}
+        />
+      )}
     </>
   );
 }
 
 /**
- * The desktop panel. The panel's React element lives at one stable
- * position, portalled into a host node that this component owns; only the
- * host node moves, into the Chat side pane's slot when there is one and
- * otherwise into a floating drawer. Moving the node keeps the panel's
- * state (tab, conversation, typed prompt, streamed reply) across campaign
- * tab switches, which unmount and remount the Chat pane. Focus moves into
- * the panel only when it first opens.
+ * The open panel's surface, phone and desktop alike. The panel's React
+ * element lives at one stable position, portalled into a host node that
+ * this component owns; only the host node moves -- into the phone Dialog,
+ * into the Chat side pane's slot on desktop, or into a floating drawer
+ * when there is no Chat pane. Moving the node keeps the panel's state
+ * (tab, conversation, typed prompt, streamed reply) across campaign tab
+ * switches, which unmount and remount the Chat pane, and across the window
+ * crossing the md breakpoint while the assistant is open, which used to
+ * remount the panel and lose its state (found in the PR #166 review,
+ * ticket #151). The phone Dialog keeps its own focus handling (open focus
+ * trap, restore on close); the desktop region moves focus into the panel
+ * only when it first opens.
  */
-function DesktopPanel(props: {
+function AssistantSurface(props: {
   campaignId: string;
   onClose: () => void;
+  isPhone: boolean;
   slot: HTMLElement | null;
   waitForSlot: boolean;
 }) {
-  const { campaignId, onClose, slot, waitForSlot } = props;
+  const { campaignId, onClose, isPhone, slot, waitForSlot } = props;
   const [host] = useState(() => document.createElement("div"));
   const [drawerEl, setDrawerEl] = useState<HTMLElement | null>(null);
+  const [dialogEl, setDialogEl] = useState<HTMLElement | null>(null);
   const regionRef = useRef<HTMLDivElement>(null);
   const focused = useRef(false);
   // While the Chat pane is on screen but its slot has not mounted yet, the
   // host waits unattached instead of flashing the drawer.
-  const target = slot ?? (waitForSlot ? null : drawerEl);
+  const target = isPhone
+    ? dialogEl
+    : slot ?? (waitForSlot
+      ? null
+      : drawerEl);
 
   useLayoutEffect(() => {
     host.style.height = "100%";
     if (target) {
       target.appendChild(host);
-      if (!focused.current) {
+      // The desktop region is focused once, when the panel first opens.
+      // The phone Dialog focuses itself, so its own handling stays.
+      if (!focused.current && !isPhone) {
         focused.current = true;
         regionRef.current?.focus();
       }
     } else {
       host.remove();
     }
-  }, [host, target]);
+  }, [host, target, isPhone]);
 
-  useLayoutEffect(() => () => host.remove(), [host]);
+  // On unmount the host is detached and the once-focus forgotten, so a
+  // remount (React StrictMode's mount-cleanup-mount cycle in development,
+  // found in the PR #164 review) focuses the region again.
+  useLayoutEffect(
+    () => () => {
+      host.remove();
+      focused.current = false;
+    },
+    [host]
+  );
 
   return (
     <>
@@ -147,15 +157,30 @@ function DesktopPanel(props: {
         </Box>,
         host
       )}
-      {!slot && !waitForSlot && (
-        <Drawer
-          anchor={"right"}
-          variant={"persistent"}
+      {isPhone ? (
+        <Dialog
+          fullScreen
           open
-          PaperProps={{ sx: { width: 400, maxWidth: "90vw" } }}
+          onClose={onClose}
+          aria-label={"GM assistant"}
         >
-          <Box ref={setDrawerEl} sx={{ height: "100%" }} />
-        </Drawer>
+          <Box
+            ref={setDialogEl}
+            sx={{ height: "100%", display: "flex", flexDirection: "column" }}
+          />
+        </Dialog>
+      ) : (
+        !slot &&
+        !waitForSlot && (
+          <Drawer
+            anchor={"right"}
+            variant={"persistent"}
+            open
+            PaperProps={{ sx: { width: 400, maxWidth: "90vw" } }}
+          >
+            <Box ref={setDrawerEl} sx={{ height: "100%" }} />
+          </Drawer>
+        )
       )}
     </>
   );
