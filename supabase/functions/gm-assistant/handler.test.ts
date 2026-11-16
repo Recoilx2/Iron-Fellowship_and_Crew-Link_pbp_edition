@@ -10,7 +10,7 @@
  * and the real upstream.
  */
 import { createHmac } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createGmAssistantHandler,
@@ -781,4 +781,179 @@ describe("gm assistant chat endpoint", () => {
       }
     }
   });
+});
+
+describe("gm assistant error logging (ticket #170)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const SECRET_MESSAGE = "PROMPT-TEXT-private-scene-notes-xyz";
+  const SECRET_FIELD = "BODY-FIELD-should-never-be-logged-987";
+
+  interface Scenario {
+    code: string;
+    status: number;
+    fake?: FakeOptions;
+    env?: Partial<GmAssistantEnv>;
+    request: (token: string) => Request;
+  }
+
+  const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
+  const chatBody = (extra: Record<string, unknown> = {}) =>
+    JSON.stringify({ conversationId: CONVERSATION_ID, message: SECRET_MESSAGE, extra: SECRET_FIELD, ...extra });
+  const previewBody = (campaignId: string) =>
+    JSON.stringify({ campaignId, context: { notes: SECRET_FIELD }, message: SECRET_MESSAGE });
+
+  const scenarios: Scenario[] = [
+    {
+      code: "UNAUTHORIZED",
+      status: 401,
+      request: () =>
+        new Request("http://x/gm-assistant/chat", { method: "POST", body: chatBody() }),
+    },
+    {
+      code: "INVALID_REQUEST",
+      status: 400,
+      request: (token) =>
+        new Request("http://x/gm-assistant/chat", {
+          method: "POST",
+          headers: bearer(token),
+          body: JSON.stringify({ conversationId: "not-a-uuid", message: SECRET_MESSAGE, extra: SECRET_FIELD }),
+        }),
+    },
+    {
+      code: "INVALID_REQUEST",
+      status: 400,
+      request: (token) =>
+        new Request("http://x/gm-assistant/models?campaignId=nope", { headers: bearer(token) }),
+    },
+    {
+      code: "INVALID_REQUEST",
+      status: 400,
+      request: (token) =>
+        new Request("http://x/gm-assistant/context-size", {
+          method: "POST",
+          headers: bearer(token),
+          body: previewBody("not-a-uuid"),
+        }),
+    },
+    {
+      code: "FORBIDDEN",
+      status: 403,
+      fake: { rosterRole: null },
+      request: (token) =>
+        new Request(`http://x/gm-assistant/models?campaignId=${CAMPAIGN_ID}`, { headers: bearer(token) }),
+    },
+    {
+      code: "FORBIDDEN",
+      status: 403,
+      fake: { rosterRole: null },
+      request: (token) =>
+        new Request("http://x/gm-assistant/context-size", {
+          method: "POST",
+          headers: bearer(token),
+          body: previewBody(CAMPAIGN_ID),
+        }),
+    },
+    {
+      code: "NOT_SET_UP",
+      status: 503,
+      fake: { rosterRole: "gm" },
+      env: { endpoint: "" },
+      request: (token) =>
+        new Request(`http://x/gm-assistant/models?campaignId=${CAMPAIGN_ID}`, { headers: bearer(token) }),
+    },
+    {
+      code: "NOT_SET_UP",
+      status: 503,
+      env: { endpoint: "" },
+      request: (token) =>
+        new Request("http://x/gm-assistant/chat", {
+          method: "POST",
+          headers: bearer(token),
+          body: chatBody(),
+        }),
+    },
+    {
+      code: "CONVERSATION_NOT_FOUND",
+      status: 404,
+      fake: { conversation: null },
+      request: (token) =>
+        new Request("http://x/gm-assistant/chat", {
+          method: "POST",
+          headers: bearer(token),
+          body: chatBody(),
+        }),
+    },
+    {
+      code: "PAYLOAD_TOO_LARGE",
+      status: 413,
+      fake: { rosterRole: "gm" },
+      request: (token) =>
+        new Request("http://x/gm-assistant/context-size", {
+          method: "POST",
+          headers: bearer(token),
+          body: JSON.stringify({ campaignId: CAMPAIGN_ID, pad: "x".repeat(2_000_000), m: SECRET_MESSAGE }),
+        }),
+    },
+    {
+      code: "UPSTREAM_ERROR",
+      status: 502,
+      fake: { rosterRole: "gm", modelsStatus: 500 },
+      request: (token) =>
+        new Request(`http://x/gm-assistant/models?campaignId=${CAMPAIGN_ID}`, { headers: bearer(token) }),
+    },
+    {
+      code: "UPSTREAM_ERROR",
+      status: 502,
+      fake: { chatStatus: 500 },
+      request: (token) =>
+        new Request("http://x/gm-assistant/chat", {
+          method: "POST",
+          headers: bearer(token),
+          body: chatBody(),
+        }),
+    },
+    {
+      code: "FUNCTIONS_NOT_CONFIGURED",
+      status: 404,
+      request: (token) => new Request("http://x/smoke-probe", { headers: bearer(token) }),
+    },
+  ];
+
+  it.each(scenarios.map((s, i) => [`${s.code} #${i}`, s] as const))(
+    "%s: the reference appears in exactly one log line and nothing private does",
+    async (_name, scenario) => {
+      const lines: string[] = [];
+      const capture = (...args: unknown[]) => {
+        lines.push(args.map((arg) => String(arg)).join(" "));
+      };
+      vi.spyOn(console, "error").mockImplementation(capture);
+      vi.spyOn(console, "log").mockImplementation(capture);
+      vi.spyOn(console, "warn").mockImplementation(capture);
+      vi.spyOn(console, "info").mockImplementation(capture);
+
+      const token = gmToken();
+      const { fetchImpl } = makeFake(scenario.fake);
+      const handle = createGmAssistantHandler(baseEnv(scenario.env), fetchImpl);
+      const res = await handle(scenario.request(token));
+      expect(res.status).toBe(scenario.status);
+      const body = (await res.json()) as { code: string; ref: string };
+      expect(body.code).toBe(scenario.code);
+      expect(body.ref).toMatch(/^[0-9A-Z]{6}$/);
+
+      const matching = lines.filter((line) => line.includes(body.ref));
+      expect(matching).toHaveLength(1);
+      expect(lines).toHaveLength(1);
+      expect(matching[0]).toContain(scenario.code);
+      expect(matching[0]).toContain(String(scenario.status));
+      expect(matching[0]).toContain(new URL(scenario.request(token).url).pathname);
+
+      const all = lines.join("\n");
+      for (const forbidden of [token, GM_ID, API_KEY, SECRET_MESSAGE, SECRET_FIELD, "Bearer"]) {
+        expect(all).not.toContain(forbidden);
+      }
+    },
+  );
 });

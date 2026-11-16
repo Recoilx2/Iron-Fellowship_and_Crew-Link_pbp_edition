@@ -197,9 +197,17 @@ function errorResponse(
   ref: string,
   detailForLog?: string,
 ): Response {
-  if (detailForLog) {
-    console.error(`[gm-assistant] ${ref} ${code}: ${detailForLog}`);
-  }
+  // One line per error response, so every reference a GM sees can be found
+  // in the server log. Only the reference, code, status, method and path are
+  // logged, plus the optional server-side detail: never the request body,
+  // headers, token, prompt text or user ids.
+  const path = new URL(req.url).pathname;
+  const detail = detailForLog
+    ? ` detail=${detailForLog.replace(/\s+/g, " ").slice(0, 300)}`
+    : "";
+  console.error(
+    `[gm-assistant] ref=${ref} code=${code} status=${status} route=${req.method} ${path}${detail}`,
+  );
   const headers = corsHeaders(req, env);
   headers.set("Content-Type", "application/json");
   return Response.json({ code, message, ref }, { status, headers });
@@ -1609,14 +1617,13 @@ export function createGmAssistantHandler(
     if (req.method === "POST" && url.pathname === "/gm-assistant/chat") {
       return handleChat(req, env, caller, callerToken, fetchImpl, options);
     }
-    const headers = corsHeaders(req, env);
-    headers.set("Content-Type", "application/json");
-    return Response.json(
-      {
-        code: "FUNCTIONS_NOT_CONFIGURED",
-        message: "No server functions are deployed yet",
-      },
-      { status: 404, headers },
+    return errorResponse(
+      req,
+      env,
+      404,
+      "FUNCTIONS_NOT_CONFIGURED",
+      "No server functions are deployed yet",
+      mintReference(),
     );
   };
 }
