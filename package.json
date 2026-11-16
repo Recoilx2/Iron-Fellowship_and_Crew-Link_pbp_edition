@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "lint": "eslint ./src ./e2e playwright.config.ts --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "format": "eslint ./src ./e2e playwright.config.ts --ext ts,tsx --fix",
+    "lint": "eslint ./src ./e2e ./supabase/functions playwright.config.ts --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "format": "eslint ./src ./e2e ./supabase/functions playwright.config.ts --ext ts,tsx --fix",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",

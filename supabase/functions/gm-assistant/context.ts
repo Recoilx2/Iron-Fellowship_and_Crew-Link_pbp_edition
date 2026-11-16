@@ -17,7 +17,8 @@ import {
 } from "./protocol.ts";
 import type { UpstreamFetch } from "./env.ts";
 import type { GmAssistantEnv } from "./env.ts";
-import { mintReference, UUID_PATTERN } from "./security.ts";
+import { UUID_PATTERN } from "./security.ts";
+import { logServerError } from "./log.ts";
 import { postgrest } from "./postgrest.ts";
 import { yjsBase64ToPlainText } from "./yjsText.ts";
 
@@ -177,8 +178,10 @@ export async function buildAssistantContext(
     fetchImpl,
   );
   if (campaignRead.status !== 200) {
-    console.error(
-      `[gm-assistant] ref=${mintReference()} code=WORLD_READ_FAILED status=${campaignRead.status} campaigns read failed; world references are skipped`,
+    logServerError(
+      "WORLD_READ_FAILED",
+      "campaigns read failed; world references are skipped",
+      { status: campaignRead.status },
     );
   }
   const worldId = (campaignRead.rows[0] as { world_id?: unknown } | undefined)?.world_id;

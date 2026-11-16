@@ -520,6 +520,41 @@ describe("GMAssistant gating", () => {
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
+  it("keeps the phone dialog open on Escape during IME composition", async () => {
+    mockViewport(390);
+    const view = render();
+    act(() => {
+      view
+        .querySelector("button")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    const prompt = dialog?.querySelector("textarea");
+    expect(prompt).not.toBeNull();
+    act(() => {
+      prompt?.focus();
+      prompt?.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          bubbles: true,
+          cancelable: true,
+          // A keydown while an IME is mid-composition: real browsers
+          // report isComposing and the 229 composition keyCode, and
+          // neither the safeguard below nor the Dialog's own handler
+          // may treat this Escape as a close request.
+          isComposing: true,
+          keyCode: 229,
+        })
+      );
+    });
+    await flush();
+
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
   it("shows Chat, Context and Outline tabs with Context enabled", () => {
     const view = render();
     act(() => {

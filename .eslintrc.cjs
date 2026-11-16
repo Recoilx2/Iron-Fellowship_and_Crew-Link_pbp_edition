@@ -42,8 +42,9 @@ module.exports = {
   overrides: [
     {
       // A bare console.error/warn logs whole error objects (a PostgrestError's
-      // `details` can hold post text). Use logError/logWarning from
-      // functions/errorReference, which log a safe summary (ticket #176).
+      // `details` can hold post text), and log/debug/info are just as
+      // unreviewed. Use logError/logWarning from functions/errorReference,
+      // which log a safe summary (ticket #176, PR #186 review).
       files: ["src/**/*.{ts,tsx}"],
       excludedFiles: [
         "src/functions/errorReference.ts",
@@ -55,30 +56,75 @@ module.exports = {
           "error",
           {
             selector:
-              "CallExpression[callee.object.name='console'][callee.property.name=/^(error|warn)$/]",
+              "CallExpression[callee.object.name='console'][callee.property.name=/^(error|warn|log|debug|info)$/]",
             message:
-              "Use logError/logWarning from functions/errorReference instead of a bare console.error/console.warn.",
+              "Use logError/logWarning from functions/errorReference instead of a bare console.error/console.warn/console.log/console.debug/console.info.",
           },
           {
             // The computed form too: console["error"](...) gets past a
             // property-name match alone.
             selector:
-              "CallExpression[callee.object.name='console'][callee.computed=true][callee.property.value=/^(error|warn)$/]",
+              "CallExpression[callee.object.name='console'][callee.computed=true][callee.property.value=/^(error|warn|log|debug|info)$/]",
             message:
-              "Use logError/logWarning from functions/errorReference instead of a bare console.error/console.warn.",
+              "Use logError/logWarning from functions/errorReference instead of a bare console.error/console.warn/console.log/console.debug/console.info.",
           },
           {
             selector:
-              "MemberExpression[object.name='console'][property.name=/^(error|warn)$/]:not(CallExpression > MemberExpression.callee)",
+              "MemberExpression[object.name='console'][property.name=/^(error|warn|log|debug|info)$/]:not(CallExpression > MemberExpression.callee)",
             message:
-              "Do not pass console.error/console.warn as a callback; use logError/logWarning from functions/errorReference.",
+              "Do not pass console.error/console.warn/console.log/console.debug/console.info as a callback; use logError/logWarning from functions/errorReference.",
           },
           {
             // The computed form of the same, e.g. .catch(console["error"]).
             selector:
-              "MemberExpression[object.name='console'][computed=true][property.value=/^(error|warn)$/]:not(CallExpression > MemberExpression.callee)",
+              "MemberExpression[object.name='console'][computed=true][property.value=/^(error|warn|log|debug|info)$/]:not(CallExpression > MemberExpression.callee)",
             message:
-              "Do not pass console.error/console.warn as a callback; use logError/logWarning from functions/errorReference.",
+              "Do not pass console.error/console.warn/console.log/console.debug/console.info as a callback; use logError/logWarning from functions/errorReference.",
+          },
+        ],
+      },
+    },
+    {
+      // The same ban for the Supabase edge functions (ticket #183): a bare
+      // console call there could log ids, URLs or secrets. Server error
+      // lines go through logServerError from gm-assistant/log, which mints
+      // a reference and sanitizes every fragment. Exempt files: the log
+      // helper itself, and the unit tests (which assert on captured log
+      // calls).
+      files: ["supabase/functions/**/*.ts"],
+      excludedFiles: [
+        "supabase/functions/gm-assistant/log.ts",
+        "supabase/functions/**/*.test.ts",
+      ],
+      rules: {
+        "no-restricted-syntax": [
+          "error",
+          {
+            selector:
+              "CallExpression[callee.object.name='console'][callee.property.name=/^(error|warn|log|debug|info)$/]",
+            message:
+              "Use logServerError from gm-assistant/log instead of a bare console.error/console.warn/console.log/console.debug/console.info.",
+          },
+          {
+            // The computed form too: console["error"](...) gets past a
+            // property-name match alone.
+            selector:
+              "CallExpression[callee.object.name='console'][callee.computed=true][callee.property.value=/^(error|warn|log|debug|info)$/]",
+            message:
+              "Use logServerError from gm-assistant/log instead of a bare console.error/console.warn/console.log/console.debug/console.info.",
+          },
+          {
+            selector:
+              "MemberExpression[object.name='console'][property.name=/^(error|warn|log|debug|info)$/]:not(CallExpression > MemberExpression.callee)",
+            message:
+              "Do not pass console.error/console.warn/console.log/console.debug/console.info as a callback; use logServerError from gm-assistant/log.",
+          },
+          {
+            // The computed form of the same, e.g. .catch(console["error"]).
+            selector:
+              "MemberExpression[object.name='console'][computed=true][property.value=/^(error|warn|log|debug|info)$/]:not(CallExpression > MemberExpression.callee)",
+            message:
+              "Do not pass console.error/console.warn/console.log/console.debug/console.info as a callback; use logServerError from gm-assistant/log.",
           },
         ],
       },

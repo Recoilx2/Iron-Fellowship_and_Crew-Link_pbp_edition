@@ -288,48 +288,49 @@ describe("ContextTab", () => {
   it(
     "sizes more than 100 candidates of one kind in slices of at most 100",
     async () => {
-    vi.mocked(fetchAssistantContextOptions).mockResolvedValue({
-      worldId: "world-1",
-      outlineAvailable: false,
-      lore: Array.from({ length: 205 }, (_, i) => ({ id: `bulk-${i}`, name: `Entry ${i}` })),
-      npcs: [],
-      locations: [],
-      notes: [],
-      channels: [],
-    });
-    vi.mocked(fetchAssistantContextSize).mockImplementation(async (_id, options) => ({
-      items: (options?.preview?.lore ?? []).map((ref) => ({
-        key: `lore:${ref.id}`,
-        label: ref.id,
-        chars: 4,
-        tokens: 7,
-      })),
-      totalChars: 0,
-      totalTokens: 0,
-      instructionChars: 0,
-      instructionTokens: 0,
-      unavailable: [],
-    }));
-    const view = await render(() => {});
-    try {
-      // Wait for the last slice, not a fixed sleep: under load the three
-      // sequential requests can take a while (ticket #151).
-      await vi.waitFor(
-        () => {
-          const boxes = Array.from(
-            view.querySelectorAll('input[aria-label^="Include Entry "]')
-          ).map((input) => input.closest("div[class*='MuiBox']")?.textContent ?? "");
-          expect(boxes.filter((text) => !text.includes("~7 tokens"))).toEqual([]);
-        },
-        { timeout: 5000, interval: 10 }
-      );
-      const calls = vi.mocked(fetchAssistantContextSize).mock.calls;
-      expect(calls.map(([, o]) => o?.preview?.lore.length)).toEqual([100, 100, 5]);
-    } finally {
-      cleanup();
-    }
-  },
-  15_000);
+      vi.mocked(fetchAssistantContextOptions).mockResolvedValue({
+        worldId: "world-1",
+        outlineAvailable: false,
+        lore: Array.from({ length: 205 }, (_, i) => ({ id: `bulk-${i}`, name: `Entry ${i}` })),
+        npcs: [],
+        locations: [],
+        notes: [],
+        channels: [],
+      });
+      vi.mocked(fetchAssistantContextSize).mockImplementation(async (_id, options) => ({
+        items: (options?.preview?.lore ?? []).map((ref) => ({
+          key: `lore:${ref.id}`,
+          label: ref.id,
+          chars: 4,
+          tokens: 7,
+        })),
+        totalChars: 0,
+        totalTokens: 0,
+        instructionChars: 0,
+        instructionTokens: 0,
+        unavailable: [],
+      }));
+      const view = await render(() => {});
+      try {
+        // Wait for the last slice, not a fixed sleep: under load the three
+        // sequential requests can take a while (ticket #151).
+        await vi.waitFor(
+          () => {
+            const boxes = Array.from(
+              view.querySelectorAll('input[aria-label^="Include Entry "]')
+            ).map((input) => input.closest("div[class*='MuiBox']")?.textContent ?? "");
+            expect(boxes.filter((text) => !text.includes("~7 tokens"))).toEqual([]);
+          },
+          { timeout: 5000, interval: 10 }
+        );
+        const calls = vi.mocked(fetchAssistantContextSize).mock.calls;
+        expect(calls.map(([, o]) => o?.preview?.lore.length)).toEqual([100, 100, 5]);
+      } finally {
+        cleanup();
+      }
+    },
+    15_000
+  );
 
   it("shows a dash only for the rows of a slice that failed", async () => {
     vi.mocked(fetchAssistantContextOptions).mockResolvedValue({

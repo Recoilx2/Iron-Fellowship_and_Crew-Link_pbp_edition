@@ -154,16 +154,20 @@ function AssistantSurface(props: {
           role={isPhone ? undefined : "complementary"}
           aria-label={isPhone ? undefined : "GM assistant"}
           tabIndex={-1}
-          // Escape closing the phone dialog is asserted by a test, but the
+          // A safeguard: MUI's Dialog already closes on Escape, and the
           // path a keydown takes from inside the portalled panel to MUI's
           // Modal root is subtle (the host div has no fiber, so the
           // synthetic path re-enters the Dialog's tree at its host Box).
           // Handling Escape here as well keeps that behaviour explicit and
-          // independent of where the host node lives.
+          // independent of where the host node lives. Like MUI's own
+          // handler, it skips Escape while text is being composed (IME).
           onKeyDown={
             isPhone
               ? (event) => {
-                  if (event.key === "Escape") {
+                  if (
+                    event.key === "Escape" &&
+                    !event.nativeEvent.isComposing
+                  ) {
                     onClose();
                   }
                 }
