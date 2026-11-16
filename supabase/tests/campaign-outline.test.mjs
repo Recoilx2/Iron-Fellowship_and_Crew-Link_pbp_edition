@@ -32,6 +32,7 @@ describe("campaign outline migration (#131)", () => {
     // Migrations that landed after the outline (the #133 outline
     // versions) sort later by design, so they are excluded here.
     const landedLater = new Set([
+      "20261121000008_assistant_messages_applied_version_index.sql",
       "20261121000006_assistant_outline_versions.sql",
       "20261121000007_assistant_proposal_state.sql",
     ]);

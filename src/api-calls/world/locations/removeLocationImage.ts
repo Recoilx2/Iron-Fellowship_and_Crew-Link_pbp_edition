@@ -1,6 +1,7 @@
 import { createApiFunction } from "api-calls/createApiFunction";
 import { removeWorldImageFile } from "api-calls/world/worldImageStorage";
 import { updateLocation } from "./updateLocation";
+import { logError } from "functions/errorReference";
 
 /**
  * Removes a location image, clearing the location's image list. Only
@@ -21,6 +22,6 @@ export const removeLocationImage = createApiFunction<
     location: { imageFilenames: [] },
   });
   await removeWorldImageFile(worldId, locationId, filename).catch((e) =>
-    console.error(e)
+    logError("removeLocationImage", e)
   );
 }, "Failed to delete location image.");

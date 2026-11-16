@@ -1,4 +1,5 @@
 import { MAX_FILE_SIZE } from "./imageLimits";
+import { logError } from "functions/errorReference";
 
 /**
  * Browser-side image shrinking for uploads. Images are served as uploaded
@@ -92,7 +93,7 @@ export async function shrinkImageFile(
     }
     return new File([blob], file.name, { type: blob.type || outputType });
   } catch (error) {
-    console.error(error);
+    logError("shrinkImage", error);
     return file;
   }
 }

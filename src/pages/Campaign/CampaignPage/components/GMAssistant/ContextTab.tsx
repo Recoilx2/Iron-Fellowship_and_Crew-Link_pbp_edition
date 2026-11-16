@@ -29,6 +29,15 @@ import { referenceFor, withReference } from "./assistantFailure";
 const PREVIEW_LIMIT = 100;
 
 /**
+ * The cache key for a preview: everything that determines the requests —
+ * the campaign and the exact candidate slices. Two opens of the tab with
+ * the same candidates share one answer (ticket #151).
+ */
+function previewKey(campaignId: string, slices: AssistantContextChoice[]): string {
+  return JSON.stringify({ campaignId, slices });
+}
+
+/**
  * The GM assistant's Context tab (spec #10, ticket #132): the checklist of
  * what the assistant may read, grouped as campaign outline, lore, NPCs,
  * locations, notes and recent posts. Each entry shows its approximate size
@@ -52,8 +61,17 @@ export function ContextTab(props: {
   size: AssistantContextSize | null;
   conversationTokens: number;
   onSave: (context: AssistantContextChoice) => void;
+  /**
+   * Preview sizes from earlier in this session, keyed by candidate list
+   * (ticket #151): on a large campaign one preview is over a thousand
+   * database reads, and the tab reopens on every visit, so the panel
+   * passes its session cache here and a repeat open of the same
+   * candidates makes no request at all. Sizes are approximations; the
+   * saved choice's own sizes always come fresh from the server.
+   */
+  previewCache?: Map<string, Map<string, number>>;
 }) {
-  const { campaignId, context, size, conversationTokens, onSave } = props;
+  const { campaignId, context, size, conversationTokens, onSave, previewCache } = props;
   const [options, setOptions] = useState<AssistantContextOptions | null>(null);
   const [failedRef, setFailedRef] = useState<string | null>(null);
   const [reloads, setReloads] = useState(0);
@@ -82,7 +100,6 @@ export function ContextTab(props: {
   useEffect(() => {
     setPreview("loading");
     if (!options) return;
-    let cancelled = false;
     // The server keeps at most PREVIEW_LIMIT references per kind per
     // request, so a long list goes in slices, one request after another.
     const slices: AssistantContextChoice[] = [];
@@ -109,28 +126,51 @@ export function ContextTab(props: {
           .map((channel) => ({ id: channel.id, postCount: 5 })),
       });
     }
+    // Same candidates as an earlier open this session: reuse those sizes
+    // and make no request at all (ticket #151).
+    const cacheKey = previewKey(campaignId, slices);
+    const cached = previewCache?.get(cacheKey);
+    if (cached) {
+      setPreview(new Map(cached));
+      return;
+    }
+    const controller = new AbortController();
+    let cancelled = false;
     void (async () => {
       const map = new Map<string, number>();
       let answered = 0;
       for (const slice of slices) {
         if (cancelled) return;
         try {
-          const sized = await fetchAssistantContextSize(campaignId, { preview: slice });
+          const sized = await fetchAssistantContextSize(campaignId, {
+            preview: slice,
+            signal: controller.signal,
+          });
           answered += 1;
           for (const entry of sized.unavailable) {
             if (entry.reason === "empty") map.set(entry.key, 0);
           }
           for (const item of sized.items) map.set(item.key, item.tokens);
         } catch {
-          // A slice that fails leaves its candidates with a dash.
+          // A slice that fails (or is aborted) leaves its candidates with
+          // a dash.
         }
+      }
+      if (controller.signal.aborted) return;
+      if (answered === slices.length && answered > 0) {
+        // Only a fully answered preview is cached, so a partial failure
+        // retries on the next open.
+        previewCache?.set(cacheKey, new Map(map));
       }
       if (!cancelled) setPreview(answered === 0 ? "failed" : map);
     })();
     return () => {
       cancelled = true;
+      // Stop any still-queued slice requests when the tab closes or the
+      // candidates change (ticket #151).
+      controller.abort();
     };
-  }, [campaignId, options]);
+  }, [campaignId, options, previewCache]);
 
   const sizeByKey = useMemo(() => {
     const map = new Map<string, number>();

@@ -6,6 +6,7 @@ import { TrackStatus } from "types/Track.type";
 import { addProgressTrack } from "api-calls/tracks/addProgressTrack";
 import { updateProgressTrack } from "api-calls/tracks/updateProgressTrack";
 import { removeProgressTrack } from "api-calls/tracks/removeProgressTrack";
+import { logError } from "functions/errorReference";
 
 export const createCampaignTracksSlice: CreateSliceType<CampaignTracksSlice> = (
   set,
@@ -36,7 +37,7 @@ export const createCampaignTracksSlice: CreateSliceType<CampaignTracksSlice> = (
         });
       },
       (error) => {
-        console.error(error);
+        logError("campaignTracks.slice", error);
       }
     );
 

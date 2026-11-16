@@ -67,6 +67,26 @@ describe("chat slice channel list", () => {
     });
   });
 
+  it("logs a failure without the post text its details hold", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { slice } = setUpSlice();
+      slice.subscribe("campaign-1");
+      capturedFail?.({
+        code: "23514",
+        message: "new row violates check constraint",
+        details: "Failing row contains (secret post text)",
+        hint: "secret hint",
+      });
+      expect(spy).toHaveBeenCalledWith("chat.slice channels subscription", {
+        code: "23514",
+        message: "new row violates check constraint",
+      });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("loads the campaign channels and opens the starting IC channel", () => {
     const { slice, draft } = setUpSlice();
     slice.subscribe("campaign-1");

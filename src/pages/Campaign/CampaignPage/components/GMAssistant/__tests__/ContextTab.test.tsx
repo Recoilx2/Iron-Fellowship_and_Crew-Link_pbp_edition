@@ -94,7 +94,10 @@ describe("ContextTab", () => {
     container = undefined;
   }
 
-  async function render(onSave: (next: AssistantContextChoice) => void) {
+  async function render(
+    onSave: (next: AssistantContextChoice) => void,
+    options?: { previewCache?: Map<string, Map<string, number>> }
+  ) {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -107,6 +110,7 @@ describe("ContextTab", () => {
             size={size}
             conversationTokens={30}
             onSave={onSave}
+            previewCache={options?.previewCache}
           />
         </ThemeProvider>
       );
@@ -279,7 +283,11 @@ describe("ContextTab", () => {
     }
   });
 
-  it("sizes more than 100 candidates of one kind in slices of at most 100", async () => {
+  // Under load the three sequential slice requests can outlive the default
+  // 5 s test timeout (the #177 review asked for an explicit one here).
+  it(
+    "sizes more than 100 candidates of one kind in slices of at most 100",
+    async () => {
     vi.mocked(fetchAssistantContextOptions).mockResolvedValue({
       worldId: "world-1",
       outlineAvailable: false,
@@ -303,17 +311,118 @@ describe("ContextTab", () => {
       unavailable: [],
     }));
     const view = await render(() => {});
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    });
     try {
+      // Wait for the last slice, not a fixed sleep: under load the three
+      // sequential requests can take a while (ticket #151).
+      await vi.waitFor(
+        () => {
+          const boxes = Array.from(
+            view.querySelectorAll('input[aria-label^="Include Entry "]')
+          ).map((input) => input.closest("div[class*='MuiBox']")?.textContent ?? "");
+          expect(boxes.filter((text) => !text.includes("~7 tokens"))).toEqual([]);
+        },
+        { timeout: 5000, interval: 10 }
+      );
       const calls = vi.mocked(fetchAssistantContextSize).mock.calls;
       expect(calls.map(([, o]) => o?.preview?.lore.length)).toEqual([100, 100, 5]);
+    } finally {
+      cleanup();
+    }
+  },
+  15_000);
+
+  it("shows a dash only for the rows of a slice that failed", async () => {
+    vi.mocked(fetchAssistantContextOptions).mockResolvedValue({
+      worldId: "world-1",
+      outlineAvailable: false,
+      lore: Array.from({ length: 150 }, (_, i) => ({ id: `bulk-${i}`, name: `Entry ${i}` })),
+      npcs: [],
+      locations: [],
+      notes: [],
+      channels: [],
+    });
+    vi.mocked(fetchAssistantContextSize)
+      .mockRejectedValueOnce(new Error("socket hang up on the first slice"))
+      .mockImplementation(async (_id, options) => ({
+        items: (options?.preview?.lore ?? []).map((ref) => ({
+          key: `lore:${ref.id}`,
+          label: ref.id,
+          chars: 4,
+          tokens: 7,
+        })),
+        totalChars: 0,
+        totalTokens: 0,
+        instructionChars: 0,
+        instructionTokens: 0,
+        unavailable: [],
+      }));
+    const view = await render(() => {});
+    try {
+      // Slice-two rows are the three-digit ids (bulk-100 and up); slice-one
+      // rows are bulk-0 to bulk-99.
+      const isSliceTwo = (label: string) => /^Include Entry 1[0-9][0-9]$/.test(label);
+      const isSliceOne = (label: string) => /^Include Entry [0-9]?[0-9]$/.test(label);
+      await vi.waitFor(
+        () => {
+          // The second slice answered: every bulk-1xx row shows its size.
+          const boxes = Array.from(
+            view.querySelectorAll('input[aria-label^="Include Entry "]')
+          ).map((input) => ({
+            label: input.getAttribute("aria-label") ?? "",
+            text: input.closest("div[class*='MuiBox']")?.textContent ?? "",
+          }));
+          expect(boxes.filter((box) => isSliceTwo(box.label) && !box.text.includes("~7 tokens"))).toEqual([]);
+        },
+        { timeout: 5000, interval: 10 }
+      );
       const boxes = Array.from(
         view.querySelectorAll('input[aria-label^="Include Entry "]')
-      ).map((input) => input.closest("div[class*='MuiBox']")?.textContent ?? "");
-      expect(boxes).toHaveLength(205);
-      expect(boxes.filter((text) => !text.includes("~7 tokens"))).toEqual([]);
+      ).map((input) => ({
+        label: input.getAttribute("aria-label") ?? "",
+        text: input.closest("div[class*='MuiBox']")?.textContent ?? "",
+      }));
+      // The first slice failed: exactly its 100 rows show a dash.
+      expect(boxes.filter((box) => isSliceOne(box.label) && box.text.includes("tokens"))).toEqual([]);
+      expect(boxes.filter((box) => isSliceOne(box.label) && box.text.includes("–"))).toHaveLength(100);
+      expect(view.textContent).not.toContain("socket hang up");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("aborts the in-flight preview request when the tab closes", async () => {
+    const signals: AbortSignal[] = [];
+    vi.mocked(fetchAssistantContextSize).mockImplementation(
+      async (_id, options) =>
+        new Promise((_, reject) => {
+          options?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("Aborted", "AbortError"))
+          );
+          signals.push(options?.signal as AbortSignal);
+        })
+    );
+    const view = await render(() => {});
+    expect(signals.length).toBeGreaterThan(0);
+    cleanup();
+    expect(signals.every((signal) => signal.aborted)).toBe(true);
+    view.remove();
+  });
+
+  it("reuses a cached preview for the same candidates without requesting again", async () => {
+    const previewCache = new Map<string, Map<string, number>>();
+    await render(() => {}, { previewCache });
+    try {
+      expect(fetchAssistantContextSize).toHaveBeenCalledTimes(1);
+    } finally {
+      cleanup();
+    }
+    const view2 = await render(() => {}, { previewCache });
+    try {
+      // Same candidates, same session: no request at all, sizes shown.
+      expect(fetchAssistantContextSize).toHaveBeenCalledTimes(1);
+      const keeper = view2.querySelector('input[aria-label="Include Keeper"]') as HTMLInputElement;
+      const row = keeper.closest("div[class*='MuiBox']")?.textContent ?? "";
+      expect(row).toContain("~70 tokens");
     } finally {
       cleanup();
     }

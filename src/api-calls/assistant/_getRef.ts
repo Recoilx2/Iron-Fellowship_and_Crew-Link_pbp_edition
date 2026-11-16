@@ -166,15 +166,10 @@ export function constructAssistantMessagesFilter(
   return assistantChannelFilter("conversation_id", conversationId);
 }
 
-export function constructAssistantSettingsChannelName(
-  campaignId: string
-): string {
-  return assistantChannelName("assistant-settings", campaignId);
-}
-
-export function constructAssistantSettingsFilter(campaignId: string): string {
-  return assistantChannelFilter("campaign_id", campaignId);
-}
+// There is deliberately no assistant-settings channel constructor: no
+// listener opens assistant-settings:<campaignId> — settings are read and
+// saved over REST, and the realtime allowlist dropped the speculative
+// entry (migration 20261121000007_realtime_assistant_prune_settings.sql).
 
 export function conversationRowToDocument(
   row: AssistantConversationRow

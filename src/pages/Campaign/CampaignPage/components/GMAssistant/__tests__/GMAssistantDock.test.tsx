@@ -295,4 +295,41 @@ describe("GM assistant docking", () => {
 
     expect(tracks().getAttribute("aria-selected")).toBe("true");
   });
+
+  it("keeps the panel's state when the window crosses the md breakpoint while open", () => {
+    mockViewport(1400);
+    const view = renderToggleable();
+    click(trigger(view));
+    const input = () =>
+      view.querySelector('input[aria-label="Prompt"]') as HTMLInputElement;
+    const panel = () => view.querySelector('[data-testid="panel"]');
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value"
+    )?.set;
+    act(() => {
+      setter?.call(input(), "What happens next?");
+      input().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const before = panel();
+
+    // Desktop to phone: the same panel element moves into the full-screen
+    // dialog instead of remounting and losing its state.
+    mockViewport(390);
+    click(view.querySelector('[data-testid="toggle-chat"]') as Element);
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.querySelector('[data-testid="panel"]')).toBe(before);
+    // The dialog portals to document.body, so read the input there.
+    const phoneInput = document.querySelector(
+      'input[aria-label="Prompt"]'
+    ) as HTMLInputElement;
+    expect(phoneInput.value).toBe("What happens next?");
+
+    // Phone back to desktop: still the same element.
+    mockViewport(1400);
+    click(view.querySelector('[data-testid="toggle-chat"]') as Element);
+    expect(view.querySelector('[data-testid="assistant-dock"]')).not.toBeNull();
+    expect(panel()).toBe(before);
+    expect(input().value).toBe("What happens next?");
+  });
 });

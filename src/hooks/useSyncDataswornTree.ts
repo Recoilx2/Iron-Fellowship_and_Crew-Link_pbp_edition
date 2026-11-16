@@ -2,11 +2,12 @@ import { Datasworn, IdParser } from "@datasworn-community/core";
 import { useEffect } from "react";
 import { useStore } from "stores/store";
 import { useDataswornTree } from "./useDataswornTree";
+import { logError } from "functions/errorReference";
 
 export function loadBaseRulesetForSync(
   loadBaseRuleset: () => Promise<void>,
 ): void {
-  loadBaseRuleset().catch(console.error);
+  loadBaseRuleset().catch((e) => logError("useSyncDataswornTree", e));
 }
 
 export function syncDataswornTree(

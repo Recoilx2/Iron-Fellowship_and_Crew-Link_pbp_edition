@@ -16,6 +16,8 @@ export interface OracleDialogContentProps {
   handleBack: () => void;
   handleClose: () => void;
   isLastItem: boolean;
+  /** The id the dialog is named by, when its container is not an MUI Dialog. */
+  titleId?: string;
 }
 
 // TODO - remove once datasworn is correct
@@ -25,7 +27,7 @@ type TempType = {
 };
 
 export function OracleDialogContent(props: OracleDialogContentProps) {
-  const { id, handleBack, handleClose, isLastItem } = props;
+  const { id, handleBack, handleClose, isLastItem, titleId } = props;
   const isReferenceMode = useReferenceMode();
 
   const oracles = useStore((store) => store.rules.oracleMaps.allOraclesMap);
@@ -44,6 +46,7 @@ export function OracleDialogContent(props: OracleDialogContentProps) {
           handleBack={handleBack}
           handleClose={handleClose}
           isLastItem={isLastItem}
+          titleId={titleId}
         >
           Oracle Not Found
         </LinkedDialogContentTitle>
@@ -61,6 +64,7 @@ export function OracleDialogContent(props: OracleDialogContentProps) {
         handleBack={handleBack}
         handleClose={handleClose}
         isLastItem={isLastItem}
+        titleId={titleId}
         actions={
           isReferenceMode ? undefined : (
             <Tooltip title={pinned ? "Unpin Oracle" : "Pin Oracle"}>

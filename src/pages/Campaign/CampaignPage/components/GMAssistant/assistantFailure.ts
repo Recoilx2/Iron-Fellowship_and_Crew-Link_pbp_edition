@@ -42,13 +42,13 @@ export function toAssistantFailure(error: unknown): AssistantFailure {
     return {
       code: error.code,
       message: messageForCode(error.code),
-      ref: error.ref ?? shownReference(error, error),
+      ref: error.ref ?? shownReference(error),
     };
   }
   return {
     code: "UPSTREAM_ERROR",
     message: GENERIC_MESSAGE,
-    ref: shownReference(error, error),
+    ref: shownReference(error),
   };
 }
 
@@ -59,7 +59,7 @@ export function toAssistantFailure(error: unknown): AssistantFailure {
 export function referenceFor(error: unknown): string {
   return error instanceof AssistantRequestError && error.ref
     ? error.ref
-    : shownReference(error, error);
+    : shownReference(error);
 }
 
 /** `message (ref: ABC123)`, the shape every assistant error is shown in. */

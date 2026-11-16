@@ -3,8 +3,11 @@
 // Routes /gm-assistant/* to the GM assistant proxy (spec #10); every other
 // /functions/v1/* request gets a 404 with a stable, machine-readable body so
 // operators can tell "no such function" apart from "gateway or runtime down"
-// (the smoke test and CI probe rely on that code).
+// (the smoke test and CI probe rely on that code). The route list is shared
+// with the handler and the browser client (protocol.ts, ticket #151), so
+// the three sides cannot drift.
 import { createGmAssistantHandler } from "../gm-assistant/handler.ts";
+import { isGmAssistantPath } from "../gm-assistant/protocol.ts";
 
 const handleGmAssistant = createGmAssistantHandler({
   endpoint: Deno.env.get("GM_ASSISTANT_ENDPOINT") ?? "",
@@ -20,13 +23,11 @@ const handleGmAssistant = createGmAssistantHandler({
 
 Deno.serve((req: Request): Promise<Response> => {
   const { pathname } = new URL(req.url);
-  if (
-    pathname === "/gm-assistant/models" ||
-    pathname === "/gm-assistant/context-size" ||
-    pathname === "/gm-assistant/chat"
-  ) {
+  if (isGmAssistantPath(pathname)) {
     return handleGmAssistant(req);
   }
+  // OPTIONS on any other /gm-assistant/* path still reaches the handler,
+  // which answers preflight refusals with a bodyless 404.
   if (req.method === "OPTIONS" && pathname.startsWith("/gm-assistant/")) {
     return handleGmAssistant(req);
   }

@@ -75,7 +75,10 @@ describe("createApiFunction with a SnackbarProvider", () => {
       for (const [index, failure] of [failure1, failure2].entries()) {
         const call = consoleSpy.mock.calls[index];
         expect(call[0]).toContain(codes[index]);
-        expect(call[1]).toBe(failure);
+        expect(call[1]).toEqual({
+          name: failure.name,
+          message: failure.message,
+        });
       }
     } finally {
       consoleSpy.mockRestore();

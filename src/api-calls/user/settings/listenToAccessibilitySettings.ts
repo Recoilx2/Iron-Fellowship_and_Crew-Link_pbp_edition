@@ -7,6 +7,7 @@ import {
   USER_SETTINGS_TABLE,
   UserSettingsRow,
 } from "./_getRef";
+import { logError } from "functions/errorReference";
 
 export const listenToAccessibilitySettings = (
   uid: string,
@@ -38,7 +39,7 @@ export const listenToAccessibilitySettings = (
         )
         .eq("user_id", uid);
       if (error) {
-        console.error(error);
+        logError("listenToAccessibilitySettings", error);
         return [];
       }
       return (data ?? []) as unknown as UserSettingsRow[];

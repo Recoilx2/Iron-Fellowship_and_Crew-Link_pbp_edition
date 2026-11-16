@@ -6,6 +6,7 @@ import { addAsset } from "api-calls/assets/addAsset";
 import { removeAsset } from "api-calls/assets/removeAsset";
 import { updateAsset } from "api-calls/assets/updateAsset";
 import { updateAssetCheckbox } from "api-calls/assets/updateAssetCheckbox";
+import { logError } from "functions/errorReference";
 
 export const createSharedAssetsSlice: CreateSliceType<SharedAssetSlice> = (
   set,
@@ -27,7 +28,7 @@ export const createSharedAssetsSlice: CreateSliceType<SharedAssetSlice> = (
         });
       },
       (error) => {
-        console.error(error);
+        logError("sharedAssets.slice", error);
         set((store) => {
           store.campaigns.currentCampaign.assets.loading = false;
           store.campaigns.currentCampaign.assets.error = error;

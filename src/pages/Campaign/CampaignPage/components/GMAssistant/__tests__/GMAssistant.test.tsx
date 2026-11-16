@@ -489,6 +489,37 @@ describe("GMAssistant gating", () => {
     expect(close).toBeDefined();
   });
 
+  it("closes the phone dialog again on Escape pressed inside the panel", async () => {
+    mockViewport(390);
+    const view = render();
+    act(() => {
+      view
+        .querySelector("button")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    // Focus inside the portalled panel -- a React sibling of the Dialog,
+    // so the Dialog's own Escape handling never sees the keydown.
+    const prompt = dialog?.querySelector("textarea");
+    expect(prompt).not.toBeNull();
+    act(() => {
+      prompt?.focus();
+      prompt?.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+    });
+    await flush();
+
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
   it("shows Chat, Context and Outline tabs with Context enabled", () => {
     const view = render();
     act(() => {

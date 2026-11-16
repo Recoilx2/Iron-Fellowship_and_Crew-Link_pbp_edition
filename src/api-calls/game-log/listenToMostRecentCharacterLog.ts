@@ -11,6 +11,7 @@ import {
   constructCharacterRollsFilter,
   type CharacterRollRow,
 } from "./_getRef";
+import { logError } from "functions/errorReference";
 
 export function listenToMostRecentCharacterLog(params: {
   isGM: boolean;
@@ -90,7 +91,7 @@ export function listenToMostRecentCharacterLog(params: {
       }
     },
     onError: (error) => {
-      console.error(error);
+      logError("listenToMostRecentCharacterLog", error);
       onError("Error getting new logs.");
     },
   });

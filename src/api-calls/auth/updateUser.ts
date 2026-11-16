@@ -1,5 +1,6 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { upsertProfile } from "api-calls/profiles/upsertProfile";
+import { logError } from "functions/errorReference";
 
 /**
  * Saves the signed-in person's display name. The `profiles` table is the
@@ -19,7 +20,7 @@ export function updateUser(params: { displayName: string }): Promise<void> {
         .auth.updateUser({ data: { display_name: displayName } })
         .then(({ error: metadataError }) => {
           if (metadataError) {
-            console.error(metadataError);
+            logError("updateUser", metadataError);
             return Promise.reject("Failed to update user name.");
           }
           return upsertProfile({ uid, displayName }).then(() => undefined);

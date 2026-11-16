@@ -34,7 +34,10 @@ describe("assistant outline versions migration (#133)", () => {
     );
     const stamp = versionsFile().slice(0, 14);
     // The #148 proposal state builds on this table and sorts later.
-    const landedLater = new Set(["20261121000007_assistant_proposal_state.sql"]);
+    const landedLater = new Set([
+      "20261121000008_assistant_messages_applied_version_index.sql",
+      "20261121000007_assistant_proposal_state.sql",
+    ]);
     const others = readdirSync(dir).filter(
       (f) =>
         /^\d{14}_/.test(f) && f !== versionsFile() && !landedLater.has(f)

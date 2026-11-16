@@ -1,6 +1,7 @@
 import { Datasworn } from "@datasworn-community/core";
 import { getSystem } from "hooks/useGameSystem";
 import { GAME_SYSTEMS } from "types/GameSystems.type";
+import { logError } from "functions/errorReference";
 
 export interface IRulesetConfig {
   id: string;
@@ -283,6 +284,6 @@ export async function loadIncludedExpansion(
   return expansionLoadPromises[expansionId];
 }
 
-preloadActiveRuleset().catch(console.error);
+preloadActiveRuleset().catch((e) => logError("rulesets", e));
 
 export { ruleset, defaultExpansions, thirdPartyExpansions };

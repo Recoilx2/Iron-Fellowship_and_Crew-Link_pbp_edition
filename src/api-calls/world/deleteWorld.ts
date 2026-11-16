@@ -2,6 +2,7 @@ import { getSupabaseClient } from "config/supabase.config";
 import { createApiFunction } from "api-calls/createApiFunction";
 import { WORLD_IMAGES_BUCKET } from "api-calls/world/worldImageStorage";
 import { WORLDS_TABLE } from "./_getRef";
+import { logError } from "functions/errorReference";
 
 /**
  * Deletes a world and everything under it: items, GM details and notes
@@ -30,7 +31,7 @@ export const deleteWorld = createApiFunction<string, void>(
         await client.storage.from(WORLD_IMAGES_BUCKET).remove(paths);
       }
     } catch (e) {
-      console.error(e);
+      logError("deleteWorld", e);
     }
     const { error } = await client
       .from(WORLDS_TABLE)

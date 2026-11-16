@@ -111,8 +111,11 @@ test.describe("rules page", () => {
     ).toBeVisible();
   }
 
-  const rollButtons = (page: Page) =>
-    page.getByRole("button", { name: /^roll\b/i });
+  // Oracle buttons are named after the oracle, so a name match alone
+  // cannot prove the page rolls nothing; the dice icon is what every roll
+  // control carries (ticket #151). The scope is the page, or a dialog.
+  const diceIcons = (scope: Page | Locator) =>
+    scope.locator('[data-testid="CasinoIcon"]');
 
   async function nothingRolls(page: Page) {
     // Pay the Price places a rollable table inline. Elsewhere its roll
@@ -128,7 +131,7 @@ test.describe("rules page", () => {
         .getByRole("table")
     ).toBeVisible();
 
-    await expect(rollButtons(page)).toHaveCount(0);
+    await expect(diceIcons(page)).toHaveCount(0);
     await expect(
       page.getByRole("button", {
         name: /^(Almost Certain|Likely|Unlikely|Small Chance|50\/50)$/,
@@ -143,9 +146,7 @@ test.describe("rules page", () => {
     await expect(dialog.getByRole("button", { name: "Pin Oracle" })).toHaveCount(
       0
     );
-    await expect(dialog.getByRole("button", { name: /^roll\b/i })).toHaveCount(
-      0
-    );
+    await expect(diceIcons(dialog)).toHaveCount(0);
     await expect(dialog.getByRole("button", { name: "Action", exact: true })).toHaveCount(0);
   }
 
@@ -176,5 +177,29 @@ test.describe("rules page", () => {
     await page.goto("/rules");
 
     await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("the five-item bottom navigation fits a 320 px phone", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 700 });
+    await signInAs(page, config, person, "/characters");
+
+    await page.getByRole("link", { name: "Rules", exact: true }).click();
+    await expect(page).toHaveURL(/\/rules$/);
+
+    // The signed-in bottom bar carries five items (Characters, Campaigns,
+    // Worlds, Homebrew, Rules); at the narrowest supported width each stays
+    // visible and the bar does not overflow (ticket #151).
+    const nav = page.getByRole("navigation").filter({
+      has: page.getByRole("link", { name: "Characters" }),
+    });
+    for (const name of ["Characters", "Campaigns", "Worlds", "Homebrew", "Rules"]) {
+      await expect(nav.getByRole("link", { name, exact: true })).toBeVisible();
+    }
+    const overflow = await nav.evaluate(
+      (el) => el.scrollWidth - el.clientWidth
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
   });
 });

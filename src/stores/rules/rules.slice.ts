@@ -19,6 +19,7 @@ import {
   thirdPartyExpansions,
 } from "data/rulesets";
 import { idMap } from "data/idMap";
+import { logError } from "functions/errorReference";
 
 export const createRulesSlice: CreateSliceType<RulesSlice> = (
   set,
@@ -41,7 +42,9 @@ export const createRulesSlice: CreateSliceType<RulesSlice> = (
         store.rules.expansionIds = expansionIds;
       });
       getState().rules.rebuildRules();
-      getState().rules.loadIncludedExpansions(expansionIds).catch(console.error);
+      getState()
+        .rules.loadIncludedExpansions(expansionIds)
+        .catch((e) => logError("rules.slice", e));
     },
 
     loadBaseRuleset: async () => {

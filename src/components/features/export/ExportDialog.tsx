@@ -18,6 +18,7 @@ import {
   Exporter,
   ExportProgress,
 } from "services/export";
+import { logError } from "functions/errorReference";
 
 export interface ExportOption {
   /** Stable key persisted across renders; used as map key for selections. */
@@ -147,7 +148,7 @@ export function ExportDialog(props: ExportDialogProps) {
         setProgress(null);
         return;
       }
-      console.error("Export failed", err);
+      logError("Export failed", err);
       setError(err instanceof Error ? err.message : "Export failed");
     }
   };
