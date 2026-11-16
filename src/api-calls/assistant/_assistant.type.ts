@@ -21,11 +21,24 @@ export interface AssistantConversationWithId
   ownerId: string;
 }
 
+/**
+ * What the GM did with an outline proposal carried by a reply: applied it
+ * or dismissed it. A proposal that was undone, or never acted on, is null.
+ */
+export type AssistantProposalState = "applied" | "dismissed";
+
 export interface AssistantMessageDocument {
   role: AssistantMessageRole;
   content: string;
   /** A reply stopped partway still keeps the text written so far. */
   stoppedPartway: boolean;
+  /** Null until the GM applies or dismisses the reply's outline proposal. */
+  proposalState: AssistantProposalState | null;
+  /**
+   * The outline version this reply's Apply kept, for Undo; null when none
+   * was kept, or once that version was undone or pruned.
+   */
+  appliedVersionId: string | null;
   createdAt: string;
 }
 

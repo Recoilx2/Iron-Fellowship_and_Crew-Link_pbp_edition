@@ -7,6 +7,7 @@ import type {
   AssistantConversationDocument,
   AssistantMessageDocument,
   AssistantMessageRole,
+  AssistantProposalState,
   AssistantSettingsDocument,
 } from "api-calls/assistant/_assistant.type";
 
@@ -126,6 +127,8 @@ export interface AssistantMessageRow {
   role: AssistantMessageRole;
   content: string;
   stopped_partway: boolean;
+  proposal_state: AssistantProposalState | null;
+  applied_version_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -204,6 +207,8 @@ export function messageRowToDocument(
     role: roleOf(row),
     content: row.content,
     stoppedPartway: row.stopped_partway,
+    proposalState: row.proposal_state ?? null,
+    appliedVersionId: row.applied_version_id ?? null,
     createdAt: row.created_at,
   };
 }
