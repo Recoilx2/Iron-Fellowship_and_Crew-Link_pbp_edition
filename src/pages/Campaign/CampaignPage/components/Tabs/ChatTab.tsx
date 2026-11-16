@@ -60,6 +60,7 @@ import { LocationsSection } from "components/features/worlds/Locations";
 import { NPCSection } from "components/features/worlds/NPCSection";
 import { LoreSection } from "components/features/worlds/Lore";
 import { useCampaignType } from "hooks/useCampaignType";
+import { useGMAssistantDock } from "../GMAssistant/useGMAssistantDock";
 
 export interface RosterEntry {
   uid: string;
@@ -112,6 +113,17 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
   useListenToChannelPosts();
   const theme = useTheme();
   const showSideScreens = useMediaQuery(theme.breakpoints.up("md"));
+  // The open GM assistant docks in this side pane's place (ticket #150).
+  const assistantDock = useGMAssistantDock();
+  const setAssistantHosted = assistantDock?.setHosted;
+  useEffect(() => {
+    if (!showSideScreens || !setAssistantHosted) {
+      return;
+    }
+    setAssistantHosted(true);
+    return () => setAssistantHosted(false);
+  }, [showSideScreens, setAssistantHosted]);
+  const assistantDocked = showSideScreens && !!assistantDock?.open;
 
   const channels = useStore((store) => store.chat.channels);
   const membersByChannel = useStore(
@@ -134,6 +146,8 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
 
   const [showArchived, setShowArchived] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
+  // Kept here, not in the pane, so it survives the assistant docking over it.
+  const [sideTab, setSideTab] = useState("Character");
   const [phoneScreen, setPhoneScreen] = useState<PhoneScreen>("Chat");
   const [createKind, setCreateKind] = useState<ChannelKind | undefined>(
     undefined
@@ -313,8 +327,22 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
         )}
         <PhoneBottomNavigation screen={phoneScreen} onPick={setPhoneScreen} />
       </Box>
-      {showSideScreens && (
+      {assistantDocked && (
         <Box
+          ref={assistantDock?.setSlot}
+          data-testid={"assistant-dock"}
+          sx={{
+            width: 360,
+            flexShrink: 0,
+            borderLeft: 1,
+            borderColor: "divider",
+            overflow: "hidden",
+          }}
+        />
+      )}
+      {showSideScreens && !assistantDocked && (
+        <Box
+          data-testid={"chat-side-pane"}
           sx={{
             width: 360,
             flexShrink: 0,
@@ -323,7 +351,11 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
             overflowY: "auto",
           }}
         >
-          <CampaignScreens openInviteDialog={openInviteDialog} />
+          <CampaignScreens
+            openInviteDialog={openInviteDialog}
+            tab={sideTab}
+            setTab={setSideTab}
+          />
         </Box>
       )}
       <Drawer open={peopleOpen} onClose={() => setPeopleOpen(false)}>
@@ -865,8 +897,12 @@ function RenameChannelDialog(props: {
   );
 }
 
-function CampaignScreens(props: { openInviteDialog: () => void }) {
-  const [tab, setTab] = useState("Character");
+function CampaignScreens(props: {
+  openInviteDialog: () => void;
+  tab: string;
+  setTab: (tab: string) => void;
+}) {
+  const { tab, setTab } = props;
   return (
     <>
       <StyledTabs
