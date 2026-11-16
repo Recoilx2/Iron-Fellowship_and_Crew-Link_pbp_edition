@@ -3,7 +3,8 @@
  * #183): every line carries a reference, in the same `[gm-assistant] ref=`
  * shape as the error responses, and every free-text fragment is sanitized
  * here so no conversation or user id, URL or secret can reach a log line.
- * Raw `console.error`/`console.warn` are banned in this function by lint;
+ * Raw `console.error`, `console.warn`, `console.log`, `console.debug` and
+ * `console.info` are banned across `supabase/functions` by lint;
  * server errors go through this helper (the client-side twin is
  * `src/functions/errorReference.ts`).
  */
@@ -20,13 +21,13 @@ const UUID_ANYWHERE =
   /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g;
 
 /** A URL can carry ids, tokens or a key in its query: never logged raw. */
-const URL_ANYWHERE = /[a-z][a-z0-9+.-]*:\/\/\S+|https?:\/\/\S+/gi;
+const URL_ANYWHERE = /[a-z][a-z0-9+.-]*:\/\/\S+/gi;
 
 /**
  * Reduces a fragment to a safe one: control characters are stripped (so a
  * hostile string cannot forge extra log lines), whitespace collapses, URLs
  * and UUID-shaped ids become placeholders, and the result is capped.
- * Callers pass only static text; this is defense in depth, not licence.
+ * Callers pass only static text; this is defence in depth, not licence.
  */
 function sanitizeFragment(text: string, maxLength: number): string {
   return text
