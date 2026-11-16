@@ -83,6 +83,19 @@ describe("logServerError", () => {
     expect(detail.length).toBe(300);
   });
 
+  it("caps the route at 120 characters", () => {
+    const lines = capturedLines();
+    logServerError("REPLY_SAVE_FAILED", "d", {
+      status: 500,
+      route: `POST /${"x".repeat(200)}`,
+    });
+    const route = lines[0]!
+      .split("route=")[1]!
+      .replace(/ detail=.*$/, "");
+    expect(route.startsWith("POST /")).toBe(true);
+    expect(route.length).toBeLessThanOrEqual(120);
+  });
+
   it("mints a fresh reference per call", () => {
     capturedLines();
     const first = logServerError("REPLY_SAVE_FAILED", "a");

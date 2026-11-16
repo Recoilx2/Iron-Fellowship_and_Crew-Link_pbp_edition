@@ -11,6 +11,9 @@ import { mintReference } from "./security.ts";
 
 const MAX_DETAIL_LENGTH = 300;
 const MAX_CODE_LENGTH = 64;
+/** `route` is a method plus a path (`POST /gm-assistant/chat`): a longer
+ * one has no business in a log line, so it is capped separately. */
+const MAX_ROUTE_LENGTH = 120;
 
 /** A UUID anywhere in a fragment is an id: it never logs as itself. */
 const UUID_ANYWHERE =
@@ -59,7 +62,7 @@ export function logServerError(
     parts.push(`status=${context.status}`);
   }
   if (context?.route !== undefined) {
-    parts.push(`route=${sanitizeFragment(context.route, MAX_CODE_LENGTH)}`);
+    parts.push(`route=${sanitizeFragment(context.route, MAX_ROUTE_LENGTH)}`);
   }
   const safeDetail = sanitizeFragment(detail, MAX_DETAIL_LENGTH);
   if (safeDetail) {
