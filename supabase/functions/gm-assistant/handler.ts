@@ -731,7 +731,8 @@ function gmDetailLines(details: Record<string, unknown>, fields: Array<{ column:
  * A reference that reads back nothing (deleted, or a direct message the
  * caller is not in) is skipped and reported in `unavailable`, never
  * leaked; a GM-only part is read only when its toggle is on. World entries
- * must belong to the campaign's world and channels to the campaign,
+ * must belong to the campaign's own world (a campaign with no world has
+ * none, so world references are ignored) and channels to the campaign,
  * otherwise they read as unavailable too.
  */
 async function buildAssistantContext(
@@ -764,6 +765,26 @@ async function buildAssistantContext(
   );
   const worldId = (campaignRows[0] as { world_id?: unknown } | undefined)?.world_id;
   const campaignWorldId = typeof worldId === "string" && UUID_PATTERN.test(worldId) ? worldId : null;
+
+  /**
+   * The one place a world item is looked up, so chat and `/context-size`
+   * (both built here) cannot drift. A campaign with no world has no world
+   * items: nothing is queried. Otherwise the read is filtered to the
+   * campaign's own world and the row is checked again.
+   */
+  const readWorldItem = async (
+    table: "world_lore" | "world_npcs" | "world_locations",
+    id: string,
+    columns: string,
+  ): Promise<Record<string, unknown> | null> => {
+    if (!campaignWorldId) return null;
+    const rows = await readRows(
+      `${table}?id=eq.${encodeURIComponent(id)}&world_id=eq.${encodeURIComponent(campaignWorldId)}&select=id,${columns},world_id`,
+    );
+    const row = rows[0];
+    if (!row || typeof row.id !== "string" || row.world_id !== campaignWorldId) return null;
+    return row;
+  };
 
   if (choice.includeOutline) {
     const outlineRows = await readRows(
@@ -876,11 +897,8 @@ async function buildAssistantContext(
   };
 
   for (const ref of choice.lore) {
-    const rows = await readRows(
-      `world_lore?id=eq.${encodeURIComponent(ref.id)}&select=id,name,tags,world_id`,
-    );
-    const row = rows[0] as { id?: unknown; name?: unknown; tags?: unknown; world_id?: unknown } | undefined;
-    if (!row || typeof row.id !== "string" || (campaignWorldId && row.world_id !== campaignWorldId)) {
+    const row = (await readWorldItem("world_lore", ref.id, "name,tags")) as { name?: unknown; tags?: unknown } | null;
+    if (!row) {
       unavailable.push({ key: `lore:${ref.id}`, reason: "not found" });
       continue;
     }
@@ -897,11 +915,8 @@ async function buildAssistantContext(
   }
 
   for (const ref of choice.npcs) {
-    const rows = await readRows(
-      `world_npcs?id=eq.${encodeURIComponent(ref.id)}&select=id,name,world_id`,
-    );
-    const row = rows[0] as { id?: unknown; name?: unknown; world_id?: unknown } | undefined;
-    if (!row || typeof row.id !== "string" || (campaignWorldId && row.world_id !== campaignWorldId)) {
+    const row = (await readWorldItem("world_npcs", ref.id, "name")) as { name?: unknown } | null;
+    if (!row) {
       unavailable.push({ key: `npc:${ref.id}`, reason: "not found" });
       continue;
     }
@@ -930,11 +945,8 @@ async function buildAssistantContext(
   }
 
   for (const ref of choice.locations) {
-    const rows = await readRows(
-      `world_locations?id=eq.${encodeURIComponent(ref.id)}&select=id,name,world_id`,
-    );
-    const row = rows[0] as { id?: unknown; name?: unknown; world_id?: unknown } | undefined;
-    if (!row || typeof row.id !== "string" || (campaignWorldId && row.world_id !== campaignWorldId)) {
+    const row = (await readWorldItem("world_locations", ref.id, "name")) as { name?: unknown } | null;
+    if (!row) {
       unavailable.push({ key: `location:${ref.id}`, reason: "not found" });
       continue;
     }
