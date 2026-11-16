@@ -22,7 +22,7 @@ import {
   undoOutlineRevision,
 } from "api-calls/assistant/outlineVersions";
 import { listenToOutlineVersions } from "api-calls/assistant/listenToOutlineVersions";
-import { mintErrorReference } from "functions/errorReference";
+import { logFailureReference, mintErrorReference } from "functions/errorReference";
 import { referenceFor, withReference } from "./assistantFailure";
 import { useOutlineDocument } from "./useOutlineDocument";
 import { OutlineRevision } from "./OutlineRevision";
@@ -55,6 +55,10 @@ export function OutlineTab(props: { campaignId: string }) {
     () => (failed ? mintErrorReference() : null),
     [failed]
   );
+  // The reference shown is also logged, once per failed open.
+  useEffect(() => {
+    if (failedRef) logFailureReference(failedRef, "outline failed to open");
+  }, [failedRef]);
   // The newest kept version: the Outline tab's Undo restores exactly this one.
   const [newestVersionId, setNewestVersionId] = useState<string | null>(null);
   const [undoing, setUndoing] = useState(false);
@@ -133,10 +137,12 @@ export function OutlineTab(props: { campaignId: string }) {
       });
       const proposed = extractOutlineProposal(result.text);
       if (!proposed) {
+        const ref = mintErrorReference();
+        logFailureReference(ref, "reply carried no marked outline revision");
         setRevisionError(
           withReference(
             "The assistant didn't return a marked revision. Try again with a plainer instruction.",
-            mintErrorReference()
+            ref
           )
         );
         return;

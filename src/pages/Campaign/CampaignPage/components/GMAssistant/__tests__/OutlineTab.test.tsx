@@ -448,6 +448,44 @@ describe("OutlineTab", () => {
     expect(view.textContent).not.toContain("row violates policy");
   });
 
+  it("logs the reference shown for an outline that fails to open", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(getOrCreateCampaignOutline).mockRejectedValueOnce(
+      new Error("no access")
+    );
+    const view = render();
+    await flush();
+
+    const shown = /\(ref: ([A-Z0-9]{6})\)/.exec(view.textContent ?? "")?.[1];
+    expect(shown).toBeDefined();
+    const logged = consoleSpy.mock.calls.filter((call) =>
+      String(call[0]).includes(`ref: ${shown}`)
+    );
+    expect(logged).toHaveLength(1);
+    consoleSpy.mockRestore();
+  });
+
+  it("logs the reference shown when the reply carries no marked revision", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(streamAssistantChat).mockResolvedValueOnce({
+      text: "Just some chat with no proposal.",
+      aborted: false,
+    });
+    const view = render();
+    await flush();
+    requestRevisionFrom(view);
+    await flush();
+
+    const shown = /\(ref: ([A-Z0-9]{6})\)/.exec(view.textContent ?? "")?.[1];
+    expect(shown).toBeDefined();
+    expect(
+      consoleSpy.mock.calls.filter((call) =>
+        String(call[0]).includes(`ref: ${shown}`)
+      )
+    ).toHaveLength(1);
+    consoleSpy.mockRestore();
+  });
+
   it("shows a reference when opening the outline fails", async () => {
     vi.mocked(getOrCreateCampaignOutline).mockRejectedValueOnce(
       new Error("no access")
