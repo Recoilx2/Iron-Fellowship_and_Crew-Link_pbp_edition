@@ -35,6 +35,7 @@ describe("chat image access rules (#118)", () => {
     // storage-privileges fix (20261120000000), and the #128 assistant tables
     // (20261121000004), and the #131 campaign outline (20261121000005).
     const landedLater = new Set([
+      "20261121000008_assistant_messages_applied_version_index.sql",
       "20261115000000_chat_roll_cleanup.sql",
       "20261116000000_chat_momentum_burn.sql",
       "20261117000000_chat_image_hardening.sql",
