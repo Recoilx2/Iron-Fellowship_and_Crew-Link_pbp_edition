@@ -35,6 +35,7 @@ describe("deleted-post cleanup and roll forgery migration (#120)", () => {
     // #128 assistant tables, 20261121000004, and the #131 campaign outline, 20261121000005) sort later by design, so they
     // are excluded here.
     const landedLater = new Set([
+      "20261121000008_assistant_messages_applied_version_index.sql",
       "20261116000000_chat_momentum_burn.sql",
       "20261117000000_chat_image_hardening.sql",
       "20261118000000_chat_momentum_burn_hardening.sql",
