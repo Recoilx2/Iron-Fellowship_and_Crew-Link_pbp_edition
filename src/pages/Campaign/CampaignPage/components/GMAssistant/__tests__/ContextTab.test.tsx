@@ -11,7 +11,13 @@ vi.mock("api-calls/assistant/assistantContextOptions", () => ({
   fetchAssistantContextOptions: vi.fn(),
 }));
 
+vi.mock("api-calls/assistant/gmAssistantClient", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("api-calls/assistant/gmAssistantClient")>()),
+  fetchAssistantContextSize: vi.fn(),
+}));
+
 import { fetchAssistantContextOptions } from "api-calls/assistant/assistantContextOptions";
+import { fetchAssistantContextSize } from "api-calls/assistant/gmAssistantClient";
 import { ContextTab } from "../ContextTab";
 
 const theme = createTheme();
@@ -52,6 +58,21 @@ describe("ContextTab", () => {
   let container: HTMLDivElement | undefined;
 
   beforeEach(() => {
+    vi.mocked(fetchAssistantContextSize).mockReset();
+    vi.mocked(fetchAssistantContextSize).mockResolvedValue({
+      items: [
+        { key: "lore:lore-1", label: "Lore: Old Vault", chars: 8, tokens: 2 },
+        { key: "npc:npc-1", label: "NPC: Keeper", chars: 280, tokens: 70 },
+        { key: "note:note-1", label: "Note: Session idea", chars: 8, tokens: 2 },
+        { key: "channel:ch-1", label: "Channel: In-character", chars: 8, tokens: 2 },
+        { key: "channel:ch-2", label: "Channel: Planning", chars: 360, tokens: 90 },
+      ],
+      totalChars: 0,
+      totalTokens: 0,
+      instructionChars: 0,
+      instructionTokens: 0,
+      unavailable: [],
+    });
     vi.mocked(fetchAssistantContextOptions).mockResolvedValue({
       worldId: "world-1",
       outlineAvailable: true,
@@ -198,5 +219,60 @@ describe("ContextTab", () => {
     expect(view.textContent).toMatch(/\(ref: [A-Z0-9]{6}\)/);
     expect(view.textContent).not.toContain("relation does not exist");
     cleanup();
+  });
+
+  it("shows a size beside every candidate before it is ticked, from one batched request", async () => {
+    const view = await render(() => {});
+    try {
+      // Keeper (NPC) and Planning (channel) are not ticked in `choice`.
+      const keeper = view.querySelector('input[aria-label="Include Keeper"]') as HTMLInputElement;
+      const planning = view.querySelector('input[aria-label="Include Planning"]') as HTMLInputElement;
+      expect(keeper.checked).toBe(false);
+      expect(planning.checked).toBe(false);
+      const rowText = (input: HTMLInputElement) =>
+        input.closest("div[class*='MuiBox']")?.textContent ?? "";
+      expect(rowText(keeper)).toContain("~70 tokens");
+      expect(rowText(planning)).toContain("~90 tokens");
+      // A ticked entry keeps the size of its saved choice.
+      expect(view.textContent).toContain("~50 tokens");
+
+      expect(fetchAssistantContextSize).toHaveBeenCalledTimes(1);
+      expect(fetchAssistantContextSize).toHaveBeenCalledWith(
+        "campaign-1",
+        expect.objectContaining({
+          preview: {
+            includeOutline: true,
+            lore: [{ id: "lore-1", includeGmParts: false }],
+            npcs: [{ id: "npc-1", includeGmParts: false }],
+            locations: [],
+            notes: ["note-1"],
+            channels: [
+              { id: "ch-1", postCount: 5 },
+              { id: "ch-2", postCount: 5 },
+            ],
+          },
+        })
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("shows a dash, never raw error text, when sizing the candidates fails", async () => {
+    vi.mocked(fetchAssistantContextSize).mockRejectedValue(
+      new Error("socket hang up at 10.0.0.5")
+    );
+    const view = await render(() => {});
+    try {
+      const keeper = view.querySelector('input[aria-label="Include Keeper"]') as HTMLInputElement;
+      const row = keeper.closest("div[class*='MuiBox']")?.textContent ?? "";
+      expect(row).toContain("–");
+      expect(row).not.toContain("tokens");
+      expect(view.textContent).not.toContain("socket hang up");
+      // The checklist still works.
+      expect(view.textContent).toContain("Keeper");
+    } finally {
+      cleanup();
+    }
   });
 });

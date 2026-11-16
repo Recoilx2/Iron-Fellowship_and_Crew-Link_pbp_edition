@@ -246,6 +246,32 @@ describe("fetchAssistantContextSize", () => {
     );
   });
 
+  it("sizes a preview list with one POST carrying the references", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, { items: [], totalChars: 0, totalTokens: 0 })
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const preview = {
+      includeOutline: false,
+      lore: [{ id: "lore-1", includeGmParts: false }],
+      npcs: [],
+      locations: [],
+      notes: ["note-1"],
+      channels: [{ id: "ch-1", postCount: 5 }],
+    };
+
+    await fetchAssistantContextSize("campaign-1", { preview });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://stack.example/functions/v1/gm-assistant/context-size");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({
+      campaignId: "campaign-1",
+      context: preview,
+    });
+  });
+
   it("carries the server reference on a size failure", async () => {
     globalThis.fetch = (async () =>
       jsonResponse(403, {

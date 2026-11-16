@@ -32,6 +32,9 @@ const OUTLINE_ID = "88888888-8888-4222-8222-888888888888";
 const NOTE_ID = "99999999-9999-4222-8222-999999999999";
 const CHANNEL_ID = "aaaaaaaa-aaaa-4222-8222-aaaaaaaaaaaa";
 const DM_CHANNEL_ID = "bbbbbbbb-bbbb-4222-8222-bbbbbbbbbbbb";
+const PLAYER_ID = "dddddddd-dddd-4222-8222-dddddddddddd";
+const PLAYER_CHARACTER_ID = "eeeeeeee-eeee-4222-8222-eeeeeeeeeeee";
+const OTHER_CAMPAIGN_ID = "ffffffff-ffff-4222-8222-ffffffffffff";
 const MISSING_LORE_ID = "cccccccc-cccc-4222-8222-cccccccccccc";
 const API_KEY = "sk-test-secret-KEY-abcdef123456";
 const JWT_SECRET = "test-jwt-secret-that-is-long-enough";
@@ -90,6 +93,8 @@ interface RecordedCall {
 interface ContextFakeOptions {
   includeGmParts?: boolean;
   loreId?: string;
+  /** The campaign the fake's note row really belongs to. */
+  noteCampaignId?: string;
 }
 
 function makeContextFake(options: ContextFakeOptions = {}): {
@@ -99,6 +104,7 @@ function makeContextFake(options: ContextFakeOptions = {}): {
   const calls: RecordedCall[] = [];
   const includeGmParts = options.includeGmParts ?? true;
   const loreId = options.loreId ?? LORE_ID;
+  const noteCampaignId = options.noteCampaignId ?? CAMPAIGN_ID;
   const fetchImpl: UpstreamFetch = async (input, init = {}) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     let body: unknown;
@@ -109,7 +115,18 @@ function makeContextFake(options: ContextFakeOptions = {}): {
     }
     calls.push({ url, method: (init.method ?? "GET").toUpperCase(), body });
     if (url.includes("/rest/v1/")) {
-      if (url.includes("campaign_members")) return Response.json([{ role: "gm" }]);
+      if (url.includes("campaign_members")) {
+        return Response.json([{ role: "gm", user_id: GM_ID }]);
+      }
+      if (url.includes("characters?")) {
+        return Response.json([{ id: PLAYER_CHARACTER_ID, name: "Kira Vance" }]);
+      }
+      if (url.includes("profiles?")) {
+        return Response.json([
+          { id: GM_ID, display_name: "Mara" },
+          { id: PLAYER_ID, display_name: "Jo" },
+        ]);
+      }
       if (url.includes("assistant_conversations")) {
         return Response.json([{ id: CONVERSATION_ID, campaign_id: CAMPAIGN_ID }]);
       }
@@ -166,7 +183,11 @@ function makeContextFake(options: ContextFakeOptions = {}): {
           return Response.json([{ id: OUTLINE_ID, title: "Campaign outline" }]);
         }
         if (url.includes(NOTE_ID)) {
-          return Response.json([{ id: NOTE_ID, title: "Session idea", campaign_id: CAMPAIGN_ID }]);
+          // Like PostgREST: a campaign filter that does not match reads nothing.
+          if (url.includes("campaign_id=eq.") && !url.includes(`campaign_id=eq.${noteCampaignId}`)) {
+            return Response.json([]);
+          }
+          return Response.json([{ id: NOTE_ID, title: "Session idea", campaign_id: noteCampaignId }]);
         }
         return Response.json([]);
       }
@@ -191,8 +212,20 @@ function makeContextFake(options: ContextFakeOptions = {}): {
       if (url.includes("chat_posts?")) {
         if (url.includes(CHANNEL_ID)) {
           return Response.json([
-            { text: "The bell rings.", created_at: "2026-11-14T00:00:01Z" },
-            { text: "A wolf howls.", created_at: "2026-11-14T00:00:00Z" },
+            {
+              text: "The bell rings.",
+              created_at: "2026-11-14T00:00:01Z",
+              author_id: PLAYER_ID,
+              speaker_character_id: PLAYER_CHARACTER_ID,
+              speaker_npc_id: null,
+            },
+            {
+              text: "A wolf howls.",
+              created_at: "2026-11-14T00:00:00Z",
+              author_id: GM_ID,
+              speaker_character_id: null,
+              speaker_npc_id: null,
+            },
           ]);
         }
         return Response.json([]);
@@ -314,6 +347,60 @@ describe("gm assistant context-size endpoint", () => {
   });
 });
 
+describe("gm assistant context-size preview", () => {
+  it("sizes a posted preview list in one request, not the saved context", async () => {
+    const { fetchImpl, calls } = makeContextFake();
+    const handle = createGmAssistantHandler(baseEnv(), fetchImpl);
+    const res = await handle(
+      new Request("http://x/gm-assistant/context-size", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${gmToken()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          campaignId: CAMPAIGN_ID,
+          context: {
+            includeOutline: false,
+            lore: [],
+            npcs: [],
+            locations: [],
+            notes: [NOTE_ID],
+            channels: [{ id: CHANNEL_ID, postCount: 5 }],
+          },
+        }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: Array<{ key: string; tokens: number }> };
+    expect(body.items.map((item) => item.key).sort()).toEqual(
+      [`channel:${CHANNEL_ID}`, `note:${NOTE_ID}`].sort(),
+    );
+    expect(calls.some((call) => call.url.includes("assistant_settings"))).toBe(false);
+  });
+
+  it("refuses a preview from someone who is not a GM and a malformed body", async () => {
+    const { fetchImpl } = makeContextFake();
+    const denying: UpstreamFetch = async (input, init = {}) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("/rest/v1/campaign_members")) return Response.json([{ role: "player" }]);
+      return fetchImpl(input, init);
+    };
+    const post = (handle: (req: Request) => Promise<Response>, body: string) =>
+      handle(
+        new Request("http://x/gm-assistant/context-size", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${gmToken()}`, "Content-Type": "application/json" },
+          body,
+        }),
+      );
+    const denied = await post(
+      createGmAssistantHandler(baseEnv(), denying),
+      JSON.stringify({ campaignId: CAMPAIGN_ID, context: {} }),
+    );
+    expect(denied.status).toBe(403);
+    const bad = await post(createGmAssistantHandler(baseEnv(), fetchImpl), "not json");
+    expect(bad.status).toBe(400);
+  });
+});
+
 describe("gm assistant chat with server-built context", () => {
   function upstreamMessages(calls: RecordedCall[]): Array<{ role: string; content: string }> {
     const call = calls.find((entry) => entry.url.endsWith("/chat/completions"));
@@ -392,6 +479,43 @@ describe("gm assistant chat with server-built context", () => {
     expect((await size.json()) as { unavailable: Array<{ key: string }> }).toMatchObject({
       unavailable: [{ key: `channel:${DM_CHANNEL_ID}` }],
     });
+  });
+
+  it("names the speaker of every recent post, with a GM label for the GM", async () => {
+    const { fetchImpl, calls } = makeContextFake();
+    const handle = createGmAssistantHandler(baseEnv(), fetchImpl);
+    const res = await handle(chatRequest({ conversationId: CONVERSATION_ID, message: "hi" }));
+    expect(res.status).toBe(200);
+    await res.text();
+    const text = allUpstreamText(calls);
+    expect(text).toContain("Kira Vance: The bell rings.");
+    expect(text).toContain("Mara (GM): A wolf howls.");
+    // Oldest first, as before.
+    expect(text.indexOf("A wolf howls.")).toBeLessThan(text.indexOf("The bell rings."));
+  });
+
+  it("ignores a note reference from another campaign", async () => {
+    const { fetchImpl, calls } = makeContextFake({ noteCampaignId: OTHER_CAMPAIGN_ID });
+    const handle = createGmAssistantHandler(baseEnv(), fetchImpl);
+    const res = await handle(chatRequest({ conversationId: CONVERSATION_ID, message: "hi" }));
+    expect(res.status).toBe(200);
+    await res.text();
+    expect(allUpstreamText(calls)).not.toContain("A chase through the market.");
+    expect(
+      calls.some(
+        (call) =>
+          call.url.includes("campaign_notes?") &&
+          call.url.includes(NOTE_ID) &&
+          call.url.includes(`campaign_id=eq.${CAMPAIGN_ID}`),
+      ),
+    ).toBe(true);
+    const size = await handle(
+      new Request(`http://x/gm-assistant/context-size?campaignId=${CAMPAIGN_ID}`, {
+        headers: { Authorization: `Bearer ${gmToken()}` },
+      }),
+    );
+    const body = (await size.json()) as { unavailable: Array<{ key: string }> };
+    expect(body.unavailable.map((entry) => entry.key)).toContain(`note:${NOTE_ID}`);
   });
 
   it("ignores anything context-like the browser sends", async () => {

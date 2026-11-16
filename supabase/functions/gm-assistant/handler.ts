@@ -14,6 +14,10 @@
  *   returns per-item sizes plus the references it had to skip, so the
  *   panel can show roughly how big each piece is without ever seeing text
  *   it may not read.
+ *   `POST /gm-assistant/context-size` with `{ campaignId, context }` sizes a
+ *   preview list of references the same way in one batch (ticket #149), so
+ *   the Context tab can show a size beside every candidate before it is
+ *   ticked; nothing is saved.
  * - `POST /gm-assistant/chat` takes `{ conversationId, message }`, saves the
  *   GM's message and the streamed reply to `assistant_messages`, and streams
  *   the reply back as server-sent events. An optional
@@ -798,6 +802,66 @@ async function buildAssistantContext(
     return { publicText, gmText };
   };
 
+  const idsOf = (rows: Array<Record<string, unknown>>, column: string): string[] => [
+    ...new Set(
+      rows
+        .map((row) => row[column])
+        .filter((id): id is string => typeof id === "string" && UUID_PATTERN.test(id)),
+    ),
+  ];
+  const namesById = async (
+    table: string,
+    nameColumn: string,
+    ids: string[],
+  ): Promise<Map<string, string>> => {
+    const map = new Map<string, string>();
+    if (ids.length === 0) return map;
+    const rows = await readRows(
+      `${table}?id=in.(${ids.map(encodeURIComponent).join(",")})&select=id,${nameColumn}`,
+    );
+    for (const row of rows) {
+      const name = row[nameColumn];
+      if (typeof row.id === "string" && typeof name === "string" && name.trim()) {
+        map.set(row.id, name.trim());
+      }
+    }
+    return map;
+  };
+  let gmIds: Set<string> | null = null;
+  /**
+   * Who spoke each recent post: the NPC or character voice, else the
+   * author's display name, with a GM label for the campaign's GMs. A name
+   * that cannot be read falls back to "Someone".
+   */
+  const readSpeakerNames = async (posts: Array<Record<string, unknown>>) => {
+    if (gmIds === null) {
+      const members = await readRows(
+        `campaign_members?campaign_id=eq.${encodeURIComponent(campaignId)}&role=eq.gm&select=user_id`,
+      );
+      gmIds = new Set(idsOf(members, "user_id"));
+    }
+    const [characters, npcs, authors] = await Promise.all([
+      namesById("characters", "name", idsOf(posts, "speaker_character_id")),
+      namesById("world_npcs", "name", idsOf(posts, "speaker_npc_id")),
+      namesById("profiles", "display_name", idsOf(posts, "author_id")),
+    ]);
+    const gm = gmIds;
+    return {
+      speakerOf: (post: Record<string, unknown>): string => {
+        const name =
+          (typeof post.speaker_npc_id === "string" ? npcs.get(post.speaker_npc_id) : undefined) ??
+          (typeof post.speaker_character_id === "string"
+            ? characters.get(post.speaker_character_id)
+            : undefined) ??
+          (typeof post.author_id === "string" ? authors.get(post.author_id) : undefined) ??
+          "Someone";
+        return typeof post.author_id === "string" && gm.has(post.author_id)
+          ? `${name} (GM)`
+          : name;
+      },
+    };
+  };
+
   for (const ref of choice.lore) {
     const rows = await readRows(
       `world_lore?id=eq.${encodeURIComponent(ref.id)}&select=id,name,tags,world_id`,
@@ -884,7 +948,7 @@ async function buildAssistantContext(
 
   for (const noteId of choice.notes) {
     const rows = await readRows(
-      `campaign_notes?id=eq.${encodeURIComponent(noteId)}&select=id,title`,
+      `campaign_notes?id=eq.${encodeURIComponent(noteId)}&campaign_id=eq.${encodeURIComponent(campaignId)}&select=id,title`,
     );
     const row = rows[0] as { id?: unknown; title?: unknown } | undefined;
     if (!row || typeof row.id !== "string") {
@@ -910,11 +974,14 @@ async function buildAssistantContext(
       continue;
     }
     const posts = await readRows(
-      `chat_posts?channel_id=eq.${encodeURIComponent(ref.id)}&select=text,created_at&order=created_at.desc&limit=${ref.postCount}`,
+      `chat_posts?channel_id=eq.${encodeURIComponent(ref.id)}&select=text,created_at,author_id,speaker_character_id,speaker_npc_id&order=created_at.desc&limit=${ref.postCount}`,
     );
-    const lines = posts
-      .filter((post) => typeof post.text === "string" && (post.text as string).trim().length > 0)
-      .map((post) => (post.text as string).trim())
+    const readable = posts.filter(
+      (post) => typeof post.text === "string" && (post.text as string).trim().length > 0,
+    );
+    const names = await readSpeakerNames(readable);
+    const lines = readable
+      .map((post) => `${names.speakerOf(post)}: ${(post.text as string).trim()}`)
       .reverse();
     if (lines.length === 0) {
       unavailable.push({ key: `channel:${ref.id}`, reason: "empty" });
@@ -1047,8 +1114,22 @@ async function handleContextSize(
   callerToken: string,
   fetchImpl: UpstreamFetch,
 ): Promise<Response> {
-  const campaignId = new URL(req.url).searchParams.get("campaignId") ?? "";
-  if (!UUID_PATTERN.test(campaignId)) {
+  // POST sizes a preview list of references in one batch (the Context tab's
+  // candidates); GET sizes the GM's saved context.
+  let campaignId = new URL(req.url).searchParams.get("campaignId") ?? "";
+  let preview: AssistantContextChoice | null = null;
+  if (req.method === "POST") {
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      body = null;
+    }
+    const record = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+    campaignId = typeof record?.campaignId === "string" ? record.campaignId : "";
+    preview = record ? normalizeContextChoice(record.context) : null;
+  }
+  if (!UUID_PATTERN.test(campaignId) || (req.method === "POST" && !preview)) {
     return errorResponse(
       req,
       env,
@@ -1079,7 +1160,8 @@ async function handleContextSize(
   // the model would receive. Every reference it cannot read is skipped and
   // reported, never leaked.
   try {
-    const choice = await readSavedContext(env, callerToken, caller.sub, campaignId, fetchImpl);
+    const choice =
+      preview ?? (await readSavedContext(env, callerToken, caller.sub, campaignId, fetchImpl));
     const built = await buildAssistantContext(env, callerToken, caller.sub, campaignId, choice, fetchImpl);
     const instructionChars = systemPrompt(env.gameSystem).length;
     const headers = corsHeaders(req, env);
@@ -1487,7 +1569,10 @@ export function createGmAssistantHandler(
     if (req.method === "GET" && url.pathname === "/gm-assistant/models") {
       return handleModels(req, env, caller, callerToken, fetchImpl);
     }
-    if (req.method === "GET" && url.pathname === "/gm-assistant/context-size") {
+    if (
+      (req.method === "GET" || req.method === "POST") &&
+      url.pathname === "/gm-assistant/context-size"
+    ) {
       return handleContextSize(req, env, caller, callerToken, fetchImpl);
     }
     if (req.method === "POST" && url.pathname === "/gm-assistant/chat") {
