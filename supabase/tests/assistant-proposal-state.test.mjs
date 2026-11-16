@@ -25,8 +25,13 @@ describe("assistant proposal state migration (#148)", () => {
   it("sorts after every migration it builds on", () => {
     const stamp = stateFile().slice(0, 14);
     assert.match(stateFile(), /^\d{14}_assistant_proposal_state\.sql$/);
+    // Migrations that build on this table are allowed to sort after it
+    // (the branch pattern, see campaign-outline.test.mjs).
+    const landedLater = new Set([
+      "20261121000008_assistant_messages_applied_version_index.sql",
+    ]);
     for (const other of readdirSync(dir).filter(
-      (f) => /^\d{14}_/.test(f) && f !== stateFile()
+      (f) => /^\d{14}_/.test(f) && f !== stateFile() && !landedLater.has(f)
     )) {
       assert.ok(stamp > other.slice(0, 14), `does not sort after ${other}`);
     }
