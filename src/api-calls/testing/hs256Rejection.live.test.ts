@@ -71,7 +71,8 @@ describe.skipIf(!config)("HS256 tokens are refused everywhere", () => {
         Authorization: `Bearer ${forgedToken(WELL_KNOWN_SEED_SECRET)}`,
       },
     });
-    expect(res.status).toBe(401);
+    // GoTrue's bad-JWT refusal is a 403 (the token never authenticates).
+    expect(res.status).toBe(403);
   });
 
   it("PostgREST refuses an HS256 access token", async () => {
@@ -121,13 +122,19 @@ describe.skipIf(!config)("HS256 tokens are refused everywhere", () => {
     const base = cfg.url.replace(/\/+$/, "");
     const storageSecret = readStorageAuthSecret();
     expect(storageSecret).toBeTruthy();
+    // An upload attempt: the upload route has no invalid-JWT fallback, so
+    // the refused token is a 403 (the object GET route would degrade the
+    // same refusal to an anonymous reader and answer 400 instead).
     const res = await fetch(
-      `${base}/storage/v1/object/chat-images/${crypto.randomUUID()}/${crypto.randomUUID()}/missing.png`,
+      `${base}/storage/v1/object/chat-images/${crypto.randomUUID()}/${crypto.randomUUID()}/sneaky.png`,
       {
+        method: "POST",
         headers: {
           apikey: cfg.anonKey,
           Authorization: `Bearer ${forgedToken(storageSecret)}`,
+          "content-type": "image/png",
         },
+        body: new Uint8Array([137, 80, 78, 71]),
       }
     );
     expect(res.status).toBe(403);
