@@ -14,8 +14,9 @@ The stack signs tokens asymmetrically (ticket #152): GoTrue holds one
 RSA-3072 private key per copy and signs access tokens with RS256; every
 verifier holds only the public JWKS. The shared `JWT_SECRET` is removed
 from the template entirely: no service or function accepts an HS256-signed
-token on any user-token path (one internal, non-user-facing exception is
-recorded under Consequences).
+token on any user-token path. One internal realtime endpoint (`/metrics`)
+still demands an HS256 secret at boot — recorded below as an open gap, not
+an accepted exception.
 
 - **Key generation** (`bin/gen-env.py` + `bin/gen-keys.mjs`): node generates
   the RSA-3072 key pair (Python's standard library cannot). The private JWK
@@ -79,6 +80,13 @@ recorded under Consequences).
   `/.well-known/jwks.json`): the self-hosted verifiers read their key set
   from configuration, not from a URL, so the public JWKS is still
   distributed through the env file.
+- **Bumping Realtime to close the metrics gap**: checked every release from
+  the pinned v2.148.3 through v2.168.0 (the newest): `config/runtime.exs`
+  still boots with `System.fetch_env!("METRICS_JWT_SECRET")` and the
+  metrics pipeline still verifies HS256-only (`authorize(token, secret,
+  nil)` — no JWKS argument). No released version makes the secret optional
+  or accepts key-pair tokens there, so the pin stays and the gap stays
+  tracked on ticket #152.
 
 ## Consequences
 
@@ -86,15 +94,22 @@ recorded under Consequences).
   private JWK lives in a GoTrue-only env file, and the shared env file every
   other container reads never carries it. A verifier compromise forges no
   tokens; a signing-key compromise is contained to GoTrue's env.
-- No service or function accepts an HS256-signed token, with one internal
-  exception: realtime's `/metrics` scrape endpoint (the pinned image refuses
-  to boot without `METRICS_JWT_SECRET`, and its endpoints are HS256-only).
-  It is reachable only from the compose network — the gateway never routes
-  it — and a token for it grants metric reads, nothing else.
+- **Open gap against "no service accepts an HS256-signed token"**: realtime's
+  `/metrics` scrape endpoints still require an HS256 token signed with
+  `METRICS_JWT_SECRET`. This is not accepted here as fine — it is a
+  limitation of the pinned image, which refuses to boot without the secret
+  (`System.fetch_env!/1` in `config/runtime.exs`) and verifies metrics
+  tokens HS256-only (`check_auth` → `authorize_any` → `authorize(token,
+  secret, nil)`: the JWKS argument is hardcoded nil). The same holds at the
+  newest release (v2.168.0), so no version bump fixes it; the gap stays
+  tracked on ticket #152. The exposure is bounded: the gateway never routes
+  `/metrics`, so only containers on the compose network can reach it, and a
+  metrics token grants metric reads, nothing else.
 - Regenerating the key pair (`bin/gen-env.py`) signs everyone out once:
   sessions carry the old signature until they expire. Operators keep both
   env files (the main one and the GoTrue-only one) with their backups
-  (README).
+  (README). `METRICS_JWT_SECRET` is still generated per copy: the pinned
+  image does not boot without it.
 - The realtime seed fork is coupled to the pinned realtime image's release
   path; `tests/template.test.mjs` fails when the image tag and the mount
   path drift apart.
