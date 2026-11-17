@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createHmac } from "node:crypto";
+import { createHmac, createPrivateKey, createPublicKey, generateKeyPairSync, sign as cryptoSign } from "node:crypto";
 
 import {
   parseDocumentName,
@@ -8,9 +8,34 @@ import {
   verifySupabaseJwt,
 } from "./note-access.js";
 
-const SECRET = "test-secret-with-at-least-32-characters!!";
+// A throwaway RSA key pair playing the stack's GoTrue signing key: the
+// tests mint RS256 tokens the way GoTrue does and verify against the
+// public JWKS only. RSA-3072: the approved key size applies to test keys
+// too (ticket #152 review).
+const { publicKey, privateKey } = generateKeyPairSync("rsa", {
+  modulusLength: 3072,
+});
+const KID = "test-rsa-key";
+const exportedPrivate = { ...privateKey.export({ format: "jwk" }), kid: KID, alg: "RS256" };
+const exportedPublic = { ...publicKey.export({ format: "jwk" }), kid: KID, alg: "RS256" };
+const JWKS = [exportedPublic];
+// The old shared secret from before the asymmetric switch (ticket #152).
+const OLD_SECRET = "test-secret-with-at-least-32-characters!!";
 
-function mintJwt({ sub = "11111111-1111-1111-1111-111111111111", role = "authenticated", expOffsetSec = 3600, secret = SECRET } = {}) {
+function mintJwt({ sub = "11111111-1111-1111-1111-111111111111", role = "authenticated", expOffsetSec = 3600, kid = KID } = {}) {
+  const b64url = (obj) =>
+    Buffer.from(JSON.stringify(obj)).toString("base64url");
+  const now = Math.floor(Date.now() / 1000);
+  const unsigned =
+    `${b64url({ alg: "RS256", typ: "JWT", kid })}.` +
+    b64url({ sub, role, exp: now + expOffsetSec });
+  const sig = cryptoSign("sha256", Buffer.from(unsigned), {
+    key: createPrivateKey({ key: exportedPrivate, format: "jwk" }),
+  });
+  return `${unsigned}.${sig.toString("base64url")}`;
+}
+
+function mintHs256Jwt({ sub = "11111111-1111-1111-1111-111111111111", role = "authenticated", expOffsetSec = 3600, secret = OLD_SECRET } = {}) {
   const b64url = (obj) =>
     Buffer.from(JSON.stringify(obj)).toString("base64url");
   const now = Math.floor(Date.now() / 1000);
@@ -22,45 +47,60 @@ function mintJwt({ sub = "11111111-1111-1111-1111-111111111111", role = "authent
 }
 
 describe("verifySupabaseJwt", () => {
-  it("accepts a fresh HS256 token signed with the stack secret", () => {
+  it("accepts a fresh RS256 token signed by the stack key", () => {
     const sub = "22222222-2222-2222-2222-222222222222";
-    const claims = verifySupabaseJwt(mintJwt({ sub }), SECRET);
+    const claims = verifySupabaseJwt(mintJwt({ sub }), JWKS);
     assert.ok(claims);
     assert.equal(claims.sub, sub);
   });
 
-  it("rejects tokens signed with another secret", () => {
-    assert.equal(verifySupabaseJwt(mintJwt(), "wrong-secret"), null);
+  it("rejects tokens signed with another key", () => {
+    const { publicKey: otherKey } = generateKeyPairSync("rsa", { modulusLength: 3072 });
+    const otherJwks = [{ ...otherKey.export({ format: "jwk" }), kid: KID, alg: "RS256" }];
+    assert.equal(verifySupabaseJwt(mintJwt(), otherJwks), null);
+  });
+
+  it("rejects an HS256 token signed with the old shared secret", () => {
+    assert.equal(verifySupabaseJwt(mintHs256Jwt(), JWKS), null);
   });
 
   it("rejects expired tokens", () => {
-    assert.equal(verifySupabaseJwt(mintJwt({ expOffsetSec: -10 }), SECRET), null);
+    assert.equal(verifySupabaseJwt(mintJwt({ expOffsetSec: -10 }), JWKS), null);
   });
 
   it("rejects anon and service-role keys: only a person's token connects", () => {
-    assert.equal(
-      verifySupabaseJwt(mintJwt({ role: "anon" }), SECRET),
-      null
-    );
-    assert.equal(
-      verifySupabaseJwt(mintJwt({ role: "service_role" }), SECRET),
-      null
-    );
+    assert.equal(verifySupabaseJwt(mintJwt({ role: "anon" }), JWKS), null);
+    assert.equal(verifySupabaseJwt(mintJwt({ role: "service_role" }), JWKS), null);
   });
 
   it("rejects malformed tokens without throwing", () => {
     for (const bad of ["", "garbage", "a.b", "a.b.c.d", "....", null, undefined, 42]) {
-      assert.equal(verifySupabaseJwt(bad, SECRET), null, `accepted ${bad}`);
+      assert.equal(verifySupabaseJwt(bad, JWKS), null, `accepted ${bad}`);
     }
   });
 
-  it("rejects tokens with a non-HS256 header", () => {
+  it("rejects tokens whose kid names no key in the JWKS", () => {
+    assert.equal(verifySupabaseJwt(mintJwt({ kid: "unknown-kid" }), JWKS), null);
+    const [header, payload, sig] = mintJwt().split(".");
+    const noKid =
+      `${Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url")}.${payload}.${sig}`;
+    assert.equal(verifySupabaseJwt(noKid, JWKS), null);
+  });
+
+  it("rejects tokens with a non-RS256 header", () => {
     const token = mintJwt();
     const [header, payload, sig] = token.split(".");
     const forged =
       `${Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url")}.${payload}.${sig}`;
-    assert.equal(verifySupabaseJwt(forged, SECRET), null);
+    assert.equal(verifySupabaseJwt(forged, JWKS), null);
     assert.ok(header.length > 0);
+  });
+
+  it("rejects junk JWKS values without throwing", () => {
+    assert.equal(verifySupabaseJwt(mintJwt(), null), null);
+    assert.equal(verifySupabaseJwt(mintJwt(), []), null);
+    assert.equal(verifySupabaseJwt(mintJwt(), [{ kid: KID }]), null);
+    assert.equal(verifySupabaseJwt(mintJwt(), "junk"), null);
   });
 });
 

@@ -1,27 +1,28 @@
 import { useEffect, useState } from "react";
 import { Box, Dialog, Stack } from "@mui/material";
 import {
-  CHAT_IMAGE_SIGNED_URL_TTL_SECONDS,
+  CHAT_IMAGE_RELOAD_SECONDS,
   getChatImageUrl,
 } from "api-calls/chat/chatImages";
 
-// Signed URLs are per-object and short-lived (minutes, so a revoked
-// member's links stop working quickly): the cache remembers each link with
-// its signing time, and an image shown with a stale link is signed again,
-// on display and once a minute while mounted, instead of serving the
-// expired URL.
-const urlCache = new Map<string, { url: string; signedAt: number }>();
+// Image bytes are fetched with the viewer's own token and held as object
+// URLs (ticket #152): the cache remembers each image with its load time,
+// and an image is fetched again on the reload cadence — on display and
+// once a minute while mounted — so a member whose access is revoked stops
+// seeing it shortly after. The replaced object URL is revoked, so the old
+// bytes are freed.
+const urlCache = new Map<string, { url: string; loadedAt: number }>();
 
-// A link counts as stale shortly before it expires, so the refresh lands
-// before the old one stops working.
+// A fetch counts as stale shortly before the reload cadence, so the
+// refresh lands before access changes should show.
 const REFRESH_SKEW_MS = 60 * 1000;
 
 function freshCachedUrl(path: string, now: number): string | undefined {
   const entry = urlCache.get(path);
   if (
     entry &&
-    now - entry.signedAt <
-      CHAT_IMAGE_SIGNED_URL_TTL_SECONDS * 1000 - REFRESH_SKEW_MS
+    now - entry.loadedAt <
+      CHAT_IMAGE_RELOAD_SECONDS * 1000 - REFRESH_SKEW_MS
   ) {
     return entry.url;
   }
@@ -49,9 +50,14 @@ export function ChatPostImages(props: { paths: string[] }) {
       getChatImageUrl(path).then(
         (url) => {
           if (!live) {
+            URL.revokeObjectURL(url);
             return;
           }
-          urlCache.set(path, { url, signedAt: Date.now() });
+          const previous = urlCache.get(path)?.url;
+          urlCache.set(path, { url, loadedAt: Date.now() });
+          if (previous && previous !== url) {
+            URL.revokeObjectURL(previous);
+          }
           setUrls((current) =>
             current[path] === url ? current : { ...current, [path]: url }
           );

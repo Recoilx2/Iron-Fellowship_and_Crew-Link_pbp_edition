@@ -8,13 +8,29 @@
 // the three sides cannot drift.
 import { createGmAssistantHandler } from "../gm-assistant/handler.ts";
 import { isGmAssistantPath } from "../gm-assistant/protocol.ts";
+import { parseJwkSet } from "../gm-assistant/env.ts";
+import { logServerError } from "../gm-assistant/log.ts";
+
+// The public JWKS every caller token is verified against (RS256,
+// ticket #152). Missing or malformed key material is a broken deployment,
+// not a request problem: refuse to start so the container never comes up
+// half-verified.
+const jwtJwks = parseJwkSet(Deno.env.get("JWT_JWKS"));
+if (!jwtJwks) {
+  logServerError(
+    "BOOT_CONFIG",
+    "JWT_JWKS is missing or malformed; cannot verify caller tokens",
+    { status: 500 },
+  );
+  Deno.exit(1);
+}
 
 const handleGmAssistant = createGmAssistantHandler({
   endpoint: Deno.env.get("GM_ASSISTANT_ENDPOINT") ?? "",
   apiKey: Deno.env.get("GM_ASSISTANT_API_KEY") ?? "",
   allowedModels: Deno.env.get("GM_ASSISTANT_ALLOWED_MODELS") ?? "",
   contextTokens: Deno.env.get("GM_ASSISTANT_CONTEXT_TOKENS") ?? "",
-  jwtSecret: Deno.env.get("JWT_SECRET") ?? "",
+  jwtJwks,
   supabaseUrl: Deno.env.get("SUPABASE_URL") ?? "",
   anonKey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
   siteUrl: Deno.env.get("SITE_URL") ?? "",

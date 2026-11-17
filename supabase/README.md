@@ -15,7 +15,7 @@ dev workflow, see `SETUP.md` at the repo root; this file is for operators.
 |---|---|
 | `docker-compose.yml` | The template. No fixed container or project names; everything per-copy comes from the env file. |
 | `.env.example` | Every variable the template uses, with blank secrets. Copy to `.env.ironsworn` / `.env.starforged` (git-ignored, never commit them) or generate them: `python3 bin/gen-env.py --copy ironsworn --port 8000`. |
-| `bin/gen-env.py` | Generates a filled per-copy env file: random passwords/keys, HS256 API keys, per-copy ports. Needs only Python 3 stdlib. |
+| `bin/gen-env.py` | Generates a filled per-copy env file: random passwords/keys, an RSA-3072 signing key pair (node does the crypto; see `bin/gen-keys.mjs`), RS256-minted API keys, per-copy ports. |
 | `envoy/` | Gateway config: static bootstrap, cluster table, and the route template rendered at boot. Studio/MCP/postgres-meta routes are removed (those services are dropped). |
 | `db-init/` | First-boot database setup (roles, realtime schema, webhooks), vendored from upstream. Runs once per fresh volume. |
 | `migrations/` | Your schema migrations; applied automatically on every start (see below). First schema: `profiles` (display names, owner-only access rules). |
@@ -58,13 +58,16 @@ to `ADDITIONAL_REDIRECT_URLS` (e.g. `http://localhost:5173`) and restart.
 
 ## Secrets
 
-Every secret comes from the uncommitted per-copy env file: Postgres password,
-JWT secret and API keys, the realtime GCM key, the storage S3-protocol keys,
-and (for the dashboard add-on) the meta crypto key. `.env.example` ships with
-all of them blank. Realtime encrypts its stored secrets with AES-256-GCM
-(`DB_ENC_KEY_GCM` + `DB_ENC_WRITE_GCM=true`); the legacy ECB key is not set,
-so ECB is never used. Rotate a secret by editing the env file and restarting
-(`up -d` recreates what changed).
+Every secret comes from the uncommitted per-copy env files: Postgres password,
+the JWT signing key pair (`GOTRUE_JWT_KEYS` holds the private half; GoTrue alone
+signs with it) and the API keys minted from it, Storage's static secret,
+the realtime GCM key, the
+storage S3-protocol keys, and (for the dashboard add-on) the meta crypto key.
+`.env.example` ships with all of them blank. Realtime encrypts its stored
+secrets with AES-256-GCM (`DB_ENC_KEY_GCM` + `DB_ENC_WRITE_GCM=true`); the
+legacy ECB key is not set, so ECB is never used. Rotate a secret by editing
+the env file and restarting (`up -d` recreates what changed); regenerating
+the JWT key pair signs everyone out once.
 
 ## Migrations
 
@@ -152,9 +155,11 @@ docker run --rm -v ironsworn_storage-data:/data -v "$PWD":/backup \
 ENV_FILE=.env.ironsworn docker compose -p ironsworn up -d
 ```
 
-Keep the env file with the backup: without the same `JWT_SECRET` old session
-tokens stop verifying, and without `REALTIME_DB_ENC_KEY_GCM` realtime cannot
-decrypt its stored secrets.
+Keep all three env files with the backup (the main one, the GoTrue-only
+one, the Storage-only one): without the same private JWT signing
+key (`GOTRUE_JWT_KEYS`, in the GoTrue-only file) old session tokens stop
+verifying — a re-generated key pair signs everyone out once — and without
+`REALTIME_DB_ENC_KEY_GCM` realtime cannot decrypt its stored secrets.
 
 ## Admin without the dashboard
 

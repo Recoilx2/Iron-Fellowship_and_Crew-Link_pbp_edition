@@ -2,6 +2,7 @@ import { CreateSliceType } from "stores/store.type";
 import { LocationTab, LocationsSlice } from "./locations.slice.type";
 import { defaultLocationsSlice } from "./locations.slice.default";
 import { listenToLocations } from "api-calls/world/locations/listenToLocations";
+import { dropObjectUrl, replaceObjectUrl } from "api-calls/storage/objectUrls";
 import { createLocation } from "api-calls/world/locations/createLocation";
 import { deleteLocation } from "api-calls/world/locations/deleteLocation";
 import { updateLocation } from "api-calls/world/locations/updateLocation";
@@ -75,6 +76,15 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
           const mapBackgroundImageUrl = location.mapBackgroundImageFilename
             ? existingLocation?.mapBackgroundImageUrl
             : undefined;
+          if (existingLocation?.imageUrl && existingLocation.imageUrl !== imageUrl) {
+            dropObjectUrl(existingLocation.imageUrl);
+          }
+          if (
+            existingLocation?.mapBackgroundImageUrl &&
+            existingLocation.mapBackgroundImageUrl !== mapBackgroundImageUrl
+          ) {
+            dropObjectUrl(existingLocation.mapBackgroundImageUrl);
+          }
           store.worlds.currentWorld.currentWorldLocations.locationMap[
             locationId
           ] = {
@@ -90,13 +100,21 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
       },
       (locationId, imageUrl) => {
         set((store) => {
-          store.worlds.currentWorld.currentWorldLocations.locationMap[
-            locationId
-          ].imageUrl = imageUrl;
+          const location =
+            store.worlds.currentWorld.currentWorldLocations.locationMap[
+              locationId
+            ];
+          location.imageUrl = replaceObjectUrl(location.imageUrl, imageUrl);
         });
       },
       (locationId) => {
         set((store) => {
+          const location =
+            store.worlds.currentWorld.currentWorldLocations.locationMap[
+              locationId
+            ];
+          dropObjectUrl(location?.imageUrl);
+          dropObjectUrl(location?.mapBackgroundImageUrl);
           delete store.worlds.currentWorld.currentWorldLocations.locationMap[
             locationId
           ];
@@ -333,9 +351,14 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
     getWorldImageUrl(worldId, locationId, filename)
       .then((url) => {
         set((store) => {
-          store.worlds.currentWorld.currentWorldLocations.locationMap[
-            locationId
-          ].mapBackgroundImageUrl = url;
+          const location =
+            store.worlds.currentWorld.currentWorldLocations.locationMap[
+              locationId
+            ];
+          location.mapBackgroundImageUrl = replaceObjectUrl(
+            location.mapBackgroundImageUrl,
+            url
+          );
         });
       })
       .catch(() => {});

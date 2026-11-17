@@ -5,10 +5,11 @@
  * unit-testable without a stack: sign-in token verification, document-name
  * routing and the per-scope table/helper mapping.
  *
- * Decisions (see the ticket #20 PR):
- * - Tokens are the stack's HS256 Supabase access tokens, verified with the
- *   same JWT_SECRET GoTrue signs with. Only the "authenticated" role
- *   connects: anon and service-role keys never open a note document.
+ * Decisions (see the ticket #20 PR, token shape updated in ticket #152):
+ * - Tokens are the stack's Supabase access tokens, signed by GoTrue with
+ *   the asymmetric RSA key (RS256) and verified here against the public
+ *   JWKS only. Only the "authenticated" role connects: anon and
+ *   service-role keys never open a note document.
  * - Access goes through the database's own visibility helpers (the same
  *   private.* functions the row-level security policies call), but over a
  *   direct privileged connection instead of PostgREST-as-user: one rule
@@ -21,7 +22,7 @@
  *   live beside their own parent, like the world description).
  */
 
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createPublicKey, verify as cryptoVerify } from "node:crypto";
 
 const UUID_PATTERN =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -85,14 +86,18 @@ export function parseDocumentName(name) {
 }
 
 /**
- * Verifies a Supabase access token against the stack's HS256 secret.
- * Returns the claims ({ sub, role, exp, ... }) or null when the token is
- * missing, malformed, mis-signed, expired, or not a person's token.
- * Never throws: authentication failures must close the connection, not the
- * server.
+ * Verifies a Supabase access token against the stack's public JWKS (RS256;
+ * ticket #152). GoTrue signs with the stack's RSA-3072 key and only its
+ * public half reaches this server. Returns the claims
+ * ({ sub, role, exp, ... }) or null when the token is missing, malformed,
+ * mis-signed, expired, or not a person's token. Never throws:
+ * authentication failures must close the connection, not the server.
+ *
+ * `jwks` is the parsed JWT_JWKS value: an array of RSA public JWKs
+ * ({ kty, kid, alg, n, e }). The token's `kid` must name one of them.
  */
-export function verifySupabaseJwt(token, secret) {
-  if (typeof token !== "string" || typeof secret !== "string" || !secret) {
+export function verifySupabaseJwt(token, jwks) {
+  if (typeof token !== "string" || !Array.isArray(jwks) || jwks.length === 0) {
     return null;
   }
   const parts = token.split(".");
@@ -106,14 +111,25 @@ export function verifySupabaseJwt(token, secret) {
   } catch {
     return null;
   }
-  if (!header || header.alg !== "HS256") return null;
-  const expected = createHmac("sha256", secret)
-    .update(`${headerB64}.${payloadB64}`)
-    .digest("base64url");
-  if (signatureB64.length !== expected.length) return null;
-  if (!timingSafeEqual(Buffer.from(signatureB64), Buffer.from(expected))) {
+  // RS256 only: an HS256 token — signed with any secret — is refused by
+  // the algorithm check before any key is touched.
+  if (!header || header.alg !== "RS256") return null;
+  if (typeof header.kid !== "string" || header.kid === "") return null;
+  const jwk = jwks.find((key) => key?.kid === header.kid && key?.kty === "RSA");
+  if (!jwk) return null;
+  let publicKey;
+  try {
+    publicKey = createPublicKey({ key: jwk, format: "jwk" });
+  } catch {
     return null;
   }
+  let valid = false;
+  try {
+    valid = cryptoVerify("sha256", Buffer.from(`${headerB64}.${payloadB64}`), publicKey, Buffer.from(signatureB64, "base64url"));
+  } catch {
+    return null;
+  }
+  if (!valid) return null;
   if (!payload || typeof payload !== "object") return null;
   if (payload.role !== "authenticated") return null;
   if (typeof payload.exp !== "number" || payload.exp * 1000 <= Date.now()) {
