@@ -122,9 +122,9 @@ describe.skipIf(!config)("HS256 tokens are refused everywhere", () => {
     const base = cfg.url.replace(/\/+$/, "");
     const storageSecret = readStorageAuthSecret();
     expect(storageSecret).toBeTruthy();
-    // An upload attempt: the upload route has no invalid-JWT fallback, so
-    // the refused token is a 403 (the object GET route would degrade the
-    // same refusal to an anonymous reader and answer 400 instead).
+    // An upload attempt: the patched verifier refuses the HMAC token
+    // (jose rejects the alg against the patched allowed list), the request
+    // never authenticates, and Storage surfaces the refusal as a 400.
     const res = await fetch(
       `${base}/storage/v1/object/chat-images/${crypto.randomUUID()}/${crypto.randomUUID()}/sneaky.png`,
       {
@@ -137,6 +137,6 @@ describe.skipIf(!config)("HS256 tokens are refused everywhere", () => {
         body: new Uint8Array([137, 80, 78, 71]),
       }
     );
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(400);
   });
 });
