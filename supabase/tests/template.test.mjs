@@ -185,10 +185,9 @@ describe("supabase compose template", () => {
       "POSTGRES_PASSWORD",
       "JWT_KEYS_FILE",
       "JWT_JWKS",
-      "AUTH_JWT_SECRET",
+      "STORAGE_AUTH_FILE",
       "ANON_KEY",
       "SERVICE_ROLE_KEY",
-      "METRICS_JWT_SECRET",
       "SECRET_KEY_BASE",
       "REALTIME_DB_ENC_KEY_GCM",
       "S3_PROTOCOL_ACCESS_KEY_ID",
@@ -220,8 +219,8 @@ describe("supabase compose template", () => {
       // holds the private key, the verifiers hold the public one.
       assert.ok(!/JWT_JWKS/.test(block), "auth must not need the public JWKS: it holds the private key");
     }
-    // Every verifier sees the public JWKS; storage its own copy with the
-    // URL-signing key; PostgREST and Realtime never see the private key.
+    // Every verifier sees the public JWKS, and no service sees the private
+    // key: it is delivered only through the GoTrue-only env file.
     {
       const m = text.match(/^  rest:\s*$/m);
       assert.ok(m, "service rest missing");
@@ -253,8 +252,22 @@ describe("supabase compose template", () => {
       const next = after.search(/^  [a-z][a-z-]*:\s*$/m);
       const block = next === -1 ? after : after.slice(0, next);
       assert.ok(/JWT_JWKS\s*:\s*\$\{JWT_JWKS\}/.test(block), "storage does not verify with the public JWKS");
-      // The boot-mandated static secret (an open gap, docs/adr/0003).
-      assert.ok(/AUTH_JWT_SECRET\s*:\s*\$\{AUTH_JWT_SECRET\}/.test(block), "storage misses its boot-mandated static secret");
+      // The static secret arrives through its own env file (the patched
+      // verifier verifies nothing with it); it must not be interpolated
+      // into the shared environment, where an empty value would override
+      // the file and fail the boot check.
+      assert.ok(/-\s+\$\{STORAGE_AUTH_FILE\}/.test(block), "storage does not read its secret-only env file");
+      assert.ok(!/AUTH_JWT_SECRET/.test(block), "storage interpolates its static secret");
+      // The mounted verifier patch must be built from the pinned image.
+      const storageImage = text.match(/^    image:\s*supabase\/storage-api:(\S+)$/m)?.[1];
+      assert.ok(storageImage, "storage image line missing");
+      assert.ok(/\.\/storage\/jwt\.js:\/app\/dist\/internal\/auth\/jwt\.js:ro/.test(block), "the patched verifier is not mounted");
+      const patched = read("storage/jwt.js");
+      assert.ok(
+        patched.includes(`supabase/storage-api ${storageImage}`),
+        `the patched verifier was not built from ${storageImage}`,
+      );
+      assert.ok(patched.includes("is not accepted"), "the patched verifier does not refuse HMAC tokens");
     }
     assert.ok(
       [...text.matchAll(/-\s+\$\{JWT_KEYS_FILE\}/g)].length === 1,
@@ -262,7 +275,7 @@ describe("supabase compose template", () => {
     );
   });
 
-  it("forks the realtime tenant seed and keeps its mount on the pinned image", () => {
+  it("forks the realtime tenant seed and release config on the pinned image", () => {
     const text = compose();
     assert.ok(/SEED_SELF_HOST\s*:\s*["']true["']/.test(text), "realtime tenant seeding is off");
     const image = text.match(/^    image:\s*supabase\/realtime:(\S+)$/m)?.[1];
@@ -272,13 +285,28 @@ describe("supabase compose template", () => {
       text.includes(`./realtime/seeds.exs:/app/lib/realtime-${version}/priv/repo/seeds.exs:ro`),
       `the seed fork is not mounted over the pinned image's seeds (realtime-${version})`,
     );
+    assert.ok(
+      text.includes(`./realtime/runtime.exs:/app/releases/${version}/runtime.exs:ro`),
+      `the release-config fork is not mounted over the pinned image's runtime.exs (realtime-${version})`,
+    );
     const seeds = read("realtime/seeds.exs");
     assert.ok(seeds.includes("API_JWT_JWKS"), "seed fork does not read the public JWKS");
     const seedsCode = seeds
       .split("\n")
       .filter((l) => !/^\s*#/.test(l))
       .join("\n");
+    assert.ok(seedsCode.includes('"jwt_secret" => nil'), "seed fork must seed the tenant with no HS256 secret");
     assert.ok(!/API_JWT_SECRET/.test(seedsCode), "seed fork must not copy the admin secret into the tenant");
+    const runtime = read("realtime/runtime.exs");
+    const runtimeCode = runtime
+      .split("\n")
+      .filter((l) => !/^\s*#/.test(l))
+      .join("\n");
+    assert.ok(
+      /metrics_jwt_secret\s*=\s*\[\]/.test(runtimeCode),
+      "release-config fork must leave the metrics verifier no secret",
+    );
+    assert.ok(!/METRICS_JWT_SECRET/.test(runtimeCode), "release-config fork still reads METRICS_JWT_SECRET");
     assert.ok(exists("realtime/healthcheck.sh"), "realtime healthcheck script missing");
     assert.ok(
       /test:\s*\["CMD",\s*"\/bin\/sh",\s*"\/realtime\/healthcheck.sh"\]/.test(text),

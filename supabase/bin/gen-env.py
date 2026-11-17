@@ -11,9 +11,10 @@ GoTrue-only env file (.env.<copy>.gotrue) and never to the shared file, so
 no other container ever sees it. The public JWKS goes into JWT_JWKS —
 consumed by everything that verifies tokens: PostgREST, Realtime, Storage,
 the functions container and the note server. ANON_KEY and
-SERVICE_ROLE_KEY are minted as RS256 JWTs signed by the same key. Two
-boot-mandated HS256 hold-outs remain (Storage's static secret and
-Realtime's metrics secret) and are recorded as open gaps in
+SERVICE_ROLE_KEY are minted as RS256 JWTs signed by the same key. The two
+boot-mandated HS256 verifiers the pinned images ship (Realtime's metrics
+endpoints, Storage's static secret) are closed by the forks in
+supabase/realtime/ and supabase/storage/ — see
 docs/adr/0003-asymmetric-jwt-signing.md.
 
 Usage:
@@ -79,14 +80,9 @@ def fresh_secrets() -> dict:
         "SERVICE_ROLE_KEY": keys["SERVICE_ROLE_KEY"],
         # Storage's static JWT secret: the pinned storage image refuses to
         # boot without one, and it signs Storage's short-lived object URLs.
-        # It never signs or verifies user tokens on the other services, and
-        # is one of the two HS256 hold-outs recorded as open gaps in
-        # docs/adr/0003 (ticket #152).
+        # The patched verifier (supabase/storage/jwt.js) verifies nothing
+        # with it; it lives in a storage-only env file (see main).
         "AUTH_JWT_SECRET": secrets.token_urlsafe(36),
-        # Realtime's metrics endpoint scrape secret: the pinned realtime
-        # image refuses to boot without one. It grants metric reads on an
-        # endpoint the gateway never routes, and never touches user tokens.
-        "METRICS_JWT_SECRET": secrets.token_urlsafe(36),
         "SECRET_KEY_BASE": secrets.token_urlsafe(48),
         "REALTIME_DB_ENC_KEY_GCM": realtime_db_enc_key_gcm,
         "S3_PROTOCOL_ACCESS_KEY_ID": secrets.token_hex(16),
@@ -109,18 +105,30 @@ def main() -> int:
 
     lines = open(EXAMPLE).read().splitlines(keepends=False)
     values = fresh_secrets()
-    # The private signing JWK never enters the shared env file: it lives in a
-    # GoTrue-only file beside it, and the shared file points the template at
-    # that path (the auth service's env_file list). The pinned GoTrue also
-    # refuses to boot without GOTRUE_JWT_SECRET even when keys are set, so a
-    # random dead value rides along: signing uses the JWK, verification is
-    # pinned to RS256, and the secret is never consulted (see ADR 0003).
+    # Two secrets never enter the shared env file; each lives in its own
+    # service-only file beside it, and the shared file points the template
+    # at those paths (the auth and storage services' env_file lists):
+    # - GOTRUE_JWT_KEYS: the private RSA signing JWK. GoTrue alone signs
+    #   with it; no other container ever sees it. The pinned GoTrue also
+    #   refuses to boot without GOTRUE_JWT_SECRET even when keys are set,
+    #   so a random dead value rides along: signing uses the JWK,
+    #   verification is pinned to RS256, and the secret is never consulted
+    #   (see ADR 0003).
+    # - AUTH_JWT_SECRET: Storage's static secret. After the patched
+    #   verifier (supabase/storage/jwt.js) it satisfies the boot-time
+    #   config check and signs Storage's own object URLs; it verifies
+    #   nothing.
     gotrue_keys_file = os.path.basename(out) + ".gotrue"
-    gotrue_values = {
-        "GOTRUE_JWT_KEYS": values.pop("JWT_KEYS"),
-        "GOTRUE_JWT_SECRET": secrets.token_urlsafe(36),
+    storage_auth_file = os.path.basename(out) + ".storage"
+    service_files = {
+        gotrue_keys_file: {
+            "GOTRUE_JWT_KEYS": values.pop("JWT_KEYS"),
+            "GOTRUE_JWT_SECRET": secrets.token_urlsafe(36),
+        },
+        storage_auth_file: {"AUTH_JWT_SECRET": values.pop("AUTH_JWT_SECRET")},
     }
     values["JWT_KEYS_FILE"] = gotrue_keys_file
+    values["STORAGE_AUTH_FILE"] = storage_auth_file
     values.update(
         {
             "ENV_FILE": os.path.basename(out),
@@ -173,20 +181,24 @@ def main() -> int:
         else:
             filled.append(derived_limit)
 
-    with open(out, "w") as fh:
-        fh.write("\n".join(filled) + "\n")
-
-    # The GoTrue-only file: the private signing JWK, beside the main env
-    # file, git-ignored like it. Only the auth service's env_file reads it.
-    gotrue_out = os.path.join(os.path.dirname(out), gotrue_keys_file)
-    with open(gotrue_out, "w") as fh:
-        for key, value in gotrue_values.items():
-            fh.write(f"{key}={value}\n")
-
     missing = [k for k, v in values.items() if not v]
     if missing:
         print(f"gen-env: refusing to write, blank values for: {', '.join(missing)}", file=sys.stderr)
         return 1
+
+    # The shared file, the two service-only files: all created 0600 (they
+    # hold secrets; the default umask would leave them world-readable).
+    for path, content in [
+        (out, "\n".join(filled) + "\n"),
+        *[
+            (os.path.join(os.path.dirname(out), name), "".join(f"{k}={v}\n" for k, v in file_values.items()))
+            for name, file_values in service_files.items()
+        ],
+    ]:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(content)
+
     print(f"gen-env: wrote {out} (keep it secret, never commit it)")
     return 0
 

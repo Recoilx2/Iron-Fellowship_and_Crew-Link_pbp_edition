@@ -32,9 +32,12 @@ describe("bin/gen-env.py", () => {
     execFileSync("python3", [genEnv, "--copy", "starforged", "--port", "8001", "--out", starOut], { stdio: "pipe" });
     iron = parseEnv(readFileSync(ironOut, "utf8"));
     star = parseEnv(readFileSync(starOut, "utf8"));
-    // The private signing JWK lives in a GoTrue-only file beside the main one.
+    // The private signing JWK (GoTrue) and Storage's static secret live in
+    // service-only files beside the main one.
     iron.gotrue = parseEnv(readFileSync(join(tmp, ".env.ironsworn.gotrue"), "utf8"));
     star.gotrue = parseEnv(readFileSync(join(tmp, ".env.starforged.gotrue"), "utf8"));
+    iron.storage = parseEnv(readFileSync(join(tmp, ".env.ironsworn.storage"), "utf8"));
+    star.storage = parseEnv(readFileSync(join(tmp, ".env.starforged.storage"), "utf8"));
     iron.__tmp = tmp;
   });
 
@@ -42,10 +45,8 @@ describe("bin/gen-env.py", () => {
     for (const v of [
       "POSTGRES_PASSWORD",
       "JWT_JWKS",
-      "AUTH_JWT_SECRET",
       "ANON_KEY",
       "SERVICE_ROLE_KEY",
-      "METRICS_JWT_SECRET",
       "SECRET_KEY_BASE",
       "REALTIME_DB_ENC_KEY_GCM",
       "S3_PROTOCOL_ACCESS_KEY_ID",
@@ -56,22 +57,25 @@ describe("bin/gen-env.py", () => {
       assert.ok(star[v], `${v} blank in second copy`);
       assert.notEqual(iron[v], star[v], `${v} identical across copies`);
     }
-    assert.ok(iron.AUTH_JWT_SECRET.length >= 32, "AUTH_JWT_SECRET too short");
-    assert.ok(iron.METRICS_JWT_SECRET.length >= 32, "METRICS_JWT_SECRET too short");
     assert.equal(iron.REALTIME_DB_ENC_KEY_GCM.length, 32, "GCM key must be exactly 32 chars");
   });
 
-  it("keeps the private signing key out of the shared env file", () => {
+  it("keeps the private signing key and Storage's static secret out of the shared env file", () => {
     assert.equal(iron.JWT_KEYS, undefined, "shared env file carries JWT_KEYS");
+    assert.equal(iron.AUTH_JWT_SECRET, undefined, "shared env file carries AUTH_JWT_SECRET");
     assert.match(iron.JWT_KEYS_FILE, /^\.env\.ironsworn\.gotrue$/);
+    assert.match(iron.STORAGE_AUTH_FILE, /^\.env\.ironsworn\.storage$/);
     assert.ok(iron.gotrue.GOTRUE_JWT_KEYS, "GoTrue-only env file has no signing key");
     assert.notEqual(iron.gotrue.GOTRUE_JWT_KEYS, star.gotrue.GOTRUE_JWT_KEYS, "same key in both copies");
     // The pinned GoTrue refuses to boot without GOTRUE_JWT_SECRET even when
     // keys are set: a random dead value rides along in the GoTrue-only file.
     assert.ok(iron.gotrue.GOTRUE_JWT_SECRET, "GoTrue-only env file misses the boot-required secret");
     assert.notEqual(iron.gotrue.GOTRUE_JWT_SECRET, star.gotrue.GOTRUE_JWT_SECRET);
-    const shared = Object.keys(iron).filter((key) => key.startsWith("GOTRUE_JWT"));
-    assert.deepEqual(shared, [], "shared env file carries a GoTrue signing variable");
+    // Storage's static secret: boot check and object-URL signing only.
+    assert.ok(iron.storage.AUTH_JWT_SECRET, "storage-only env file misses its secret");
+    assert.notEqual(iron.storage.AUTH_JWT_SECRET, star.storage.AUTH_JWT_SECRET);
+    const shared = Object.keys(iron).filter((key) => key.startsWith("GOTRUE_JWT") || key === "AUTH_JWT_SECRET");
+    assert.deepEqual(shared, [], "shared env file carries a service-only JWT variable");
   });
 
   it("generates one RSA key pair of at least 3072 bits per copy", () => {

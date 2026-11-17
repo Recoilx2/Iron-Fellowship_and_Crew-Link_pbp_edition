@@ -62,7 +62,5 @@ services:
       SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
       SUPABASE_ANON_KEY: ${ANON_KEY}
       SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
-      # Best-effort: the dashboard's API-keys page renders the JWT secret
-      # field; the stack has no symmetric secret (ticket #152), so it gets
-      # the public JWKS instead.
-      AUTH_JWT_SECRET: ${JWT_JWKS}
+      # No AUTH_JWT_SECRET: the stack has no symmetric token secret (ticket
+      # #152), and the dashboard's API-keys page renders the field empty.

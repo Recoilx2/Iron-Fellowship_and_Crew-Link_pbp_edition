@@ -2,6 +2,7 @@ import { CreateSliceType } from "stores/store.type";
 import { NPCsSlice } from "./npcs.slice.type";
 import { defaultNPCsSlice } from "./npcs.slice.default";
 import { listenToNPCs } from "api-calls/world/npcs/listenToNPCs";
+import { dropObjectUrl, replaceObjectUrl } from "api-calls/storage/objectUrls";
 import { createNPC } from "api-calls/world/npcs/createNPC";
 import { deleteNPC } from "api-calls/world/npcs/deleteNPC";
 import { updateNPC } from "api-calls/world/npcs/updateNPC";
@@ -62,6 +63,9 @@ export const createNPCsSlice: CreateSliceType<NPCsSlice> = (set, getState) => ({
             (npc.imageFilenames?.length ?? 0) > 0
               ? existingNPC?.imageUrl
               : undefined;
+          if (existingNPC?.imageUrl && existingNPC.imageUrl !== imageUrl) {
+            dropObjectUrl(existingNPC.imageUrl);
+          }
           store.worlds.currentWorld.currentWorldNPCs.npcMap[npcId] = {
             ...npc,
             gmProperties,
@@ -75,13 +79,16 @@ export const createNPCsSlice: CreateSliceType<NPCsSlice> = (set, getState) => ({
       (npcId, imageUrl) => {
         set((store) => {
           if (store.worlds.currentWorld.currentWorldNPCs.npcMap[npcId]) {
-            store.worlds.currentWorld.currentWorldNPCs.npcMap[npcId].imageUrl =
-              imageUrl;
+            const npc = store.worlds.currentWorld.currentWorldNPCs.npcMap[npcId];
+            npc.imageUrl = replaceObjectUrl(npc.imageUrl, imageUrl);
           }
         });
       },
       (npcId) => {
         set((store) => {
+          dropObjectUrl(
+            store.worlds.currentWorld.currentWorldNPCs.npcMap[npcId]?.imageUrl
+          );
           delete store.worlds.currentWorld.currentWorldNPCs.npcMap[npcId];
         });
       },

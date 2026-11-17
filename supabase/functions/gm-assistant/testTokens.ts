@@ -14,7 +14,11 @@ import type { JwkSet } from "./env.ts";
 
 const TEST_KID = "test-rsa-key";
 
-const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+// RSA-3072: the approved key size applies to test keys too (ticket #152
+// review) — a test that accepts 2048 would bless a non-compliant key.
+const { publicKey, privateKey } = generateKeyPairSync("rsa", {
+  modulusLength: 3072,
+});
 const exportedPrivate = {
   ...(privateKey.export({ format: "jwk" }) as JsonWebKey & Record<string, string>),
   kid: TEST_KID,

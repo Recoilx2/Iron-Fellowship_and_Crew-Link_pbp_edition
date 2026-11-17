@@ -7,7 +7,7 @@ import { ThemeProvider, createTheme } from "@mui/material";
 const getChatImageUrl = vi.fn();
 
 vi.mock("api-calls/chat/chatImages", () => ({
-  CHAT_IMAGE_SIGNED_URL_TTL_SECONDS: 10 * 60,
+  CHAT_IMAGE_RELOAD_SECONDS: 10 * 60,
   getChatImageUrl: (...args: unknown[]) => getChatImageUrl(...args),
 }));
 
@@ -20,7 +20,7 @@ const theme = createTheme();
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 // Seam under test: the feed images readers see. Thumbnails resolve their
-// signed URLs (members only, by the bucket rules) and a tap opens the
+// image URLs (members only, by the bucket rules) and a tap opens the
 // image larger. Resolution itself is covered by the storage live tests;
 // here it is a stub.
 describe("ChatPostImages", () => {
@@ -83,15 +83,15 @@ describe("ChatPostImages", () => {
     expect(view.querySelector("img")).toBeNull();
   });
 
-  it("re-signs a stale image when it is shown again", async () => {
+  it("re-fetches a stale image when it is shown again", async () => {
     getChatImageUrl.mockImplementation(async (path: unknown) => `signed:${path}`);
     const view = render(["campaign-1/post-9/stale.png"]);
     await act(async () => {});
     expect(getChatImageUrl).toHaveBeenCalledTimes(1);
 
     // The feed re-renders with a fresh array for the same post: the cached
-    // link has outlived its minutes-long life, so showing the image signs
-    // it again instead of serving the expired URL.
+    // bytes have outlived the reload cadence, so showing the image fetches
+    // them again instead of serving stale access.
     const realNow = Date.now();
     const nowSpy = vi.spyOn(Date, "now").mockReturnValue(realNow + 60 * 60 * 1000);
     try {

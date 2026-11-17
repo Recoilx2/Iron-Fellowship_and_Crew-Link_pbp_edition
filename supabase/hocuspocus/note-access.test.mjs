@@ -10,8 +10,11 @@ import {
 
 // A throwaway RSA key pair playing the stack's GoTrue signing key: the
 // tests mint RS256 tokens the way GoTrue does and verify against the
-// public JWKS only.
-const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+// public JWKS only. RSA-3072: the approved key size applies to test keys
+// too (ticket #152 review).
+const { publicKey, privateKey } = generateKeyPairSync("rsa", {
+  modulusLength: 3072,
+});
 const KID = "test-rsa-key";
 const exportedPrivate = { ...privateKey.export({ format: "jwk" }), kid: KID, alg: "RS256" };
 const exportedPublic = { ...publicKey.export({ format: "jwk" }), kid: KID, alg: "RS256" };
@@ -52,7 +55,7 @@ describe("verifySupabaseJwt", () => {
   });
 
   it("rejects tokens signed with another key", () => {
-    const { publicKey: otherKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const { publicKey: otherKey } = generateKeyPairSync("rsa", { modulusLength: 3072 });
     const otherJwks = [{ ...otherKey.export({ format: "jwk" }), kid: KID, alg: "RS256" }];
     assert.equal(verifySupabaseJwt(mintJwt(), otherJwks), null);
   });

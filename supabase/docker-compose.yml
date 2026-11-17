@@ -220,6 +220,10 @@ services:
       # stack's tenant verifies RS256 through the JWKS only. The mount path
       # matches the pinned image's release layout (lib/realtime-<version>).
       - ./realtime/seeds.exs:/app/lib/realtime-2.148.3/priv/repo/seeds.exs:ro
+      # The release config is forked too (supabase/realtime/runtime.exs):
+      # the metrics endpoints' secret is an empty list, so /metrics refuses
+      # every caller instead of verifying HS256 tokens (ticket #152).
+      - ./realtime/runtime.exs:/app/releases/2.148.3/runtime.exs:ro
       - ./realtime/healthcheck.sh:/realtime/healthcheck.sh:ro
     env_file:
       - ${ENV_FILE:-.env}
@@ -244,7 +248,6 @@ services:
       API_JWT_JWKS: ${JWT_JWKS}
 
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
-      METRICS_JWT_SECRET: ${METRICS_JWT_SECRET}
       ERL_AFLAGS: -proto_dist inet_tcp
       DNS_NODES: "''"
       RLIMIT_NOFILE: "10000"
@@ -315,17 +318,21 @@ services:
       start_period: 10s
     env_file:
       - ${ENV_FILE:-.env}
+      # Storage's static JWT secret lives in its own env file (ticket #152):
+      # after the patched verifier (below) it satisfies the boot-time config
+      # check and signs Storage's own object URLs — it verifies nothing. The
+      # path is set in the main env file (STORAGE_AUTH_FILE, written by
+      # bin/gen-env.py).
+      - ${STORAGE_AUTH_FILE}
     environment:
       ANON_KEY: ${ANON_KEY}
       SERVICE_KEY: ${SERVICE_ROLE_KEY}
       POSTGREST_URL: http://rest:3000
 
-      # Verifies caller JWTs against the public JWKS (RS256; ticket #152),
-      # and keeps one static secret: the pinned image refuses to boot
-      # without AUTH_JWT_SECRET, and it signs Storage's short-lived object
-      # URLs. Recorded as an open gap in docs/adr/0003.
+      # Verifies caller JWTs against the public JWKS (RS256; ticket #152).
+      # The mounted dist patch (below) refuses HMAC tokens outright: no
+      # static-secret fallback, and no matching key is a refusal.
       JWT_JWKS: ${JWT_JWKS}
-      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET}
 
       DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
       STORAGE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
@@ -348,6 +355,12 @@ services:
       S3_PROTOCOL_ACCESS_KEY_SECRET: ${S3_PROTOCOL_ACCESS_KEY_SECRET}
     volumes:
       - storage-data:/var/lib/storage
+      # The JWT verifier is a patched build of the pinned image's own
+      # dist/internal/auth/jwt.js (ticket #152): HMAC tokens are refused
+      # outright and a missing key is a refusal, instead of falling back to
+      # the static secret. The file's header names the image tag it was
+      # built from; tests/template.test.mjs keeps the two in sync.
+      - ./storage/jwt.js:/app/dist/internal/auth/jwt.js:ro
 
   # Server functions (Edge Runtime) for the GM assistant's AI proxy.
   # Starts with a placeholder main service that answers 404 until later

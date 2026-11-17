@@ -58,9 +58,10 @@ to `ADDITIONAL_REDIRECT_URLS` (e.g. `http://localhost:5173`) and restart.
 
 ## Secrets
 
-Every secret comes from the uncommitted per-copy env file: Postgres password,
-the JWT signing key pair (`JWT_KEYS` holds the private half; GoTrue alone
-signs with it) and the API keys minted from it, the realtime GCM key, the
+Every secret comes from the uncommitted per-copy env files: Postgres password,
+the JWT signing key pair (`GOTRUE_JWT_KEYS` holds the private half; GoTrue alone
+signs with it) and the API keys minted from it, Storage's static secret,
+the realtime GCM key, the
 storage S3-protocol keys, and (for the dashboard add-on) the meta crypto key.
 `.env.example` ships with all of them blank. Realtime encrypts its stored
 secrets with AES-256-GCM (`DB_ENC_KEY_GCM` + `DB_ENC_WRITE_GCM=true`); the
@@ -154,9 +155,10 @@ docker run --rm -v ironsworn_storage-data:/data -v "$PWD":/backup \
 ENV_FILE=.env.ironsworn docker compose -p ironsworn up -d
 ```
 
-Keep both env files with the backup: without the same private JWT signing
-key (`JWT_KEYS`, in the GoTrue-only file) old session tokens stop verifying
-— a re-generated key pair signs everyone out once — and without
+Keep all three env files with the backup (the main one, the GoTrue-only
+one, the Storage-only one): without the same private JWT signing
+key (`GOTRUE_JWT_KEYS`, in the GoTrue-only file) old session tokens stop
+verifying — a re-generated key pair signs everyone out once — and without
 `REALTIME_DB_ENC_KEY_GCM` realtime cannot decrypt its stored secrets.
 
 ## Admin without the dashboard

@@ -2,6 +2,7 @@ import { CreateSliceType } from "stores/store.type";
 import { CharacterSlice } from "./character.slice.type";
 import { defaultCharacterSlice } from "./character.slice.default";
 import { listenToUsersCharacters } from "api-calls/character/listenToUsersCharacters";
+import { dropObjectUrl } from "api-calls/storage/objectUrls";
 import { getErrorMessage } from "functions/getErrorMessage";
 import { deleteCharacter } from "api-calls/character/deleteCharacter";
 import { createCharacter } from "api-calls/character/createCharacter";
@@ -90,6 +91,9 @@ export const createCharacterSlice: CreateSliceType<CharacterSlice> = (
 
       if (!filename) {
         set((state) => {
+          dropObjectUrl(
+            state.characters.characterPortraitMap[characterId]?.url
+          );
           delete state.characters.characterPortraitMap[characterId];
         });
       } else if (existingFilename !== filename) {
@@ -102,11 +106,16 @@ export const createCharacterSlice: CreateSliceType<CharacterSlice> = (
         getCharacterPortraitUrl({ uid, characterId, filename })
           .then((url) => {
             set((state) => {
+              const previous =
+                state.characters.characterPortraitMap[characterId]?.url;
               state.characters.characterPortraitMap[characterId] = {
                 loading: false,
                 filename: filename,
                 url,
               };
+              if (previous && previous !== url) {
+                dropObjectUrl(previous);
+              }
             });
           })
           .catch(() => {});
