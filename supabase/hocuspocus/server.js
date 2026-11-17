@@ -11,9 +11,11 @@
  * seconds and reloads survive restarts.
  *
  * Authentication and access, per connection:
- * - the client sends its Supabase access token; it is verified as HS256
- *   with the stack's JWT_SECRET (see note-access.js). Anything else --
- *   missing, forged, expired, anon or service-role keys -- is refused.
+ * - the client sends its Supabase access token; it is verified as RS256
+ *   against the stack's public JWKS (JWT_JWKS — GoTrue signs with the
+ *   matching private key, which never leaves GoTrue; see note-access.js).
+ *   Anything else -- missing, forged, expired, anon or service-role keys --
+ *   is refused.
  * - the server then checks the person's access to that note through the
  *   database's own visibility helpers (the same private.* functions the
  *   row-level security policies use), over a direct privileged connection.
@@ -40,15 +42,23 @@ import {
 
 const PORT = Number(process.env.PORT ?? 1234);
 const {
-  JWT_SECRET,
+  JWT_JWKS,
   POSTGRES_HOST = "db",
   POSTGRES_PORT = "5432",
   POSTGRES_DB = "postgres",
   POSTGRES_PASSWORD,
 } = process.env;
 
-if (!JWT_SECRET) {
-  console.error("hocuspocus: JWT_SECRET is required");
+// The public JWKS is required: without it no token can be verified, so the
+// server refuses to start rather than accept nothing (or everything).
+let jwks = null;
+try {
+  jwks = JSON.parse(JWT_JWKS ?? "")?.keys;
+} catch {
+  jwks = null;
+}
+if (!Array.isArray(jwks) || jwks.length === 0) {
+  console.error("hocuspocus: JWT_JWKS is missing or malformed");
   process.exit(1);
 }
 if (!POSTGRES_PASSWORD) {
@@ -160,7 +170,7 @@ const persistence = new Database({
 });
 
 async function onAuthenticate(data) {
-  const claims = verifySupabaseJwt(data.token, JWT_SECRET);
+  const claims = verifySupabaseJwt(data.token, jwks);
   if (!claims) {
     throw new Error("hocuspocus: invalid sign-in token");
   }

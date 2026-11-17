@@ -78,6 +78,8 @@ jobs:
           echo "::add-mask::$(grep -E '^ANON_KEY=' .env.live | cut -d= -f2-)"
           echo "::add-mask::$(grep -E '^SERVICE_ROLE_KEY=' .env.live | cut -d= -f2-)"
           echo "::add-mask::$(grep -E '^POSTGRES_PASSWORD=' .env.live | cut -d= -f2-)"
+          echo "::add-mask::$(grep -E '^JWT_KEYS=' .env.live | cut -d= -f2-)"
+          echo "::add-mask::$(grep -E '^METRICS_JWT_SECRET=' .env.live | cut -d= -f2-)"
 
       - name: Validate the template renders
         working-directory: supabase
@@ -124,10 +126,12 @@ jobs:
           }
 
           realtime_healthy() {
-            compose exec -T realtime \
-              curl -sSfL --head -o /dev/null \
-              -H "Authorization: Bearer $ANON" \
-              http://localhost:4000/api/tenants/realtime-dev/health
+            # Liveness via the unauthenticated /healthcheck route
+            # (realtime/healthcheck.sh): the /api health endpoint
+            # authenticates with an HS256 admin secret this stack
+            # deliberately does not configure, so it accepts no probe
+            # (ticket #152).
+            compose exec -T realtime /bin/sh /realtime/healthcheck.sh
           }
 
           functions_placeholder_ok() {
@@ -195,6 +199,8 @@ jobs:
           echo "::add-mask::$(grep -E '^ANON_KEY=' .env.live | cut -d= -f2-)"
           echo "::add-mask::$(grep -E '^SERVICE_ROLE_KEY=' .env.live | cut -d= -f2-)"
           echo "::add-mask::$(grep -E '^POSTGRES_PASSWORD=' .env.live | cut -d= -f2-)"
+          echo "::add-mask::$(grep -E '^JWT_KEYS=' .env.live | cut -d= -f2-)"
+          echo "::add-mask::$(grep -E '^METRICS_JWT_SECRET=' .env.live | cut -d= -f2-)"
 
       - name: Validate the template renders
         working-directory: supabase
@@ -246,10 +252,12 @@ jobs:
           }
 
           realtime_healthy() {
-            compose exec -T realtime \
-              curl -sSfL --head -o /dev/null \
-              -H "Authorization: Bearer $ANON" \
-              http://localhost:4000/api/tenants/realtime-dev/health
+            # Liveness via the unauthenticated /healthcheck route
+            # (realtime/healthcheck.sh): the /api health endpoint
+            # authenticates with an HS256 admin secret this stack
+            # deliberately does not configure, so it accepts no probe
+            # (ticket #152).
+            compose exec -T realtime /bin/sh /realtime/healthcheck.sh
           }
 
           functions_placeholder_ok() {

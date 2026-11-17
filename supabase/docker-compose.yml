@@ -104,6 +104,11 @@ services:
         condition: service_healthy
     env_file:
       - ${ENV_FILE:-.env}
+      # The private JWT signing key lives in its own env file (ticket #152):
+      # GoTrue is the only service that receives it, so no other container's
+      # environment can become a signing oracle. The path is set in the main
+      # env file (JWT_KEYS_FILE, written by bin/gen-env.py).
+      - ${JWT_KEYS_FILE}
     environment:
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: 9999
@@ -121,8 +126,11 @@ services:
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
       GOTRUE_JWT_EXP: ${JWT_EXPIRY}
 
-      # Legacy symmetric HS256 key
-      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      # Asymmetric JWT signing (ticket #152): GoTrue signs access tokens
+      # with the private JWK from its own env file (RS256, RSA-3072) and
+      # verifies incoming tokens against the same key; HS256 is never
+      # accepted. The key arrives through the env_file list above.
+      GOTRUE_JWT_VALID_METHODS: RS256
 
       GOTRUE_JWT_ISSUER: ${API_EXTERNAL_URL}
 
@@ -168,8 +176,9 @@ services:
       PGRST_ADMIN_SERVER_PORT: 3001
       PGRST_ADMIN_SERVER_HOST: localhost
 
-      # PostgREST accepts a plain-text symmetric secret, a single JWK, or a JWKS.
-      PGRST_JWT_SECRET: ${JWT_JWKS:-${JWT_SECRET}}
+      # Verifies caller JWTs against the stack's public JWKS (RS256;
+      # ticket #152). Accepts a plain secret, a single JWK or a JWKS.
+      PGRST_JWT_SECRET: ${JWT_JWKS}
 
       PGRST_DB_USE_LEGACY_GUCS: "false"
       PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY}
@@ -195,15 +204,23 @@ services:
       migrate:
         condition: service_completed_successfully
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -sSfL --head -o /dev/null -H \"Authorization: Bearer ${ANON_KEY}\" http://localhost:4000/api/tenants/realtime-dev/health"
-        ]
+      # Liveness via the unauthenticated /healthcheck route: the /api health
+      # endpoint authenticates with an HS256 admin secret this stack
+      # deliberately does not configure, so it can accept no probe.
+      # healthcheck.sh is shared with the smoke test and the CI wait steps.
+      test: ["CMD", "/bin/sh", "/realtime/healthcheck.sh"]
       timeout: 5s
       interval: 30s
       retries: 3
       start_period: 10s
+    volumes:
+      # The tenant seed is forked (supabase/realtime/seeds.exs): upstream's
+      # copy forces the tenant's jwt_secret to a well-known default when
+      # API_JWT_SECRET is unset, which would let HS256 tokens back in. This
+      # stack's tenant verifies RS256 through the JWKS only. The mount path
+      # matches the pinned image's release layout (lib/realtime-<version>).
+      - ./realtime/seeds.exs:/app/lib/realtime-2.148.3/priv/repo/seeds.exs:ro
+      - ./realtime/healthcheck.sh:/realtime/healthcheck.sh:ro
     env_file:
       - ${ENV_FILE:-.env}
     environment:
@@ -220,11 +237,14 @@ services:
       DB_ENC_KEY_GCM: ${REALTIME_DB_ENC_KEY_GCM}
       DB_ENC_WRITE_GCM: "true"
 
-      # Legacy symmetric HS256 key
-      API_JWT_SECRET: ${JWT_SECRET}
+      # Public JWKS for token verification (RS256; ticket #152). The app
+      # level API_JWT_SECRET is deliberately unset: with no admin secret
+      # configured, realtime's /api endpoints (health, tenant management)
+      # refuse every caller, so no HS256 token is accepted anywhere.
+      API_JWT_JWKS: ${JWT_JWKS}
 
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
-      METRICS_JWT_SECRET: ${JWT_SECRET}
+      METRICS_JWT_SECRET: ${METRICS_JWT_SECRET}
       ERL_AFLAGS: -proto_dist inet_tcp
       DNS_NODES: "''"
       RLIMIT_NOFILE: "10000"
@@ -300,8 +320,10 @@ services:
       SERVICE_KEY: ${SERVICE_ROLE_KEY}
       POSTGREST_URL: http://rest:3000
 
-      # Legacy symmetric HS256 key
-      AUTH_JWT_SECRET: ${JWT_SECRET}
+      # Verifies caller JWTs against the public JWKS (RS256; ticket #152).
+      # The storage copy adds Storage's own URL-signing key, which no other
+      # service sees. With the JWKS set, HS256 tokens are refused.
+      JWT_JWKS: ${JWT_JWKS_STORAGE}
 
       DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
       STORAGE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
@@ -346,8 +368,10 @@ services:
     env_file:
       - ${ENV_FILE:-.env}
     environment:
-      # Legacy symmetric HS256 key
-      JWT_SECRET: ${JWT_SECRET}
+      # Public JWKS the gm-assistant function verifies caller JWTs against
+      # (RS256; ticket #152). The runtime's own VERIFY_JWT stays off: the
+      # function checks the JWT in code.
+      JWT_JWKS: ${JWT_JWKS}
 
       SUPABASE_URL: http://api-gw:8000
       SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
@@ -400,7 +424,9 @@ services:
       - ${ENV_FILE:-.env}
     environment:
       PORT: 1234
-      JWT_SECRET: ${JWT_SECRET}
+      # Public JWKS used to verify the client's Supabase access token
+      # (RS256; ticket #152).
+      JWT_JWKS: ${JWT_JWKS}
       POSTGRES_HOST: ${POSTGRES_HOST}
       POSTGRES_PORT: ${POSTGRES_PORT}
       POSTGRES_DB: ${POSTGRES_DB}

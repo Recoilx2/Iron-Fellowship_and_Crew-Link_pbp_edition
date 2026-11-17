@@ -9,7 +9,6 @@
  * live test): the Deno wiring, the gateway rewrite, real row-level security
  * and the real upstream.
  */
-import { createHmac } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -17,12 +16,15 @@ import {
   type GmAssistantEnv,
   type UpstreamFetch,
 } from "./handler";
+import { mintHs256, mintRs256, testJwks } from "./testTokens";
 
 const GM_ID = "11111111-1111-4111-8111-111111111111";
 const CAMPAIGN_ID = "22222222-2222-4222-8222-222222222222";
 const CONVERSATION_ID = "33333333-3333-4333-8333-333333333333";
 const API_KEY = "sk-test-secret-KEY-abcdef123456";
-const JWT_SECRET = "test-jwt-secret-that-is-long-enough";
+// The old shared secret from before the asymmetric switch (ticket #152):
+// tokens signed with it must be refused, like any HS256 token.
+const OLD_JWT_SECRET = "test-jwt-secret-that-is-long-enough";
 
 function baseEnv(overrides: Partial<GmAssistantEnv> = {}): GmAssistantEnv {
   return {
@@ -30,7 +32,7 @@ function baseEnv(overrides: Partial<GmAssistantEnv> = {}): GmAssistantEnv {
     apiKey: API_KEY,
     allowedModels: "",
     contextTokens: "",
-    jwtSecret: JWT_SECRET,
+    jwtJwks: testJwks(),
     supabaseUrl: "http://api-gw:8000",
     anonKey: "anon-key",
     siteUrl: "https://site.test",
@@ -39,23 +41,8 @@ function baseEnv(overrides: Partial<GmAssistantEnv> = {}): GmAssistantEnv {
   };
 }
 
-function b64url(b64: string): string {
-  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function mintToken(claims: Record<string, unknown>): string {
-  const header = b64url(
-    Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64"),
-  );
-  const payload = b64url(Buffer.from(JSON.stringify(claims)).toString("base64"));
-  const sig = b64url(
-    createHmac("sha256", JWT_SECRET).update(`${header}.${payload}`).digest("base64"),
-  );
-  return `${header}.${payload}.${sig}`;
-}
-
 function gmToken(): string {
-  return mintToken({
+  return mintRs256({
     role: "authenticated",
     sub: GM_ID,
     exp: Math.floor(Date.now() / 1000) + 3600,
@@ -275,25 +262,22 @@ describe("gm assistant handler routing and auth", () => {
   it("refuses forged, expired and non-authenticated tokens", async () => {
     const { fetchImpl } = makeFake();
     const handle = createGmAssistantHandler(baseEnv(), fetchImpl);
-    const forged = mintToken({ role: "authenticated", sub: GM_ID, exp: Date.now() / 1000 + 3600 });
-    void forged;
-    const wrongSecret = (() => {
-      const header = b64url(Buffer.from(JSON.stringify({ alg: "HS256" })).toString("base64"));
-      const payload = b64url(
-        Buffer.from(
-          JSON.stringify({ role: "authenticated", sub: GM_ID, exp: Date.now() / 1000 + 3600 }),
-        ).toString("base64"),
-      );
-      const sig = b64url(
-        createHmac("sha256", "wrong-secret").update(`${header}.${payload}`).digest("base64"),
-      );
-      return `${header}.${payload}.${sig}`;
-    })();
+    // An HS256 token signed with the old shared secret: refused like any
+    // HS256 token, even though the secret was once the stack's own.
+    const oldSecret = mintHs256(
+      { role: "authenticated", sub: GM_ID, exp: Date.now() / 1000 + 3600 },
+      OLD_JWT_SECRET,
+    );
+    const wrongKey = mintHs256(
+      { role: "authenticated", sub: GM_ID, exp: Date.now() / 1000 + 3600 },
+      "wrong-secret",
+    );
     for (const token of [
-      wrongSecret,
-      mintToken({ role: "service_role", sub: GM_ID, exp: Date.now() / 1000 + 3600 }),
-      mintToken({ role: "authenticated", sub: GM_ID, exp: Date.now() / 1000 - 10 }),
-      mintToken({ role: "authenticated", sub: "not-a-uuid", exp: Date.now() / 1000 + 3600 }),
+      oldSecret,
+      wrongKey,
+      mintRs256({ role: "service_role", sub: GM_ID, exp: Date.now() / 1000 + 3600 }),
+      mintRs256({ role: "authenticated", sub: GM_ID, exp: Date.now() / 1000 - 10 }),
+      mintRs256({ role: "authenticated", sub: "not-a-uuid", exp: Date.now() / 1000 + 3600 }),
       "not.a.token",
     ]) {
       const res = await handle(

@@ -89,11 +89,12 @@ poll_for() {
 }
 
 realtime_healthy() {
-  # realtime_healthy <project> <env-file> <anon-key>
-  compose "$1" "$2" exec -T realtime \
-    curl -sSfL --head -o /dev/null \
-    -H "Authorization: Bearer $3" \
-    http://localhost:4000/api/tenants/realtime-dev/health
+  # realtime_healthy <project> <env-file>
+  # Liveness via the unauthenticated /healthcheck route (realtime/
+  # healthcheck.sh): the /api health endpoint authenticates with an HS256
+  # admin secret this stack deliberately does not configure, so it accepts
+  # no probe (ticket #152).
+  compose "$1" "$2" exec -T realtime /bin/sh /realtime/healthcheck.sh
 }
 
 functions_placeholder_ok() {
@@ -117,7 +118,7 @@ check_copy() {
   wait_for "$project rest" -H "apikey: $service_key" "$gw/rest/v1/"
   wait_for "$project storage" "$gw/storage/v1/status"
   wait_for "$project hocuspocus" "$gw/hocuspocus/"
-  poll_for "$project realtime" realtime_healthy "$project" "$env_file" "$key"
+  poll_for "$project realtime" realtime_healthy "$project" "$env_file"
   poll_for "$project functions" functions_placeholder_ok "$gw" "$key"
   poll_for "$project migrations" migrate_done "$project" "$env_file"
 }
