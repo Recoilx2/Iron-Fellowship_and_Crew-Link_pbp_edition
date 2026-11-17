@@ -49,8 +49,6 @@ describe("bin/gen-env.py", () => {
       "SERVICE_ROLE_KEY",
       "SECRET_KEY_BASE",
       "REALTIME_DB_ENC_KEY_GCM",
-      "S3_PROTOCOL_ACCESS_KEY_ID",
-      "S3_PROTOCOL_ACCESS_KEY_SECRET",
       "PG_META_CRYPTO_KEY",
     ]) {
       assert.ok(iron[v], `${v} blank`);

@@ -123,6 +123,11 @@ realtime_metrics_refuse_hs256() {
   # The /metrics endpoints must refuse every caller: the release-config
   # fork leaves the metrics verifier no secret, so even a token signed
   # with upstream's well-known seed constant gets 403 (ticket #152).
+  # Note what this check proves on its own: it cannot tell "no secret"
+  # from "a different secret", because the stack never held this constant.
+  # It is the fork's boot behaviour that makes a drifted mount fail loudly
+  # — upstream's System.fetch_env! raises without METRICS_JWT_SECRET — so
+  # this probe plus a green boot pins the fork in place.
   local token
   token="$(printf '{"alg":"HS256","typ":"JWT"}' | openssl base64 -A | tr '+/' '-_' | tr -d '=').$(printf '{"role":"anon","iat":%s,"exp":%s}' "$(date +%s)" "$(( $(date +%s) + 60 ))" | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
   token="${token}.$(printf '%s' "$token" | openssl dgst -sha256 -hmac 'super-secret-jwt-token-with-at-least-32-characters-long' -binary | openssl base64 -A | tr '+/' '-_' | tr -d '=')"

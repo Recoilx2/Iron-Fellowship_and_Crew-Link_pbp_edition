@@ -320,9 +320,9 @@ services:
       - ${ENV_FILE:-.env}
       # Storage's static JWT secret lives in its own env file (ticket #152):
       # after the patched verifier (below) it satisfies the boot-time config
-      # check and signs Storage's own object URLs — it verifies nothing. The
-      # path is set in the main env file (STORAGE_AUTH_FILE, written by
-      # bin/gen-env.py).
+      # check and nothing else — it verifies no tokens, and the patched
+      # signJWT mints no HMAC tokens. The path is set in the main env file
+      # (STORAGE_AUTH_FILE, written by bin/gen-env.py).
       - ${STORAGE_AUTH_FILE}
     environment:
       ANON_KEY: ${ANON_KEY}
@@ -347,12 +347,14 @@ services:
       GLOBAL_S3_BUCKET: ${GLOBAL_S3_BUCKET}
       FILE_STORAGE_BACKEND_PATH: /var/lib/storage
       TENANT_ID: ${STORAGE_TENANT_ID}
+      # The S3 protocol endpoint is off: it authenticates with AWS SigV4
+      # (HMAC-SHA256) and mints HS256 session tokens — HMAC paths the stack
+      # must not have (ticket #152), and the app uses the storage API
+      # directly.
+      S3_PROTOCOL_ENABLED: "false"
       # TODO: https://github.com/supabase/storage-api/issues/55
       REGION: ${REGION}
       ENABLE_IMAGE_TRANSFORMATION: "false"
-      # S3 protocol endpoint configuration
-      S3_PROTOCOL_ACCESS_KEY_ID: ${S3_PROTOCOL_ACCESS_KEY_ID}
-      S3_PROTOCOL_ACCESS_KEY_SECRET: ${S3_PROTOCOL_ACCESS_KEY_SECRET}
     volumes:
       - storage-data:/var/lib/storage
       # The JWT verifier is a patched build of the pinned image's own

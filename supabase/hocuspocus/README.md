@@ -13,7 +13,7 @@ worlds ticket ports them: they sync live but never touch the database.
 | Variable | Meaning |
 |---|---|
 | `PORT` | Listen port (default 1234). Reached only through the gateway. |
-| `JWT_JWKS` | The stack's public JWKS: client access tokens (RS256, signed by GoTrue's private key in `JWT_KEYS`) are verified against it. |
+| `JWT_JWKS` | The stack's public JWKS: client access tokens (RS256, signed by GoTrue with its private key from the GoTrue-only env file) are verified against it. |
 | `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_DB` / `POSTGRES_PASSWORD` | Database connection. Connects as `postgres` on the internal network; per-connection access checks reuse the same `private.*` visibility helpers the row-level security policies use. |
 
 ## Behavior

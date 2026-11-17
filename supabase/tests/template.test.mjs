@@ -190,8 +190,6 @@ describe("supabase compose template", () => {
       "SERVICE_ROLE_KEY",
       "SECRET_KEY_BASE",
       "REALTIME_DB_ENC_KEY_GCM",
-      "S3_PROTOCOL_ACCESS_KEY_ID",
-      "S3_PROTOCOL_ACCESS_KEY_SECRET",
       "PG_META_CRYPTO_KEY",
     ]) {
       assert.ok(new RegExp(`^${v}=\\s*$`, "m").test(example), `${v} is not blank`);
@@ -268,6 +266,14 @@ describe("supabase compose template", () => {
         `the patched verifier was not built from ${storageImage}`,
       );
       assert.ok(patched.includes("is not accepted"), "the patched verifier does not refuse HMAC tokens");
+      assert.ok(
+        patched.includes("HMAC token signing is not accepted"),
+        "the patched verifier still mints HMAC tokens",
+      );
+      // The S3 protocol authenticates with SigV4 (HMAC-SHA256) and mints
+      // HS256 session tokens: it must stay off.
+      assert.ok(/S3_PROTOCOL_ENABLED\s*:\s*["']false["']/.test(block), "the S3 protocol endpoint is enabled");
+      assert.ok(!/S3_PROTOCOL_ACCESS_KEY/.test(block), "storage still receives S3 protocol keys");
     }
     assert.ok(
       [...text.matchAll(/-\s+\$\{JWT_KEYS_FILE\}/g)].length === 1,

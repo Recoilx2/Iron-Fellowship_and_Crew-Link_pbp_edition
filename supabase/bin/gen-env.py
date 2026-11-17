@@ -79,14 +79,12 @@ def fresh_secrets() -> dict:
         "ANON_KEY": keys["ANON_KEY"],
         "SERVICE_ROLE_KEY": keys["SERVICE_ROLE_KEY"],
         # Storage's static JWT secret: the pinned storage image refuses to
-        # boot without one, and it signs Storage's short-lived object URLs.
-        # The patched verifier (supabase/storage/jwt.js) verifies nothing
-        # with it; it lives in a storage-only env file (see main).
+        # boot without one. The patched verifier (supabase/storage/jwt.js)
+        # verifies nothing with it and the stack mints no HMAC tokens; it
+        # lives in a storage-only env file (see main).
         "AUTH_JWT_SECRET": secrets.token_urlsafe(36),
         "SECRET_KEY_BASE": secrets.token_urlsafe(48),
         "REALTIME_DB_ENC_KEY_GCM": realtime_db_enc_key_gcm,
-        "S3_PROTOCOL_ACCESS_KEY_ID": secrets.token_hex(16),
-        "S3_PROTOCOL_ACCESS_KEY_SECRET": secrets.token_hex(32),
         "PG_META_CRYPTO_KEY": secrets.token_urlsafe(32),
     }
 
@@ -116,8 +114,8 @@ def main() -> int:
     #   (see ADR 0003).
     # - AUTH_JWT_SECRET: Storage's static secret. After the patched
     #   verifier (supabase/storage/jwt.js) it satisfies the boot-time
-    #   config check and signs Storage's own object URLs; it verifies
-    #   nothing.
+    #   config check and nothing else: it verifies no tokens, and the
+    #   patched signJWT mints no HMAC tokens.
     gotrue_keys_file = os.path.basename(out) + ".gotrue"
     storage_auth_file = os.path.basename(out) + ".storage"
     service_files = {

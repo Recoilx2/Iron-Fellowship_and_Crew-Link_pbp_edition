@@ -62,20 +62,21 @@ No service or function accepts an HS256-signed token.
 - **Storage** (`JWT_JWKS` + a patched verifier): verifies user tokens
   against the public JWKS (RS256). The pinned image's verifier would still
   accept HS256 tokens against a boot-mandated static secret
-  (`AUTH_JWT_SECRET`), so `supabase/storage/jwt.js` — a patched build of
-  the image's own `dist/internal/auth/jwt.js` (built by the repo's own
-  `build.js` with its lockfile-pinned esbuild), mounted read-only over the
-  image's copy — refuses HMAC tokens outright, refuses tokens with no
-  matching key, and fails closed when no keys are configured. The static
-  secret keeps two jobs: satisfying the boot-time config check, and
-  signing Storage's own short-lived object URLs.
+  (`AUTH_JWT_SECRET`), and its `signJWT` would still mint them, so
+  `supabase/storage/jwt.js` — a patched build of the image's own
+  `dist/internal/auth/jwt.js` (built by the repo's own `build.js` with its
+  lockfile-pinned esbuild), mounted read-only over the image's copy —
+  refuses HMAC tokens outright, refuses tokens with no matching key, fails
+  closed when no keys are configured, and refuses HMAC *signing* too: the
+  stack mints no HS256 tokens. The static secret keeps one job: satisfying
+  the boot-time config check. It lives in a Storage-only env file.
 - **The app loads images with the viewer's token, not signed URLs**
   (`src/api-calls`): chat attachments, character portraits and world
   images are fetched with `download()` (the viewer's RS256 token, so the
   bucket's access rules stay the only gate) and handed to the interface as
   object URLs; the stores revoke a URL when they replace or drop it. The
   signed-URL flow is retired: its tokens are HMAC-signed, and the patched
-  verifier refuses them.
+  verifier refuses both minting and verifying them.
 - **Functions and the note server**: the GM assistant function verifies
   the caller's token in code (WebCrypto, `RSASSA-PKCS1-v1_5`) against the
   public JWKS (`JWT_JWKS`), refusing any other algorithm; the note server
@@ -126,6 +127,6 @@ No service or function accepts an HS256-signed token.
 - The realtime and storage forks are coupled to the pinned images' file
   layouts; `tests/template.test.mjs` fails when an image tag and a mount
   path (or a built file's version marker) drift apart.
-- Storage's object URLs are short-lived blobs in the browser: a member
-  whose access is revoked stops seeing an image by its next reload, and
-  the replaced bytes are freed by revocation.
+- The browser's object URLs are short-lived in the interface: a member whose
+  access is revoked stops seeing an image by its next reload, and the
+  replaced bytes are freed by revocation.

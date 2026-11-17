@@ -1,8 +1,9 @@
 // dist/internal/auth/jwt.js from supabase/storage-api v1.89.12, patched for
-// Iron-Fellowship ticket #152 (three changes, marked PATCH in the body):
+// Iron-Fellowship ticket #152 (four changes, marked PATCH in the body):
 // - no verification keys configured: refuse everything (fail closed),
 // - HMAC tokens refused outright: no static-secret fallback,
-// - an asymmetric token with no matching key refused: no secret fallback.
+// - an asymmetric token with no matching key refused: no secret fallback,
+// - HMAC token signing refused: the stack mints no HS256 tokens.
 // Built with the repo's own build.js and its lockfile-pinned esbuild 0.28.1.
 // The image tag this file matches is pinned in tests/template.test.mjs.
 "use strict";
@@ -306,6 +307,9 @@ async function verifyJWT(token, secret, jwks) {
   }
 }
 async function signJWT(payload, secret, expiresIn) {
+  if (typeof secret === "string" || secret.kty === "oct") {
+    throw import_errors.ERRORS.AccessDenied("HMAC token signing is not accepted");
+  }
   const signer = new import_jose.SignJWT(payload).setIssuedAt();
   if (expiresIn !== void 0) {
     const expiresInStr = getJWTExpirationTime(expiresIn);
