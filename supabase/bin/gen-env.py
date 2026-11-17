@@ -111,9 +111,15 @@ def main() -> int:
     values = fresh_secrets()
     # The private signing JWK never enters the shared env file: it lives in a
     # GoTrue-only file beside it, and the shared file points the template at
-    # that path (the auth service's env_file list).
+    # that path (the auth service's env_file list). The pinned GoTrue also
+    # refuses to boot without GOTRUE_JWT_SECRET even when keys are set, so a
+    # random dead value rides along: signing uses the JWK, verification is
+    # pinned to RS256, and the secret is never consulted (see ADR 0003).
     gotrue_keys_file = os.path.basename(out) + ".gotrue"
-    gotrue_values = {"GOTRUE_JWT_KEYS": values.pop("JWT_KEYS")}
+    gotrue_values = {
+        "GOTRUE_JWT_KEYS": values.pop("JWT_KEYS"),
+        "GOTRUE_JWT_SECRET": secrets.token_urlsafe(36),
+    }
     values["JWT_KEYS_FILE"] = gotrue_keys_file
     values.update(
         {

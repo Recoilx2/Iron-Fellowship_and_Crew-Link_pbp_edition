@@ -30,6 +30,10 @@ exceptions.
 - **GoTrue** (`GOTRUE_JWT_KEYS`, delivered by its own env file, plus
   `GOTRUE_JWT_VALID_METHODS=RS256`): signs with the private JWK (its `kid`
   rides every token) and refuses every other algorithm on verification.
+  The pinned image also refuses to *boot* without `GOTRUE_JWT_SECRET` even
+  when keys are set, so a random value rides along in the GoTrue-only
+  file; it is never consulted — signing uses the JWK, and the HS256
+  verification fallback sits behind the RS256-only method pin.
 - **PostgREST** (`PGRST_JWT_SECRET`): accepts the JWKS JSON directly and
   selects keys by `kid`.
 - **Realtime** (`API_JWT_JWKS`): the tenant's `jwt_jwks` verifies RS256 by

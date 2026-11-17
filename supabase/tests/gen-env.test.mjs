@@ -66,7 +66,11 @@ describe("bin/gen-env.py", () => {
     assert.match(iron.JWT_KEYS_FILE, /^\.env\.ironsworn\.gotrue$/);
     assert.ok(iron.gotrue.GOTRUE_JWT_KEYS, "GoTrue-only env file has no signing key");
     assert.notEqual(iron.gotrue.GOTRUE_JWT_KEYS, star.gotrue.GOTRUE_JWT_KEYS, "same key in both copies");
-    const shared = Object.keys(iron).filter((key) => key.startsWith("GOTRUE_JWT_KEYS"));
+    // The pinned GoTrue refuses to boot without GOTRUE_JWT_SECRET even when
+    // keys are set: a random dead value rides along in the GoTrue-only file.
+    assert.ok(iron.gotrue.GOTRUE_JWT_SECRET, "GoTrue-only env file misses the boot-required secret");
+    assert.notEqual(iron.gotrue.GOTRUE_JWT_SECRET, star.gotrue.GOTRUE_JWT_SECRET);
+    const shared = Object.keys(iron).filter((key) => key.startsWith("GOTRUE_JWT"));
     assert.deepEqual(shared, [], "shared env file carries a GoTrue signing variable");
   });
 
