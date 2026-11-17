@@ -320,10 +320,12 @@ services:
       SERVICE_KEY: ${SERVICE_ROLE_KEY}
       POSTGREST_URL: http://rest:3000
 
-      # Verifies caller JWTs against the public JWKS (RS256; ticket #152).
-      # The storage copy adds Storage's own URL-signing key, which no other
-      # service sees. With the JWKS set, HS256 tokens are refused.
-      JWT_JWKS: ${JWT_JWKS_STORAGE}
+      # Verifies caller JWTs against the public JWKS (RS256; ticket #152),
+      # and keeps one static secret: the pinned image refuses to boot
+      # without AUTH_JWT_SECRET, and it signs Storage's short-lived object
+      # URLs. Recorded as an open gap in docs/adr/0003.
+      JWT_JWKS: ${JWT_JWKS}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET}
 
       DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
       STORAGE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}

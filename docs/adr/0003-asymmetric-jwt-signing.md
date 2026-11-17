@@ -13,10 +13,11 @@ tokens for everything.
 The stack signs tokens asymmetrically (ticket #152): GoTrue holds one
 RSA-3072 private key per copy and signs access tokens with RS256; every
 verifier holds only the public JWKS. The shared `JWT_SECRET` is removed
-from the template entirely: no service or function accepts an HS256-signed
-token on any user-token path. One internal realtime endpoint (`/metrics`)
-still demands an HS256 secret at boot — recorded below as an open gap, not
-an accepted exception.
+from the template entirely, and the symmetric key is not carried in the
+JWKS either — user-token verification is RS256-only everywhere. Two
+boot-mandated HS256 hold-outs remain (Realtime's metrics endpoints and
+Storage's static secret) and are recorded below as open gaps, not accepted
+exceptions.
 
 - **Key generation** (`bin/gen-env.py` + `bin/gen-keys.mjs`): node generates
   the RSA-3072 key pair (Python's standard library cannot). The private JWK
@@ -50,14 +51,12 @@ an accepted exception.
     `/healthcheck` route; depth is covered by the seed running before the
     server binds its port, the realtime-auth one-shot's own polling, and
     the live tests joining real channels with real RS256 tokens.
-- **Storage** (`JWT_JWKS_STORAGE`): verifies user tokens against the public
-  JWKS (RS256). Storage also signs its own short-lived object URLs
-  (chat images, portraits, world images) with a URL-signing key — the
-  platform's design allows only symmetric or EC keys there, and its default
-  is HS512. That key is an HS512 oct key delivered to Storage only (in
-  `JWT_JWKS_STORAGE`, never in the shared `JWT_JWKS`), so it can never
-  verify a user token: with the shared JWKS absent from Storage's secret
-  and the URL key's `alg` pinned to HS512, HS256 tokens are refused.
+- **Storage** (`JWT_JWKS` + `AUTH_JWT_SECRET`): verifies user tokens
+  against the public JWKS (RS256) and keeps one static secret, because the
+  pinned image refuses to boot without `AUTH_JWT_SECRET` (a non-empty
+  value is checked at config load in single-tenant mode) and that secret
+  signs Storage's short-lived object URLs (chat images, portraits, world
+  images). Recorded below as an open gap, not an accepted exception.
 - **Functions and the note server**: the GM assistant function verifies
   the caller's token in code (WebCrypto, `RSASSA-PKCS1-v1_5`) against the
   public JWKS (`JWT_JWKS`), refusing any other algorithm; the note server
@@ -85,8 +84,16 @@ an accepted exception.
   still boots with `System.fetch_env!("METRICS_JWT_SECRET")` and the
   metrics pipeline still verifies HS256-only (`authorize(token, secret,
   nil)` — no JWKS argument). No released version makes the secret optional
-  or accepts key-pair tokens there, so the pin stays and the gap stays
-  tracked on ticket #152.
+  or accepts key-pair tokens there.
+- **Bumping Storage to close the static-secret gap**: checked the newest
+  release (v1.96.2) against the pinned v1.89.12: identical — single-tenant
+  mode throws at config load without `AUTH_JWT_SECRET`/`PGRST_JWT_SECRET`,
+  and the HS256 verification fallback to that secret is unchanged.
+- **Following upstream's own hybrid design** (the symmetric key stays in
+  `JWT_JWKS` next to the public key, so every service verifies both token
+  types): rejected. It keeps the shared-secret property the ticket closes
+  (a leak anywhere forges tokens for everything) and fails the criterion
+  more broadly than the two scoped hold-outs below.
 
 ## Consequences
 
@@ -94,26 +101,39 @@ an accepted exception.
   private JWK lives in a GoTrue-only env file, and the shared env file every
   other container reads never carries it. A verifier compromise forges no
   tokens; a signing-key compromise is contained to GoTrue's env.
-- **Open gap against "no service accepts an HS256-signed token"**: realtime's
-  `/metrics` scrape endpoints still require an HS256 token signed with
-  `METRICS_JWT_SECRET`. This is not accepted here as fine — it is a
-  limitation of the pinned image, which refuses to boot without the secret
-  (`System.fetch_env!/1` in `config/runtime.exs`) and verifies metrics
-  tokens HS256-only (`check_auth` → `authorize_any` → `authorize(token,
-  secret, nil)`: the JWKS argument is hardcoded nil). The same holds at the
-  newest release (v2.168.0), so no version bump fixes it; the gap stays
-  tracked on ticket #152. The exposure is bounded: the gateway never routes
-  `/metrics`, so only containers on the compose network can reach it, and a
-  metrics token grants metric reads, nothing else.
+- **Open gaps against "no service accepts an HS256-signed token"** — both
+  boot-mandated by the pinned images, neither accepted here as fine:
+  - Realtime's `/metrics` scrape endpoints: the image refuses to boot
+    without `METRICS_JWT_SECRET` (`System.fetch_env!/1` in
+    `config/runtime.exs`), and the metrics pipeline verifies HS256-only
+    (`check_auth` → `authorize_any` → `authorize(token, secret, nil)`: the
+    JWKS argument is hardcoded nil). Unchanged through v2.168.0, the newest
+    release. The gateway never routes `/metrics`, so only containers on the
+    compose network can reach it, and a metrics token grants metric reads,
+    nothing else.
+  - Storage's static secret: the image throws at config load without
+    `AUTH_JWT_SECRET` (single-tenant mode), and HS256 tokens fall back to
+    verifying against it. Unchanged in v1.96.2, the newest release. It
+    signs Storage's short-lived object URLs, and its verification fallback
+    is reachable only through the Storage API itself (the gateway routes
+    `/storage/v1/` like any other service, so a forged token reaches
+    Storage's own authorization checks — bounded to Storage data).
+  Both stay tracked on ticket #152; closing either needs an upstream change
+  (optional secrets, or JWKS support in those verifiers) or a fork.
+- Upstream's own self-hosted asymmetric-keys guide is explicitly hybrid:
+  `JWT_JWKS` ships "the EC public key … and the legacy `JWT_SECRET` as a
+  symmetric JWK", so every service keeps verifying HS256. This stack
+  deviates deliberately: the symmetric key is removed from the JWKS and
+  from GoTrue, so user-token verification is RS256-only everywhere.
 - Regenerating the key pair (`bin/gen-env.py`) signs everyone out once:
   sessions carry the old signature until they expire. Operators keep both
   env files (the main one and the GoTrue-only one) with their backups
-  (README). `METRICS_JWT_SECRET` is still generated per copy: the pinned
-  image does not boot without it.
+  (README); `AUTH_JWT_SECRET` and `METRICS_JWT_SECRET` are generated per
+  copy.
 - The realtime seed fork is coupled to the pinned realtime image's release
   path; `tests/template.test.mjs` fails when the image tag and the mount
   path drift apart.
-- Storage's URL-signing key remains symmetric (HS512) because the platform
-  only supports symmetric or EC keys there. It is scoped to Storage, never
-  verifies a user token, and its tokens are short-lived. If the platform
-  later allows RSA URL-signing keys, the exception can be retired.
+- Storage's URL tokens are HS256-signed with its static secret (short-lived,
+  minutes; see the open gap above). If a future storage release drops the
+  boot-mandated secret or accepts RS256 URL-signing keys, the hold-out can
+  be retired.

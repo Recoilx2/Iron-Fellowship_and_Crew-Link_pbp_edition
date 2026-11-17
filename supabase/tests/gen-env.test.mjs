@@ -42,7 +42,7 @@ describe("bin/gen-env.py", () => {
     for (const v of [
       "POSTGRES_PASSWORD",
       "JWT_JWKS",
-      "JWT_JWKS_STORAGE",
+      "AUTH_JWT_SECRET",
       "ANON_KEY",
       "SERVICE_ROLE_KEY",
       "METRICS_JWT_SECRET",
@@ -56,6 +56,7 @@ describe("bin/gen-env.py", () => {
       assert.ok(star[v], `${v} blank in second copy`);
       assert.notEqual(iron[v], star[v], `${v} identical across copies`);
     }
+    assert.ok(iron.AUTH_JWT_SECRET.length >= 32, "AUTH_JWT_SECRET too short");
     assert.ok(iron.METRICS_JWT_SECRET.length >= 32, "METRICS_JWT_SECRET too short");
     assert.equal(iron.REALTIME_DB_ENC_KEY_GCM.length, 32, "GCM key must be exactly 32 chars");
   });
@@ -94,25 +95,6 @@ describe("bin/gen-env.py", () => {
     for (const field of ["d", "p", "q", "dp", "dq", "qi"]) {
       assert.equal(publicJwk[field], undefined, `public JWKS leaks ${field}`);
     }
-  });
-
-  it("gives storage the public JWKS plus its own URL-signing key", () => {
-    const [privateJwk] = JSON.parse(iron.gotrue.GOTRUE_JWT_KEYS);
-    const storage = JSON.parse(iron.JWT_JWKS_STORAGE);
-    const publicJwk = storage.keys.find((key) => key.kty === "RSA");
-    assert.equal(publicJwk.kid, privateJwk.kid);
-    assert.equal(publicJwk.d, undefined, "storage must not see the signing key's private half");
-    const urlKey = storage.keys.find((key) => key.kty === "oct");
-    assert.ok(urlKey, "storage url-signing key missing");
-    assert.equal(urlKey.alg, "HS512");
-    assert.ok(urlKey.k, "storage url-signing key has no material");
-    assert.deepEqual(storage.urlSigningKey, urlKey);
-    // The URL-signing key must stay storage-only: the shared JWKS never has it.
-    assert.equal(
-      JSON.parse(iron.JWT_JWKS).keys.some((key) => key.kty === "oct"),
-      false,
-      "shared JWKS must not carry the storage URL-signing key",
-    );
   });
 
   it("mints RS256 anon/service keys signed by the GoTrue-only private key", () => {

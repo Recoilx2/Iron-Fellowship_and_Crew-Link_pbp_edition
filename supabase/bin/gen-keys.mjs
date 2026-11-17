@@ -2,11 +2,7 @@
 //
 // - one RSA-3072 key pair: the private JWK goes to GoTrue only (it signs
 //   access tokens with it), the public JWK goes to every token verifier;
-// - ANON_KEY and SERVICE_ROLE_KEY minted as RS256 JWTs signed by that key;
-// - Storage's own URL-signing key (the platform's default HS512 oct type):
-//   it signs and verifies Storage's short-lived object URLs and is read by
-//   Storage only — user tokens always arrive as RS256 and are verified
-//   through the public JWKS.
+// - ANON_KEY and SERVICE_ROLE_KEY minted as RS256 JWTs signed by that key.
 //
 // Everything is emitted as one JSON object on stdout; nothing is logged.
 // Called by bin/gen-env.py, which needs a crypto tool for RSA key
@@ -23,11 +19,8 @@ import {
   sign,
   verify,
 } from "node:crypto";
-import { randomBytes } from "node:crypto";
 
 const RSA_MODULUS_BITS = 3072;
-// DigestInfo prefix for SHA-256, only used to double-check the signature
-// shape node produced (kept for the self-check below).
 const KEY_EXPIRY_SECONDS = 10 * 365 * 24 * 3600;
 
 function b64url(input) {
@@ -99,22 +92,10 @@ for (const [token, role] of [
   }
 }
 
-// Storage's URL-signing key: 64 bytes for HS512 (the platform's default URL
-// signing type), storage-only.
-const urlSigningKey = {
-  kty: "oct",
-  kid: randomBytes(8).toString("hex"),
-  alg: "HS512",
-  use: "sig",
-  key_ops: ["sign", "verify"],
-  k: randomBytes(64).toString("base64url"),
-};
-
 process.stdout.write(
   JSON.stringify({
     JWT_KEYS: [privateJwk],
     JWT_JWKS: { keys: [publicJwk] },
-    JWT_JWKS_STORAGE: { keys: [publicJwk, urlSigningKey], urlSigningKey },
     ANON_KEY: anonKey,
     SERVICE_ROLE_KEY: serviceRoleKey,
   }),

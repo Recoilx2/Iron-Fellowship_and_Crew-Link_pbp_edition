@@ -185,7 +185,7 @@ describe("supabase compose template", () => {
       "POSTGRES_PASSWORD",
       "JWT_KEYS_FILE",
       "JWT_JWKS",
-      "JWT_JWKS_STORAGE",
+      "AUTH_JWT_SECRET",
       "ANON_KEY",
       "SERVICE_ROLE_KEY",
       "METRICS_JWT_SECRET",
@@ -252,7 +252,9 @@ describe("supabase compose template", () => {
       const after = text.slice(m.index + m[0].length);
       const next = after.search(/^  [a-z][a-z-]*:\s*$/m);
       const block = next === -1 ? after : after.slice(0, next);
-      assert.ok(/JWT_JWKS\s*:\s*\$\{JWT_JWKS_STORAGE\}/.test(block), "storage does not get its JWKS with the URL-signing key");
+      assert.ok(/JWT_JWKS\s*:\s*\$\{JWT_JWKS\}/.test(block), "storage does not verify with the public JWKS");
+      // The boot-mandated static secret (an open gap, docs/adr/0003).
+      assert.ok(/AUTH_JWT_SECRET\s*:\s*\$\{AUTH_JWT_SECRET\}/.test(block), "storage misses its boot-mandated static secret");
     }
     assert.ok(
       [...text.matchAll(/-\s+\$\{JWT_KEYS_FILE\}/g)].length === 1,
