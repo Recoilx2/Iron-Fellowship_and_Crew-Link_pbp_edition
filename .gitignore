@@ -67,3 +67,6 @@ playwright-report/
 
 # Machine-local Claude Code settings (baton)
 .claude/settings.local.json
+
+# Python bytecode
+__pycache__/

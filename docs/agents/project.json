@@ -1,7 +1,10 @@
 {
   "main_branch": "prod",
   "verify_command": "npm run lint && npx tsc --noEmit && npm test && npm run test:supabase",
-  "ci_setup_steps": [],
+  "ci_setup_steps": [
+    "- uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0\n  with:\n    node-version-file: .nvmrc\n    cache: npm",
+    "- name: Install dependencies\n  run: npm ci"
+  ],
   "evidence_dir": null,
   "paid_run_switch": "PAID_RUN",
   "job_limit": "2h",
@@ -17,7 +20,7 @@
   "ladders_per_ticket": 2,
   "max_parallel_implementers": 3,
   "notify_command": "",
-  "small_fixes_spec": null,
+  "small_fixes_spec": 192,
   "harness_commands": {
     "OpenCode": [
       "/usr/local/bin/opencode-bin",
