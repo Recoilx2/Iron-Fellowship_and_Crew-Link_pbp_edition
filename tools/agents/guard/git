@@ -1,0 +1,33 @@
+#!/usr/bin/env python3
+"""git guard: put this folder first on a harness's PATH.
+
+Passes every `git` command to the real git after this folder on PATH, except the
+ones that skip the git hooks (tools/agents/hooks) which enforce the branch
+rules: `--no-verify` on commit or push, and `commit -n`. The rule lives in the
+gh guard module and is shared with Claude's PreToolUse hook, so the three routes
+can't drift apart. It never runs a subprocess before exec.
+"""
+import importlib.machinery
+import importlib.util
+import os
+import sys
+from pathlib import Path
+
+loader = importlib.machinery.SourceFileLoader("gh_guard", str(Path(__file__).with_name("gh")))
+spec = importlib.util.spec_from_loader("gh_guard", loader)
+guard = importlib.util.module_from_spec(spec)
+loader.exec_module(guard)
+
+
+def main() -> None:
+    argv = sys.argv[1:]
+    guard.record_seen("path")
+    why = guard.git_refusal(argv)
+    if why:
+        sys.exit(f"git guard: refused `git {' '.join(argv[:3])}`: {why}")
+    git = guard.real_git()
+    os.execv(git, [git, *argv])
+
+
+if __name__ == "__main__":
+    main()

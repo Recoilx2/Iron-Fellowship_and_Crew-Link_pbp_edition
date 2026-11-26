@@ -1,0 +1,71 @@
+{
+  "main_branch": "prod",
+  "verify_command": "npm run lint && npx tsc --noEmit && npm test && npm run test:supabase",
+  "ci_setup_steps": [],
+  "evidence_dir": null,
+  "paid_run_switch": "PAID_RUN",
+  "job_limit": "2h",
+  "survey_every_merged_tickets": 10,
+  "checkpoint_after_jobs": 8,
+  "keep_session_logs": 20,
+  "ticket_limits": {
+    "acceptance_criteria": 8,
+    "touches": 10
+  },
+  "review_rounds": 2,
+  "owner_review_paths": [],
+  "ladders_per_ticket": 2,
+  "max_parallel_implementers": 3,
+  "notify_command": "",
+  "small_fixes_spec": null,
+  "harness_commands": {
+    "OpenCode": [
+      "/usr/local/bin/opencode-bin",
+      "run",
+      "--standalone",
+      "{model_args}",
+      "{prompt}"
+    ],
+    "Claude Code": [
+      "~/.vscode-server/extensions/anthropic.claude-code-*/resources/native-binary/claude",
+      "-p",
+      "{prompt}",
+      "{model_args}",
+      "--allowedTools",
+      "Bash(python3 tools/agents/ticket.py *),Bash(python3 tools/agents/job.py *),Bash(python3 tools/agents/setup.py check *),Bash(git *),Bash(gh *),Bash(npm run lint && npx tsc --noEmit && npm test && npm run test:supabase *),Bash(npm run lint *),Bash(npx tsc *),Bash(npm test *),Bash(npm run test:supabase *),Bash(npx vitest *),Bash(npx eslint *),Bash(npm run build *),Read,Edit,Write,Glob,Grep",
+      "--permission-prompts",
+      "none"
+    ]
+  },
+  "roles": {
+    "orchestrator": {
+      "harness": "Claude Code",
+      "model": "claude-opus-5-5",
+      "effort": "high"
+    },
+    "implementer": {
+      "harness": "OpenCode",
+      "model": "opencode-go/hy4-flash-free",
+      "effort": "high",
+      "model_args": [
+        "--model",
+        "opencode-go/hy4-flash-free#high"
+      ],
+      "agent_file": ".opencode/agents/implementer.md"
+    },
+    "reviewer": {
+      "harness": "Claude Code",
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "model_args": [
+        "--model",
+        "opus",
+        "--effort",
+        "high"
+      ],
+      "agent_file": ".claude/agents/reviewer.md"
+    }
+  },
+  "extras": {},
+  "mirror": true
+}

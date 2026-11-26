@@ -1,0 +1,126 @@
+{
+  "status": [
+    {
+      "name": "ready-for-agent",
+      "color": "0e8a16",
+      "description": "Unclaimed and fully specified; startable once no open blockers"
+    },
+    {
+      "name": "in-progress",
+      "color": "c5def5",
+      "description": "Claimed (signed \"Claimed\" comment)"
+    },
+    {
+      "name": "needs-review",
+      "color": "5319e7",
+      "description": "PR open; the other role reviews"
+    },
+    {
+      "name": "needs-info",
+      "color": "fbca04",
+      "description": "Waiting on an owner decision"
+    },
+    {
+      "name": "ready-for-human",
+      "color": "1d76db",
+      "description": "Agents stop; the owner decides"
+    },
+    {
+      "name": "landed-on-integration",
+      "color": "bfdadc",
+      "description": "Merged into an integration branch; open until main. Not actionable."
+    }
+  ],
+  "other": [
+    {
+      "name": "spec",
+      "color": "000000",
+      "description": "Parent spec: never claimed or implemented; agents close it only when shipped and done"
+    },
+    {
+      "name": "needs-triage",
+      "color": "ededed",
+      "description": "Not yet triaged; no status yet"
+    },
+    {
+      "name": "wontfix",
+      "color": "ffffff",
+      "description": "Will not be worked on"
+    },
+    {
+      "name": "bug",
+      "color": "d73a4a",
+      "description": "Triage category: something is broken"
+    },
+    {
+      "name": "hard",
+      "color": "b60205",
+      "description": "Hard ticket: run at the implementer's hard role"
+    },
+    {
+      "name": "enhancement",
+      "color": "a2eeef",
+      "description": "Triage category: new behaviour requested"
+    },
+    {
+      "name": "wayfinder:map",
+      "color": "006b75",
+      "description": "Wayfinder map issue"
+    },
+    {
+      "name": "wayfinder:research",
+      "color": "d4c5f9",
+      "description": "Wayfinder ticket: research"
+    },
+    {
+      "name": "wayfinder:prototype",
+      "color": "f9d0c4",
+      "description": "Wayfinder ticket: prototype"
+    },
+    {
+      "name": "wayfinder:grilling",
+      "color": "fef2c0",
+      "description": "Wayfinder ticket: grilling"
+    },
+    {
+      "name": "wayfinder:task",
+      "color": "c2e0c6",
+      "description": "Wayfinder ticket: task"
+    }
+  ],
+  "transitions": {
+    "": [
+      "ready-for-agent",
+      "needs-info",
+      "ready-for-human"
+    ],
+    "ready-for-agent": [
+      "in-progress",
+      "needs-info",
+      "ready-for-human"
+    ],
+    "in-progress": [
+      "needs-review",
+      "ready-for-agent",
+      "needs-info"
+    ],
+    "needs-review": [
+      "ready-for-agent",
+      "landed-on-integration",
+      "needs-info"
+    ],
+    "needs-info": [
+      "ready-for-agent",
+      "ready-for-human",
+      "needs-review"
+    ],
+    "ready-for-human": [
+      "ready-for-agent",
+      "needs-info"
+    ],
+    "landed-on-integration": []
+  },
+  "exempt_prefixes": [
+    "wayfinder:"
+  ]
+}

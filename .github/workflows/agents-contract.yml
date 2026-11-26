@@ -1,0 +1,30 @@
+name: agents-contract
+
+# Checks every issue and PR against docs/agents/contract.md. On a private repo
+# without GitHub Pro this can only flag and repair after the fact; it can't block.
+on:
+  issues:
+    types: [opened, edited, labeled, unlabeled, closed]
+  pull_request:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: Contract check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Fork PRs and Dependabot always get a read-only token whatever the
+          # permissions block says. Lint them without --act so gh writes aren't
+          # attempted; cmd_lint_event still exits 1 on a broken contract.
+          CONTRACT_ACT: ${{ !(github.event.pull_request.head.repo.full_name != github.repository || github.actor == 'dependabot[bot]') && '--act' || '' }}
+        run: python3 tools/agents/ticket.py lint-event $CONTRACT_ACT

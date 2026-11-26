@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+"""pre-push: the branch rules, enforced by git itself (any harness, any tool).
+
+Refuses: any push to main (it changes only through `ticket.py merge`) except
+creating it in a new repo;
+deleting main, spec/* or batch/*; and a push that rewrites history on the
+remote (a force-push). Everything else passes, tags included.
+Git gives lines on stdin: <local ref> <local sha> <remote ref> <remote sha>.
+"""
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+
+def git(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", *args], capture_output=True, text=True)
+
+
+def main_branch() -> str:
+    top = git("rev-parse", "--show-toplevel").stdout.strip()
+    try:
+        return json.loads((Path(top) / "docs/agents/project.json").read_text()).get("main_branch", "main")
+    except (OSError, ValueError):
+        return "main"
+
+
+def zero(sha: str) -> bool:
+    return set(sha) <= {"0"}
+
+
+def refusal(local: str, remote_ref: str, remote: str, main: str) -> str | None:
+    shared = remote_ref.startswith(("refs/heads/spec/", "refs/heads/batch/"))
+    if remote_ref == f"refs/heads/{main}":
+        if zero(remote) and not zero(local):
+            return None                       # first push of a brand-new repo creates main
+        return f"never push to '{main}'; it changes only through `ticket.py merge` with the owner's go-ahead"
+    if zero(local):
+        if shared:
+            return f"never delete '{remote_ref.removeprefix('refs/heads/')}' (spec/* and batch/* are shared branches)"
+        return None
+    if not zero(remote):
+        if git("cat-file", "-e", f"{remote}^{{commit}}").returncode != 0:
+            return f"{remote_ref} has commits you don't have; fetch first"
+        if git("merge-base", "--is-ancestor", remote, local).returncode != 0:
+            return (f"never force-push {remote_ref} (contract: merge the base in instead of rebasing)")
+    return None
+
+
+def main() -> int:
+    main_ref = main_branch()
+    for line in sys.stdin:
+        parts = line.split()
+        if len(parts) != 4:
+            continue
+        _, local, remote_ref, remote = parts
+        why = refusal(local, remote_ref, remote, main_ref)
+        if why:
+            print(f"pre-push: refused: {why}", file=sys.stderr)
+            return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

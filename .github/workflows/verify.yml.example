@@ -1,0 +1,20 @@
+name: verify
+
+# Template: the setup session writes .github/workflows/verify.yml from this file
+# with `python3 tools/agents/setup.py ci --write`. It runs the project's verify
+# command on every PR, so the remote result is independent proof of the head.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+{{SETUP_STEPS}}
+      - name: Verify
+        run: |
+{{VERIFY}}

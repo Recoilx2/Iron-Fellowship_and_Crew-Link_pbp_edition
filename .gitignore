@@ -39,5 +39,31 @@ playwright-report/
 
 # AI
 .claude/*
+# Baton's shared Claude Code files are tracked; personal skills stay ignored.
+!.claude/settings.json
+!.claude/agents/
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/bt-*/
+!.claude/skills/LICENSE-mattpocock-skills
 .opencode/worktrees/
 .opencode/archive/
+
+# Agent scratch (baton)
+.work/
+
+# Serena cache (baton)
+.serena/
+
+# Playwright MCP snapshots (baton)
+.playwright-mcp/
+
+# Env files hold secrets (baton)
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# Machine-local Claude Code settings (baton)
+.claude/settings.local.json

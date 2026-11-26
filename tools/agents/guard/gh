@@ -1,0 +1,526 @@
+#!/usr/bin/env python3
+"""gh guard: put this folder first on a harness's PATH.
+
+An allowlist. Without TICKET_CONTRACT_CALL=1 it passes read-only `gh` use (view, list,
+status, diff, checks, search, browse, `auth status`, `repo view`, `run view|list|watch`,
+`api` GET requests and GraphQL queries) and the raw writes the contract lists (`gh pr
+create`, `gh pr edit` for the body, `gh issue edit` for the body or needs-triage,
+`gh issue create -R <master_repo>`, and the REST pull-request creation fallback), and
+refuses every other gh write, unknown subcommands included. Calls made by ticket.py itself
+carry TICKET_CONTRACT_CALL=1 and pass straight through.
+
+It also holds the git rule used by the `guard/git` shim and the Claude hook:
+no `--no-verify` (or an accepted prefix), `-n` on commit, or a hooksPath
+override, which would skip the git hooks (tools/agents/hooks) that enforce the
+branch rules.
+
+Whenever it runs (this shim, or the Claude hook), it records which route ran
+as an empty marker file in the repo's git common dir (never committed, shared
+by every worktree); `setup.py check` reads the markers to tell whether
+the guard is really active. Writing the marker can never fail a command.
+
+This catches accidents, such as a skill's own "merge the branch" step. It
+doesn't stop a deliberate bypass.
+"""
+import json
+import os
+import re
+import sys
+import time
+from pathlib import Path
+
+STATUS = {"ready-for-agent", "in-progress", "needs-review", "needs-info",
+          "ready-for-human", "landed-on-integration", "spec"}
+
+GLOBAL_WITH_VALUE = {"-R", "--repo", "--hostname"}
+ROOT = Path(__file__).resolve().parents[3]       # the project root: <root>/tools/agents/guard/gh
+FLAG_VALUE_MSG = "a flag's value looks like a flag; pass values plainly"
+ALIASES = {"ls": "list", "co": "checkout"}       # gh's built-in aliases of the reads below
+# Read-only gh: group -> verbs (None: every subcommand of the group reads).
+# `pr checkout` and `repo clone` only change local git; `run download` only writes local files.
+READS = {"pr": {"view", "list", "status", "diff", "checks", "checkout"}, "issue": {"view", "list", "status"},
+         "repo": {"view", "clone", "list"}, "auth": {"status"}, "run": {"view", "list", "watch", "download"},
+         "label": {"list"}, "workflow": {"view", "list"}, "release": {"view", "list"},
+         "search": None, "browse": None, "status": None}
+# gh api flags that take a value; the value (e.g. "Accept: application/vnd...") isn't the path.
+API_VALUE_FLAGS = {"-H", "--header", "-q", "--jq", "-t", "--template", "-X", "--method", "-f", "-F",
+                   "--field", "--raw-field", "--input", "--cache", "-p", "--preview", "--hostname"}
+API_FIELD_FLAGS = {"-f", "-F", "--field", "--raw-field"}
+API_WRITE_PATHS = re.compile(r"/pulls/\d+/merge|/pulls/\d+/reviews|/labels\b|/issues/\d+/?$|/git/refs"
+                            r"|/merges/?$|/merge-upstream/?$|/contents/")
+# Any comment on an issue, PR or commit (create, edit, delete, reply), and any review.
+COMMENT_PATH = re.compile(r"/comments(?:/|$)|/reviews\b")
+# The REST fallback for `gh pr create` (harnesses/opencode.md).
+PR_CREATE_PATH = re.compile(r"(?:https://api\.github\.com)?/?repos/[^/]+/[^/]+/pulls/?", re.I)
+CREATE_VALUE_FLAGS = {"-a", "--assignee", "-B", "--base", "-b", "--body", "-F", "--body-file", "-H", "--head",
+                      "-l", "--label", "-m", "--milestone", "-p", "--project", "-r", "--reviewer",
+                      "-T", "--template", "-t", "--title", "--recover"}
+BODY_FLAGS = {"-b", "--body", "-F", "--body-file"}
+EDIT_LABEL_FLAGS = {"--add-label", "--remove-label"}
+GIT_VALUE_FLAGS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"}
+HOOKS_PATH_KEY = "core.hookspath"    # git config keys are case-insensitive
+GRAPHQL_MSG = ("GraphQL mutations are refused: comments go through `ticket.py note`, "
+               "status, merge, close and labels through ticket.py")
+NOTE_ONLY = "comments are written with `ticket.py note`, not raw gh"
+API_MSG = "contract actions go through ticket.py, not raw `gh api` writes"
+GENERIC = "raw gh writes outside the contract's list are refused"
+HINTS = {("pr", "merge"): "merge with `ticket.py merge <pr>` (checks approval, base and fast-forward)",
+         ("issue", "close"): "close with `ticket.py close <n>` (applies the close rule for the ticket's type)",
+         ("issue", "comment"): NOTE_ONLY, ("pr", "comment"): NOTE_ONLY,
+         ("label", "create"): "labels come from docs/agents/labels.json: `ticket.py labels --apply`",
+         ("label", "edit"): "labels come from docs/agents/labels.json: `ticket.py labels --apply`",
+         ("label", "delete"): "labels come from docs/agents/labels.json: `ticket.py labels --apply`"}
+STATUS_EDIT = "change status with `ticket.py claim|handoff|set` (label and comment together)"
+
+
+def strip_globals(argv: list[str]) -> list[str]:
+    """Drop gh's global flags (-R owner/repo, --repo=...) so the call log sees the command.
+    Logging only: the guard's own decisions parse flags value-aware (`parse_flags`)."""
+    out, skip = [], False
+    for a in argv:
+        if skip:
+            skip = False
+            continue
+        if a in GLOBAL_WITH_VALUE:
+            skip = True
+            continue
+        if a.startswith(("--repo=", "--hostname=")) or (a.startswith("-R") and len(a) > 2):
+            continue
+        out.append(a)
+    return out
+
+
+class Refuse(Exception):
+    """Raised while parsing: the command is refused with this message."""
+
+
+def _one_flag(args: list[str], i: int, value_flags: set[str]) -> tuple[list[tuple[str, str | None]], int]:
+    """Read the flag token at args[i] (pflag syntax: `--flag value`, `--flag=value`, `-fvalue`, `-f value`,
+    clusters like `-cbvalue`). A flag outside `value_flags` takes no value; a value-taking flag ends its
+    cluster. A separate value token that starts with "-" (a bare "-" excepted) is refused: it is almost
+    certainly the next flag, and reading it as a value would hide that flag from every check."""
+    flags: list[tuple[str, str | None]] = []
+    a = args[i]
+    i += 1
+
+    def next_value() -> str | None:
+        nonlocal i
+        if i >= len(args):
+            return None
+        value = args[i]
+        if value.startswith("-") and value != "-":
+            raise Refuse(FLAG_VALUE_MSG)
+        i += 1
+        return value
+
+    if a.startswith("--"):
+        name, eq, val = a.partition("=")
+        flags.append((name, val if eq else (next_value() if name in value_flags else None)))
+        return flags, i
+    j = 1
+    while j < len(a):
+        flag = "-" + a[j]
+        j += 1
+        if flag in value_flags:
+            rest = a[j:]
+            if rest.startswith("="):
+                rest = rest[1:]
+            elif not rest:
+                rest = next_value()
+            flags.append((flag, rest))
+            break
+        flags.append((flag, None))
+    return flags, i
+
+
+def _is_flag(a: str) -> bool:
+    return a.startswith("-") and len(a) > 1 and a != "--"
+
+
+def parse_flags(args: list[str], value_flags: set[str]) -> tuple[list[tuple[str, str | None]], list[str]]:
+    """(flag, value) pairs and positional words, left to right. gh's global value flags (-R, --repo,
+    --hostname) are ordinary value flags here, read in the same pass. Raises Refuse when a value-taking
+    flag is followed by a token that starts with "-"."""
+    value_flags = value_flags | GLOBAL_WITH_VALUE
+    flags, words, i = [], [], 0
+    while i < len(args):
+        if args[i] == "--":
+            words += args[i + 1:]
+            break
+        if _is_flag(args[i]):
+            got, i = _one_flag(args, i, value_flags)
+            flags += got
+        else:
+            words.append(args[i])
+            i += 1
+    return flags, words
+
+
+def locate(argv: list[str]) -> tuple[str, str, list[str], list[tuple[str, str | None]]]:
+    """(group, verb, the arguments after them, global flags read on the way). Only gh's global value
+    flags may come before the verb; any other flag there leaves the verb empty (so it is refused)."""
+    pre: list[tuple[str, str | None]] = []
+    words, i = [], 0
+    while i < len(argv) and len(words) < 2 and not (words and words[0] == "api"):
+        if _is_flag(argv[i]):
+            got, nxt = _one_flag(argv, i, GLOBAL_WITH_VALUE)
+            if any(f not in GLOBAL_WITH_VALUE for f, _ in got):
+                break
+            pre += got
+            i = nxt
+        elif argv[i] == "--":
+            break
+        else:
+            words.append(argv[i])
+            i += 1
+    words += [""] * (2 - len(words))
+    return words[0], words[1], argv[i:], pre
+
+
+def _labels(flags: list[tuple[str, str | None]], names: set[str]) -> set[str]:
+    """Label names given by the flags in `names`; GitHub labels ignore case and spacing around commas."""
+    return {label.strip().lower() for f, v in flags if f in names for label in (v or "").split(",")}
+
+
+def _text_has_mutation(text: str) -> bool:
+    return "mutation" in text.lower()
+
+
+def _json_strings(node) -> list[str]:
+    if isinstance(node, str):
+        return [node]
+    if isinstance(node, dict):
+        return [s for k, v in node.items() for s in _json_strings(k) + _json_strings(v)]
+    if isinstance(node, list):
+        return [s for v in node for s in _json_strings(v)]
+    return []
+
+
+def _graphql_has_write(fields: list[str], inputs: list[str | None]) -> bool:
+    """Does a GraphQL request contain a mutation? A `@file` field value and every --input file are
+    read from the current directory (JSON escapes decoded, so `\\u006dutation` is still seen); one
+    that can't be read, and stdin (`-`, `@-`), count as a write, so they can't hide a mutation."""
+    for value in fields:
+        body = value.split("=", 1)[1] if "=" in value else value
+        if body == "@-":
+            return True                                 # stdin can't be inspected, whatever file is named `-`
+        if body.startswith("@"):
+            try:
+                body = Path(body[1:]).read_text()
+            except (OSError, UnicodeError):
+                return True
+        if _text_has_mutation(value) or _text_has_mutation(body):
+            return True
+    for name in inputs:
+        if name == "-":
+            return True
+        try:
+            raw = Path(name or "").read_text()
+        except (OSError, UnicodeError):
+            return True
+        texts = [raw]
+        try:
+            texts += _json_strings(json.loads(raw))
+        except ValueError:
+            pass
+        if any(map(_text_has_mutation, texts)):
+            return True
+    return False
+
+
+def _endpoint(word: str) -> str:
+    """The endpoint as gh resolves it: query and fragment dropped, scheme and host dropped, slashes trimmed."""
+    path = re.split(r"[?#]", word, maxsplit=1)[0].strip()
+    return re.sub(r"^[a-z][a-z0-9+.-]*://[^/]*", "", path, flags=re.I).strip("/")
+
+
+def _api_refusal(args: list[str]) -> str | None:
+    flags, words = parse_flags(args, API_VALUE_FLAGS)
+    method, fields, inputs = None, [], []
+    for f, v in flags:
+        if f in ("-X", "--method"):
+            method = (v or "").upper()                  # gh takes the method in any case
+        elif f in API_FIELD_FLAGS:
+            fields.append(v or "")
+        elif f == "--input":
+            inputs.append(v)
+    if len(words) > 1:
+        return GENERIC                                  # gh api takes exactly one endpoint
+    paths = [w.split("?", 1)[0].split("#", 1)[0].strip().rstrip("/") for w in words]
+    if any(_endpoint(w).lower() == "graphql" for w in words):
+        return GRAPHQL_MSG if _graphql_has_write(fields, inputs) else None
+    if method == "GET" and not inputs:
+        return None                                     # -f/-F become query parameters on a GET
+    if method is None and not fields and not inputs:
+        return None
+    # Any other request writes (gh makes it a POST once it has fields or a body).
+    if (method is None or method == "POST") and any(PR_CREATE_PATH.fullmatch(p) for p in paths):
+        return None
+    path = paths[0] if paths else ""
+    if COMMENT_PATH.search(path):
+        return NOTE_ONLY
+    return API_MSG if API_WRITE_PATHS.search(path) else GENERIC
+
+
+def master_repo() -> str | None:
+    """The master copy's `owner/name` from the install manifest, or None when it names none."""
+    try:
+        value = json.loads((ROOT / "docs/agents/.contract-manifest.json").read_text()).get("master_repo")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return value if isinstance(value, str) and value else None
+
+
+def _repo_ok(flags: list[tuple[str, str | None]]) -> bool:
+    """Was -R/--repo given a value, and (when the manifest names the master repo) is it that repo?"""
+    repos = [v or "" for f, v in flags if f in ("-R", "--repo")]
+    if not repos or not all(repos):
+        return False
+    master = master_repo()
+    return not master or all(r.lower() == master.lower() for r in repos)
+
+
+def _help_only(args: list[str]) -> bool:
+    return args[0] in ("help", "--help", "-h", "--version") or \
+        (args[-1] in ("--help", "-h") and not any(a.startswith("-") for a in args[:-1]))
+
+
+def refusal(argv: list[str]) -> str | None:
+    """Why this gh command is refused (the ticket.py command to use, or the contract's list), or None
+    if it is a read or one of the raw writes the contract lists."""
+    try:
+        return _refusal(argv)
+    except Refuse as e:
+        return str(e)
+
+
+def _refusal(argv: list[str]) -> str | None:
+    if not argv or _help_only(argv):
+        return None
+    group, verb, rest, pre = locate(argv)
+    if group == "api":
+        return _api_refusal(rest)
+    if not group and not rest:
+        return None                                     # only global flags: gh prints its help
+    canon = ALIASES.get(verb)
+    if canon and READS.get(group) and canon in READS[group]:
+        verb = canon
+    if group in READS and (READS[group] is None or verb in READS[group]):
+        parse_flags(rest, set())                        # a flag-looking value is refused here too
+        return None
+    if group == "pr" and verb == "create":
+        flags, _ = parse_flags(rest, CREATE_VALUE_FLAGS)
+        if _labels(flags, {"-l", "--label"}) & STATUS:
+            return "status labels go through ticket.py (claim|handoff|set); don't set them on `pr create`"
+        return None
+    if group == "issue" and verb == "create":
+        flags, _ = parse_flags(rest, CREATE_VALUE_FLAGS)
+        if _labels(flags, {"-l", "--label"}) & STATUS:
+            return "file tickets with `ticket.py new`; statuses come from `check --promote`"
+        if not _repo_ok(pre + flags):
+            return "file tickets with `ticket.py new`; raw `gh issue create` is only for `-R <master_repo>` candidates"
+        return None
+    if group in ("pr", "issue") and verb == "edit":
+        flags, _ = parse_flags(rest, BODY_FLAGS | EDIT_LABEL_FLAGS)
+        if _labels(flags, EDIT_LABEL_FLAGS) & STATUS:
+            return STATUS_EDIT
+        names = {f for f, _ in flags} - GLOBAL_WITH_VALUE
+        allowed = BODY_FLAGS | (EDIT_LABEL_FLAGS if group == "issue" else set())
+        if names <= allowed and _labels(flags, EDIT_LABEL_FLAGS) <= {"needs-triage"}:
+            return None
+        return STATUS_EDIT if names & EDIT_LABEL_FLAGS else GENERIC
+    if group == "pr" and verb == "review":
+        flags, _ = parse_flags(rest, BODY_FLAGS)
+        if {f for f, _ in flags} & {"-a", "--approve"}:
+            return "review with `ticket.py review <pr> approved --head <sha>`; self-approval fails on one shared account"
+        return NOTE_ONLY
+    return HINTS.get((group, verb), GENERIC)
+
+
+def _commit_has_no_verify_short(args: list[str]) -> bool:
+    """Does a `git commit` short-flag cluster include -n? A flag that takes a value ends
+    the cluster: its attached remainder (or the next argv) is data, never more flags."""
+    i = 0
+    while i < len(args):
+        a = args[i]
+        i += 1
+        if a == "--":
+            break
+        if not re.fullmatch(r"-[A-Za-z]+", a):
+            continue
+        j = 1
+        while j < len(a):
+            flag = a[j]
+            j += 1
+            if flag == "n":
+                return True
+            if flag in "mFCctu":                 # value flags; -u's attached mode is optional
+                if j == len(a) and flag != "u" and i < len(args):
+                    i += 1                       # the value is the next argument
+                break
+    return False
+
+
+def _git_globals(argv: list[str]) -> tuple[list[tuple[str, str]], int]:
+    """Global git options before the subcommand, and where that subcommand starts.
+    A value (`-C dir`, `--git-dir=...`) must not be read as the command."""
+    opts, i = [], 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--":
+            i += 1
+            break
+        if a in GIT_VALUE_FLAGS and i + 1 < len(argv):
+            opts.append((a, argv[i + 1]))
+            i += 2
+        elif any(a.startswith(f + "=") for f in GIT_VALUE_FLAGS if f.startswith("--")):
+            flag, value = a.split("=", 1)
+            opts.append((flag, value))
+            i += 1
+        elif len(a) > 2 and a[:2] in ("-C", "-c"):
+            opts.append((a[:2], a[2:]))
+            i += 1
+        elif a.startswith("-"):
+            i += 1
+        else:
+            break
+    return opts, i
+
+
+def _hooks_path_overridden(opts: list[tuple[str, str]]) -> bool:
+    """Did a global -c/--config-env move the hooks away from tools/agents/hooks?"""
+    return any(flag in ("-c", "--config-env")
+               and value.split("=", 1)[0].strip().lower() == HOOKS_PATH_KEY for flag, value in opts)
+
+
+def _no_verify_long(args: list[str]) -> bool:
+    """git accepts any unambiguous prefix of --no-verify; all of them skip hooks."""
+    return any(a.startswith("--no-v") and "--no-verify".startswith(a) for a in args)
+
+
+def git_refusal(argv: list[str]) -> str | None:
+    """Why this git command skips the hooks, or None: --no-verify (or an accepted
+    prefix) on commit or push, -n on commit, or a core.hooksPath override."""
+    opts, i = _git_globals(argv)
+    if i >= len(argv) or argv[i] not in ("commit", "push"):
+        return None
+    args = argv[i + 1:]
+    if _no_verify_long(args) or (argv[i] == "commit" and _commit_has_no_verify_short(args)) \
+            or _hooks_path_overridden(opts):
+        return "hooks are the contract's checks; fix what they report instead of skipping them"
+    return None
+
+
+def is_guard(path: Path) -> bool:
+    """Is `path` a Baton guard (any repo's or worktree's copy, any version)? Read from its first line
+    after the shebang, without running it."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(200)
+    except OSError:
+        return False
+    return b'"""gh guard:' in head or b'"""git guard:' in head
+
+
+def real_exe(name: str) -> str:
+    """First executable `name` on PATH that isn't a guard, without running anything. Skipping every
+    guard, not only this folder, matters: two guard folders on PATH (two repos, or a checkout and its
+    worktree) would otherwise exec each other forever under one pid."""
+    for d in os.environ.get("PATH", "").split(os.pathsep):
+        if not d:
+            continue
+        cand = Path(d) / name
+        if cand.is_file() and os.access(cand, os.X_OK) and not is_guard(cand):
+            return str(cand)
+    sys.exit(f"{name} guard: no real {name} found on PATH after the guard")
+
+
+def common_git_dir(start: str | None = None) -> Path | None:
+    """The git common dir for `start` (default: cwd), found without running git:
+    walk up to `.git`; a worktree's `.git` file points at its own dir, whose
+    `commondir` file points at the shared one."""
+    d = Path(start or os.getcwd()).resolve()
+    for p in (d, *d.parents):
+        g = p / ".git"
+        if g.is_dir():
+            return g
+        if g.is_file():
+            own = Path(g.read_text().split(":", 1)[1].strip())
+            own = own if own.is_absolute() else (p / own)
+            cd = own / "commondir"
+            return (own / cd.read_text().strip()).resolve() if cd.is_file() else own.resolve()
+    return None
+
+
+def record_seen(route: str, start: str | None = None) -> None:
+    """Note that the guard ran by `route` ("path" or "hook"): an empty file
+    `baton-guard-seen-<route>` in the git common dir. Best effort: any failure
+    is swallowed, because a guard must never fail a command over its marker."""
+    try:
+        common = common_git_dir(start)
+        if common:
+            marker = common / f"baton-guard-seen-{route}"
+            if not marker.exists():
+                marker.touch()
+    except Exception:
+        pass
+
+
+def real_gh() -> str:
+    return real_exe("gh")
+
+
+def real_git() -> str:
+    return real_exe("git")
+
+
+def gh_api_kind(argv: list[str]) -> str:
+    """`rest` only for `gh api <path>`; GraphQL for `gh api graphql` and every other command."""
+    words = strip_globals(argv)
+    if words[:1] != ["api"]:
+        return "graphql"
+    skip = False
+    for a in words[1:]:
+        if skip:
+            skip = False
+        elif a in API_VALUE_FLAGS:
+            skip = True
+        elif not a.startswith("-"):
+            return "graphql" if a == "graphql" else "rest"
+    return "rest"
+
+
+def log_gh_call(argv: list[str]) -> None:
+    """Append one JSON line per gh call when BATON_GH_LOG is set. Best effort: a broken
+    path never fails the command, and with no path set there is no extra I/O at all."""
+    path = os.environ.get("BATON_GH_LOG")
+    if not path:
+        return
+    try:
+        entry = {
+            "t": time.time(),
+            "api": gh_api_kind(argv),
+            "cmd": " ".join(argv[:3]),
+            "pid": os.getpid(),
+            "caller": "ticket.py" if os.environ.get("TICKET_CONTRACT_CALL") == "1" else "agent",
+        }
+        with open(path, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+    except Exception:
+        pass
+
+
+def main() -> None:
+    argv = sys.argv[1:]
+    record_seen("path")
+    log_gh_call(argv)
+    if os.environ.get("TICKET_CONTRACT_CALL") != "1":
+        why = refusal(argv)
+        if why:
+            sys.exit(f"gh guard: refused `gh {' '.join(argv[:2])}`: {why}")
+    gh = real_gh()
+    os.execv(gh, [gh, *argv])
+
+
+if __name__ == "__main__":
+    main()
