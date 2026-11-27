@@ -43,9 +43,14 @@ function setUpClient() {
     channel: () => channel,
     from: (table: string) => ({
       select: () => ({
-        eq: () =>
+        eq: (column: string) =>
           Promise.resolve({
-            data: table === CHAT_CHANNEL_MEMBERS_TABLE ? rows : [],
+            data:
+              table === CHAT_CHANNEL_MEMBERS_TABLE
+                ? rows
+                : table === CHAT_CHANNELS_TABLE && column === "campaign_id"
+                  ? [{ id: "channel-1" }]
+                  : [],
             error: null,
           }),
       }),
@@ -62,7 +67,25 @@ function setUpClient() {
             new: { id: "channel-1" },
             old: {},
           });
+        } else {
+          binding.cb({
+            event: "INSERT",
+            payload: {
+              operation: "INSERT",
+              table: CHAT_CHANNEL_MEMBERS_TABLE,
+              record: {
+                channel_id: "channel-1",
+                user_id: "player-2",
+                created_at: "2026-11-12T00:00:02Z",
+              },
+            },
+          });
         }
+      }
+    },
+    waitForChannels: async () => {
+      for (let i = 0; i < 6 && subscribeCbs.length === 0; i += 1) {
+        await flush();
       }
     },
     fireSubscribed: () => {
@@ -101,9 +124,10 @@ describe("chat channel roster listener", () => {
     return { onError };
   }
 
-  it("binds the campaign's channels, not the unpublished roster table", () => {
+  it("binds the campaign's channels, not the unpublished roster table", async () => {
     const client = setUpClient();
     subscribe(() => {});
+    await client.waitForChannels();
     client.fireSubscribed();
 
     const tables = client.filters.map(
@@ -118,6 +142,7 @@ describe("chat channel roster listener", () => {
     const client = setUpClient();
     const seen: ChannelMemberRow[][] = [];
     const { onError } = subscribe((rows) => seen.push(rows));
+    await client.waitForChannels();
     client.fireSubscribed();
     await flush();
     await flush();

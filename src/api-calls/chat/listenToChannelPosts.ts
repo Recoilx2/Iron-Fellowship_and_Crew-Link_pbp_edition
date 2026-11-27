@@ -1,6 +1,10 @@
 import { getSupabaseClient } from "config/supabase.config";
 import type { Unsubscribe } from "api-calls/helpers.type";
-import { listenToRows } from "api-calls/realtime/listenToRows";
+import {
+  broadcastRowsBinding,
+  listenToRows,
+} from "api-calls/realtime/listenToRows";
+import { channelSharedTopic } from "api-calls/realtime/sharedTopics";
 import type { PostDocument } from "api-calls/chat/_chat.type";
 import {
   CHAT_POSTS_TABLE,
@@ -58,6 +62,11 @@ export function listenToChannelPosts(
     client,
     channelName: constructChannelPostsChannelName(channelId),
     bindings: [
+      broadcastRowsBinding<PostRow>({
+        topic: channelSharedTopic(channelId),
+        table: CHAT_POSTS_TABLE,
+        getKey: (row) => row.id,
+      }),
       {
         type: "postgres_changes",
         table: CHAT_POSTS_TABLE,
