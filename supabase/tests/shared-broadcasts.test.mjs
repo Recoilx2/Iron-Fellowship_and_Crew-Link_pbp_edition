@@ -8,7 +8,7 @@ const sup = join(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = join(sup, "..");
 const read = (p) => readFileSync(join(repo, p), "utf8");
 
-const MIGRATION = "supabase/migrations/20261128000000_realtime_shared_broadcasts.sql";
+const MIGRATION = "supabase/migrations/20261128000002_realtime_shared_broadcasts.sql";
 const POLICIES = "supabase/realtime-auth/20261127200000_realtime_shared_broadcasts.sql";
 const NEW_SQL = [MIGRATION, POLICIES];
 
@@ -236,7 +236,7 @@ describe("new SQL files are in every migration-order allowlist", () => {
     for (const file of lists) {
       const text = read(`supabase/tests/${file}`);
       assert.ok(
-        text.includes("20261128000000_realtime_shared_broadcasts.sql"),
+        text.includes("20261128000002_realtime_shared_broadcasts.sql"),
         `${file} does not allow the new migration`
       );
     }
