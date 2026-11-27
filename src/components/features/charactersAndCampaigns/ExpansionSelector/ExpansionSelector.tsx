@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useGameSystemValue } from "hooks/useGameSystemValue";
 import { GAME_SYSTEMS } from "types/GameSystems.type";
 import { useStore } from "stores/store";
@@ -29,9 +30,18 @@ export function ExpansionSelector(props: ExpansionSelectorProps) {
   const sortedExpansionIds = useStore(
     (store) => store.homebrew.sortedHomebrewCollectionIds,
   );
+  // Mounted expansions are registered while the base ruleset loads. Reading
+  // it here makes this list refresh once that registration has finished.
+  const baseRuleset = useStore((store) => store.rules.baseRuleset);
 
-  const rulesetExpansions = Object.values(
-    includedExpansions[activeRulesetId] ?? {},
+  const rulesetExpansions = useMemo(
+    () =>
+      Object.values(
+        includedExpansions[baseRuleset?._id ?? activeRulesetId] ??
+          includedExpansions[activeRulesetId] ??
+          {},
+      ),
+    [activeRulesetId, baseRuleset],
   );
 
   const officialExpansions = rulesetExpansions.filter((c) => !c.isHomebrew);

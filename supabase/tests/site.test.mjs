@@ -66,6 +66,57 @@ describe("site container", () => {
     );
   });
 
+  it("serves the per-copy ruleset volume read-only", () => {
+    const nginx = read("site/nginx.conf");
+    assert.ok(
+      /location \/config\/ \{/.test(nginx),
+      "nginx has no /config/ location"
+    );
+    assert.ok(
+      nginx.includes("alias /usr/share/nginx/config/;"),
+      "/config/ is not aliased to the mounted volume"
+    );
+
+    const text = code(read("docker-compose.yml"));
+    const m = text.match(/^  site:\s*$/m);
+    assert.ok(m, "site service missing");
+    const after = text.slice(m.index + m[0].length);
+    const next = after.search(/^  [a-z][a-z-]*:\s*$/m);
+    const block = next === -1 ? after : after.slice(0, next);
+    assert.ok(
+      block.includes(":/usr/share/nginx/config:ro"),
+      "site does not mount the ruleset volume read-only"
+    );
+    assert.ok(
+      block.includes("${RULESETS_CONFIG_DIR"),
+      "the ruleset volume is not per-copy"
+    );
+    assert.ok(
+      /^RULESETS_CONFIG_DIR=\S+$/m.test(read(".env.example")),
+      "RULESETS_CONFIG_DIR is not documented in .env.example"
+    );
+  });
+
+  it("ships a mounted manifest and Datasworn package fixture", () => {
+    const manifest = JSON.parse(read("site/config/rulesets/manifest.json"));
+    assert.equal(manifest.version, 1);
+    const ref = manifest.expansions.find((e) => e.id === "mounted_e2e");
+    assert.ok(ref, "manifest does not name the mounted_e2e expansion");
+    assert.equal(ref.type, "expansion");
+    assert.equal(ref.path, "/config/rulesets/mounted_e2e.json");
+
+    const pkg = JSON.parse(read("site/config/rulesets/mounted_e2e.json"));
+    assert.equal(pkg._id, ref.id);
+    assert.equal(pkg.type, ref.type);
+    assert.equal(pkg.datasworn_version, "0.3.0");
+    assert.equal(pkg.ruleset, "classic");
+    assert.equal(
+      pkg.moves.mounted?.contents?.check_the_mount?.name,
+      "Check the Mount",
+      "fixture has no move to render on the Rules page"
+    );
+  });
+
   it("compose runs one site per copy for its game system", () => {
     const text = read("docker-compose.yml");
     assert.ok(/^  site:\s*$/m.test(text), "site service missing");

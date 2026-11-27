@@ -2,6 +2,7 @@ import { Datasworn } from "@datasworn-community/core";
 import { getSystem } from "hooks/useGameSystem";
 import { GAME_SYSTEMS } from "types/GameSystems.type";
 import { logError } from "functions/errorReference";
+import { loadMountedManifest } from "./mountedRulesets";
 
 export interface IRulesetConfig {
   id: string;
@@ -234,6 +235,62 @@ export function findIncludedExpansionConfig(
       return config;
     }
   }
+}
+
+let mountedPackagesRegistration: Promise<void> | undefined;
+
+/**
+ * Adds operator-supplied packages to the same registries the built-ins use,
+ * so rebuildRules(), useDataswornTree(), homebrew loading and the expansion
+ * selector all see them. Called from loadBaseRuleset(), not at import time.
+ * A replacing ruleset is deliberately ignored here (see #218).
+ */
+export function registerMountedPackages(): Promise<void> {
+  mountedPackagesRegistration ??= loadMountedManifest(activeRulesetId)
+    .then(({ packages }) => {
+      for (const { ref, data } of packages) {
+        if (ref.type === "ruleset") {
+          // TODO(#218): `replacesBase` needs async bootstrap before defaults
+          // are read and is blocked on the mechanics/branding decision #208.
+          if (ref.replacesBase) continue;
+          if (includedRulesets[ref.id]) {
+            logError(
+              "rulesets",
+              new Error(`mounted ruleset id collides with a built-in: ${ref.id}`),
+            );
+            continue;
+          }
+          const ruleset = data as Datasworn.Ruleset;
+          includedRulesets[ref.id] = {
+            id: ref.id,
+            name: ref.name,
+            type: "ruleset",
+            isHomebrew: false,
+            load: async () => ruleset,
+          };
+        } else if (findIncludedExpansionConfig(ref.id)) {
+          logError(
+            "rulesets",
+            new Error(`mounted expansion id collides with a known id: ${ref.id}`),
+          );
+        } else {
+          const expansion = data as Datasworn.Expansion;
+          const config: IExpansionConfig = {
+            id: ref.id,
+            name: ref.name,
+            type: "expansion",
+            isHomebrew: ref.isHomebrew ?? true,
+            note: ref.note,
+            licenseInfo: ref.licenseInfo,
+            load: async () => expansion,
+          };
+          (includedExpansions[activeRulesetId] ??= {})[ref.id] = config;
+          thirdPartyExpansions[ref.id] = expansion;
+        }
+      }
+    })
+    .catch((e) => logError("rulesets", e));
+  return mountedPackagesRegistration;
 }
 
 export async function loadIncludedRuleset(

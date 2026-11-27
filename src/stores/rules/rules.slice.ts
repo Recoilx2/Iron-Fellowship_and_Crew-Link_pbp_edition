@@ -16,6 +16,7 @@ import {
   defaultExpansions,
   loadIncludedExpansion,
   loadIncludedRuleset,
+  registerMountedPackages,
   thirdPartyExpansions,
 } from "data/rulesets";
 import { idMap } from "data/idMap";
@@ -48,6 +49,9 @@ export const createRulesSlice: CreateSliceType<RulesSlice> = (
     },
 
     loadBaseRuleset: async () => {
+      // Mounted expansions must be in the registries before rules are built;
+      // the base ruleset itself is untouched by this additive slice.
+      await registerMountedPackages();
       const ruleset = await loadIncludedRuleset();
       getState().rules.setBaseRuleset(ruleset);
     },
