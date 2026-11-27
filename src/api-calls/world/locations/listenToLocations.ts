@@ -27,7 +27,8 @@ export function listenToLocations(
   updateLocation: (locationId: string, location: Location) => void,
   updateLocationImage: (locationId: string, imageUrl: string) => void,
   removeLocation: (locationId: string) => void,
-  onError: (error: unknown) => void
+  onError: (error: unknown) => void,
+  isGM = false
 ): Unsubscribe {
   const client = getSupabaseClient();
   let previousIds = new Set<string>();
@@ -42,7 +43,8 @@ export function listenToLocations(
             broadcastRowsBinding<LocationRow>({
               table: WORLD_LOCATIONS_TABLE,
               getKey: (row) => row.id,
-            })
+            }),
+            isGM
           )
         ),
       ],

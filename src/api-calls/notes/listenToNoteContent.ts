@@ -23,7 +23,8 @@ export function listenToNoteContent(
   noteId: string,
   onContent: (content?: Uint8Array) => void,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onError: (error: any) => void
+  onError: (error: any) => void,
+  isGM = false
 ): PlainUnsubscribe {
   if (!characterId && !campaignId) {
     onError("Either campaign or character ID is required.");
@@ -83,7 +84,8 @@ export function listenToNoteContent(
       ...campaignBroadcastBindings<CampaignNoteContentRow>(
         campaignId,
         "notes",
-        () => broadcastRefreshBinding({ topic: "" })
+        () => broadcastRefreshBinding({ topic: "" }),
+        isGM
       ),
     ],
     fetchRows: async () => {

@@ -48,6 +48,11 @@ export function useChannelTyping(channelId: string): ChannelTypingState {
 
   const [typingUids, setTypingUids] = useState<string[]>([]);
   const controlsRef = useRef<ChannelTypingSubscription | null>(null);
+  // supabase-js reuses a channel by topic until removeChannel resolves. A
+  // remount must not call .on("presence") on the old, still-joined object:
+  // serialize every setup behind the previous teardown instead.
+  const teardownRef = useRef<Promise<void>>(Promise.resolve());
+  const teardownPendingRef = useRef(false);
   // Only stop a presence write when one is outstanding: a fresh subscription
   // starts with no presence state, and an unconditional stop on the first
   // render would ask an unsubscribed channel to untrack.
@@ -59,33 +64,56 @@ export function useChannelTyping(channelId: string): ChannelTypingState {
       setTypingUids([]);
       return;
     }
-    // No onError: presence is a nicety. A refused join or write leaves the
-    // composer working and the indicator empty.
-    const subscription = subscribeToChannelTyping({
-      channelId,
-      uid,
-      displayName,
-      onTyping: setTypingUids,
-    });
-    controlsRef.current = subscription;
-
-    const onPageHide = () => subscription.stopTyping();
+    let cancelled = false;
+    let subscription: ChannelTypingSubscription | undefined;
+    const onPageHide = () => subscription?.stopTyping();
     const onVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
-        subscription.stopTyping();
+        subscription?.stopTyping();
       }
     };
-    window.addEventListener("pagehide", onPageHide);
-    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    // No onError: presence is a nicety. A refused join or write leaves the
+    // composer working and the indicator empty.
+    const setup = async () => {
+      // First mount has nothing to wait for: keep the subscription setup
+      // synchronous so presence is live as soon as the effect runs.
+      if (teardownPendingRef.current) {
+        const previous = teardownRef.current;
+        teardownPendingRef.current = false;
+        await previous;
+      }
+      if (cancelled) return;
+      const created = subscribeToChannelTyping({
+        channelId,
+        uid,
+        displayName,
+        onTyping: setTypingUids,
+      });
+      if (cancelled) {
+        teardownRef.current = created.unsubscribe().catch(() => {});
+        teardownPendingRef.current = true;
+        return;
+      }
+      subscription = created;
+      controlsRef.current = created;
+      window.addEventListener("pagehide", onPageHide);
+      document.addEventListener("visibilitychange", onVisibilityChange);
+    };
+    void setup();
 
     return () => {
+      cancelled = true;
       window.removeEventListener("pagehide", onPageHide);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       isTypingRef.current = false;
       if (controlsRef.current === subscription) {
         controlsRef.current = null;
       }
-      void subscription.unsubscribe();
+      if (subscription) {
+        teardownRef.current = subscription.unsubscribe().catch(() => {});
+        teardownPendingRef.current = true;
+      }
     };
   }, [channelId, uid, displayName]);
 

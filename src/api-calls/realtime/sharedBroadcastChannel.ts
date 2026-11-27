@@ -62,8 +62,13 @@ const channelsByClient = new WeakMap<
 
 const FAILED_STATUSES = new Set(["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"]);
 const MAX_RETRIES = 5;
-const BASE_RETRY_MS = 1000;
+// A failed join is already ~10 s into the app's load window: retry quickly
+// (200 ms, 400 ms, 800 ms, 1.6 s, 3.2 s) rather than another long wait.
+const BASE_RETRY_MS = 200;
 const JITTER_MS = 200;
+// A channel that never joined is already dead. Do not let a slow teardown
+// consume the whole retry window; the removeChannel promise still settles.
+const REMOVE_RACE_MS = 250;
 
 function announce(
   record: SharedBroadcastChannel,
@@ -128,7 +133,12 @@ async function retry(
   try {
     // supabase-js reuses channels by topic until teardown resolves; adding
     // handlers to the "new" object before then would be a silent no-op.
-    await client.removeChannel(oldChannel);
+    // A never-joined channel is dead already, so cap the wait: if teardown
+    // is slow we see the same object, consume the attempt and retry again.
+    await Promise.race([
+      client.removeChannel(oldChannel),
+      new Promise<void>((resolve) => setTimeout(resolve, REMOVE_RACE_MS)),
+    ]);
     // The old generation may have recovered (or been released) while the
     // teardown was pending. Do not replace or re-announce it in that case.
     if (

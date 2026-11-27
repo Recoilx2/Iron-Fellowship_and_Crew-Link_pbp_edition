@@ -9,7 +9,15 @@ export function listenToLoreNotes(
   worldId: string,
   loreId: string,
   updateLoreNotes: (notes: Uint8Array | undefined) => void,
-  onError: (error: string) => void
+  onError: (error: string) => void,
+  isGM = false
 ): Unsubscribe {
-  return listenToWorldItemNotes("lore", loreId, false, updateLoreNotes, onError);
+  return listenToWorldItemNotes(
+    "lore",
+    loreId,
+    false,
+    updateLoreNotes,
+    onError,
+    isGM
+  );
 }

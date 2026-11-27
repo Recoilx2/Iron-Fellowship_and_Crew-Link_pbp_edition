@@ -24,7 +24,8 @@ import {
 export function listenToWorld(
   worldId: string,
   onDocChange: (data?: World) => void,
-  onError: (error: unknown) => void
+  onError: (error: unknown) => void,
+  isGM = false
 ): Unsubscribe {
   const client = getSupabaseClient();
   let loaded = false;
@@ -38,7 +39,8 @@ export function listenToWorld(
             broadcastRowsBinding<WorldRow>({
               table: WORLDS_TABLE,
               getKey: (row) => row.id,
-            })
+            }),
+            isGM
           )
         ),
       ],

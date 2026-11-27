@@ -62,7 +62,9 @@ export function useOutlineDocument(campaignId: string) {
       (caught: unknown) => {
         setError(asObject(caught));
         setFailed(true);
-      }
+      },
+      // The outline lives in the GM-only campaign notes family.
+      true
     );
   }, [campaignId, outlineId, reloads]);
 

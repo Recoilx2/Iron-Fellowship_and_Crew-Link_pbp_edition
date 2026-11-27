@@ -18,6 +18,7 @@ import {
   getWorldItemNoteIds,
 } from "api-calls/world/worldNotes";
 import { logError } from "functions/errorReference";
+import { currentUserIsGm } from "stores/currentUserIsGm";
 
 export const createLoreSlice: CreateSliceType<LoreSlice> = (set, getState) => ({
   ...defaultLoreSlice,
@@ -76,7 +77,8 @@ export const createLoreSlice: CreateSliceType<LoreSlice> = (set, getState) => ({
           store.worlds.currentWorld.currentWorldLore.error =
             error instanceof Error ? error.message : String(error);
         });
-      }
+      },
+      currentUserIsGm(getState())
     );
   },
   setOpenLoreId: (loreId) => {
@@ -218,7 +220,8 @@ export const createLoreSlice: CreateSliceType<LoreSlice> = (set, getState) => ({
       },
       (error) => {
         logError("lore.slice", error);
-      }
+      },
+      currentUserIsGm(getState())
     );
 
     // GM rows are always subscribed: the database filters them, so players

@@ -23,7 +23,8 @@ export function listenToNotes(
   characterId: string | undefined,
   onNotes: (source: NoteSource, notes: Note[]) => void,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onError: (error: any) => void
+  onError: (error: any) => void,
+  isGM = false
 ): PlainUnsubscribe {
   if (!campaignId && !characterId) {
     onError("Either character or campaign ID must be defined.");
@@ -48,7 +49,8 @@ export function listenToNotes(
               broadcastRowsBinding<CampaignNoteRow>({
                 table: CAMPAIGN_NOTES_TABLE,
                 getKey: (row) => row.id,
-              })
+              }),
+            isGM
           ),
         ],
         fetchRows: async () => {

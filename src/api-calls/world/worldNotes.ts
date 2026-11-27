@@ -253,7 +253,8 @@ export function listenToWorldNoteContent(
   noteId: string,
   onContent: (content?: Uint8Array) => void,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onError: (error: any) => void
+  onError: (error: any) => void,
+  isGM = false
 ): PlainUnsubscribe {
   const client = getSupabaseClient();
   return listenToRowsDeferred<WorldNoteContentRow>(
@@ -268,7 +269,8 @@ export function listenToWorldNoteContent(
           campaignBroadcastBindings<WorldNoteContentRow>(
             campaignId,
             "world",
-            () => broadcastRefreshBinding({ topic: "" })
+            () => broadcastRefreshBinding({ topic: "" }),
+            isGM
           )
         ),
       ],
@@ -313,7 +315,8 @@ export function listenToWorldItemNotes(
   gmOnly: boolean,
   onNotes: (notes: Uint8Array | undefined) => void,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onError: (error: any) => void
+  onError: (error: any) => void,
+  isGM = false
 ): PlainUnsubscribe {
   const client = getSupabaseClient();
   let contentUnsubscribe: PlainUnsubscribe | undefined;
@@ -331,7 +334,8 @@ export function listenToWorldItemNotes(
             broadcastRowsBinding<WorldNoteRow>({
               table: WORLD_NOTES_TABLE,
               getKey: (row) => row.id,
-            })
+            }),
+            isGM
           )
         ),
       ],
@@ -362,7 +366,8 @@ export function listenToWorldItemNotes(
         contentUnsubscribe = listenToWorldNoteContent(
           currentNoteId,
           onNotes,
-          onError
+          onError,
+          isGM
         );
       },
       onError,

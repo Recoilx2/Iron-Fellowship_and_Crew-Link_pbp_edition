@@ -9,7 +9,15 @@ export function listenToNPCNotes(
   worldId: string,
   npcId: string,
   updateNPCNotes: (notes: Uint8Array | undefined) => void,
-  onError: (error: string) => void
+  onError: (error: string) => void,
+  isGM = false
 ): Unsubscribe {
-  return listenToWorldItemNotes("npc", npcId, false, updateNPCNotes, onError);
+  return listenToWorldItemNotes(
+    "npc",
+    npcId,
+    false,
+    updateNPCNotes,
+    onError,
+    isGM
+  );
 }

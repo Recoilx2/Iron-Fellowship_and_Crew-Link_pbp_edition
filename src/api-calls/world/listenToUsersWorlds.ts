@@ -28,7 +28,8 @@ export function listenToUsersWorlds(
     onDocRemove: (id: string) => void;
     onLoaded: () => void;
   },
-  onError: (error: unknown) => void
+  onError: (error: unknown) => void,
+  isGM = false
 ): Unsubscribe | undefined {
   if (!uid) {
     return undefined;
@@ -49,7 +50,8 @@ export function listenToUsersWorlds(
               broadcastRowsBinding<WorldRow>({
                 table: WORLDS_TABLE,
                 getKey: (row) => row.id,
-              })
+              }),
+              isGM
             )
           ),
         ],

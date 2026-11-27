@@ -144,9 +144,9 @@ beforeEach(() => {
 });
 
 describe("shared-data listeners use broadcasts only", () => {
-  it("notes: campaign notes and content use both campaign topics", async () => {
-    listenToNotes("campaign-1", undefined, noop, noop);
-    listenToNoteContent("campaign-1", undefined, "note-1", noop, noop);
+  it("notes: GMs get both campaign topics, players only the shared one", async () => {
+    listenToNotes("campaign-1", undefined, noop, noop, true);
+    listenToNoteContent("campaign-1", undefined, "note-1", noop, noop, true);
     await settle();
     expect(spies.params).toHaveLength(2);
     for (const params of spies.params) {
@@ -155,18 +155,30 @@ describe("shared-data listeners use broadcasts only", () => {
         "campaign-gm:campaign-1:notes",
       ]);
     }
+
+    spies.params.splice(0);
+    listenToNotes("campaign-1", undefined, noop, noop);
+    listenToNoteContent("campaign-1", undefined, "note-1", noop, noop);
+    await settle();
+    expect(spies.params).toHaveLength(2);
+    for (const params of spies.params) {
+      expectBroadcastOnly(params, ["campaign-shared:campaign-1:notes"]);
+      expect(
+        topicsOf(params).some((topic) => topic.startsWith("campaign-gm:"))
+      ).toBe(false);
+    }
   });
 
   it("world: worlds, locations, lore, NPCs, notes and GM details", async () => {
-    listenToUsersWorlds("u1", handler, noop);
-    listenToWorld("world-1", noop, noop);
-    listenToLocations("world-1", noop, noop, noop, noop);
-    listenToLoreDocuments("world-1", noop, noop, noop, noop);
-    listenToNPCs("world-1", noop, noop, noop, noop);
+    listenToUsersWorlds("u1", handler, noop, true);
+    listenToWorld("world-1", noop, noop, true);
+    listenToLocations("world-1", noop, noop, noop, noop, true);
+    listenToLoreDocuments("world-1", noop, noop, noop, noop, true);
+    listenToNPCs("world-1", noop, noop, noop, noop, true);
     listenToLocationGMProperties("world-1", "location-1", noop, noop);
     listenToNPCGMProperties("world-1", "npc-1", noop, noop);
-    listenToWorldNoteContent("note-1", noop, noop);
-    listenToLocationNotes("world-1", "location-1", noop, noop);
+    listenToWorldNoteContent("note-1", noop, noop, true);
+    listenToLocationNotes("world-1", "location-1", noop, noop, true);
     await settle();
 
     expect(spies.params).toHaveLength(9);
@@ -189,6 +201,25 @@ describe("shared-data listeners use broadcasts only", () => {
     expect(
       families.some((topics) => topics.includes("campaign-gm:campaign-1:world"))
     ).toBe(true);
+  });
+
+  it("players never join a denied campaign-gm topic", async () => {
+    listenToUsersWorlds("u1", handler, noop);
+    listenToWorld("world-1", noop, noop);
+    listenToLocations("world-1", noop, noop, noop, noop);
+    listenToLoreDocuments("world-1", noop, noop, noop, noop);
+    listenToNPCs("world-1", noop, noop, noop, noop);
+    listenToWorldNoteContent("note-1", noop, noop);
+    listenToLocationNotes("world-1", "location-1", noop, noop);
+    await settle();
+
+    expect(spies.params).toHaveLength(7);
+    for (const params of spies.params) {
+      expectBroadcastOnly(params, ["campaign-shared:campaign-1:"]);
+      expect(
+        topicsOf(params).some((topic) => topic.startsWith("campaign-gm:"))
+      ).toBe(false);
+    }
   });
 
   it("assistant: conversations, messages and outline versions use the GM topic", async () => {

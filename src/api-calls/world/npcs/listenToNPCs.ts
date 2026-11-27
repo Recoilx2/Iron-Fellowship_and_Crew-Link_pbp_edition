@@ -27,7 +27,8 @@ export function listenToNPCs(
   updateNPC: (npcId: string, npc: NPC) => void,
   updateNPCImage: (npcId: string, imageUrl: string) => void,
   removeNPC: (npcId: string) => void,
-  onError: (error: unknown) => void
+  onError: (error: unknown) => void,
+  isGM = false
 ): Unsubscribe {
   const client = getSupabaseClient();
   let previousIds = new Set<string>();
@@ -42,7 +43,8 @@ export function listenToNPCs(
             broadcastRowsBinding<NPCRow>({
               table: WORLD_NPCS_TABLE,
               getKey: (row) => row.id,
-            })
+            }),
+            isGM
           )
         ),
       ],

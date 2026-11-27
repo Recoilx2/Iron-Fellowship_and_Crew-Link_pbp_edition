@@ -95,6 +95,8 @@ function fire(channel: FakeChannel, status: string, error?: unknown) {
 describe("shared broadcast channels", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    // Deterministic jitter: the first retry lands at exactly 200 ms.
+    vi.spyOn(Math, "random").mockReturnValue(0);
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -118,7 +120,7 @@ describe("shared broadcast channels", () => {
     subscribeBroadcast(client, "campaign-shared:1:chat", late.subscriber);
     expect(created).toHaveLength(1);
 
-    await vi.advanceTimersByTimeAsync(1300);
+    await vi.advanceTimersByTimeAsync(200);
     settleRemovals();
     await vi.advanceTimersByTimeAsync(0);
     expect(created).toHaveLength(2);
@@ -135,7 +137,7 @@ describe("shared broadcast channels", () => {
     const sub = makeSubscriber();
     const stop = subscribeBroadcast(client, "channel-shared:1", sub.subscriber);
     fire(created[0], "TIMED_OUT");
-    await vi.advanceTimersByTimeAsync(1300);
+    await vi.advanceTimersByTimeAsync(200);
     // The retry is suspended awaiting removeChannel; the old generation
     // recovers in the meantime and announces success exactly once.
     fire(created[0], "SUBSCRIBED");
@@ -154,12 +156,12 @@ describe("shared broadcast channels", () => {
     fire(created[0], "CHANNEL_ERROR");
 
     // Multiple timer ticks while the first retry is pending must not stack.
-    await vi.advanceTimersByTimeAsync(1300);
+    await vi.advanceTimersByTimeAsync(200);
     settleRemovals();
     await vi.advanceTimersByTimeAsync(0);
     expect(created).toHaveLength(2);
     fire(created[1], "TIMED_OUT");
-    await vi.advanceTimersByTimeAsync(2500);
+    await vi.advanceTimersByTimeAsync(400);
     settleRemovals();
     await vi.advanceTimersByTimeAsync(0);
     expect(created).toHaveLength(3);

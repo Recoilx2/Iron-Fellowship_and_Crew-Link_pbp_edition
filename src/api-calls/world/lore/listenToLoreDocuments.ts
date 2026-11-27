@@ -27,7 +27,8 @@ export function listenToLoreDocuments(
   updateLore: (loreId: string, lore: Lore) => void,
   updateLoreImage: (loreId: string, imageUrl: string) => void,
   removeLore: (loreId: string) => void,
-  onError: (error: unknown) => void
+  onError: (error: unknown) => void,
+  isGM = false
 ): Unsubscribe {
   const client = getSupabaseClient();
   let previousIds = new Set<string>();
@@ -42,7 +43,8 @@ export function listenToLoreDocuments(
             broadcastRowsBinding<LoreRow>({
               table: WORLD_LORE_TABLE,
               getKey: (row) => row.id,
-            })
+            }),
+            isGM
           )
         ),
       ],

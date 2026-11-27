@@ -28,6 +28,7 @@ import {
 } from "api-calls/world/worldNotes";
 import type { GMLocation } from "types/Locations.type";
 import { logError } from "functions/errorReference";
+import { currentUserIsGm } from "stores/currentUserIsGm";
 
 /**
  * Merges streamed GM notes bytes into the structured GM details, keeping
@@ -125,7 +126,8 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
           store.worlds.currentWorld.currentWorldLocations.error =
             error instanceof Error ? error.message : String(error);
         });
-      }
+      },
+      currentUserIsGm(getState())
     );
   },
   setOpenLocationId: (locationId) => {
@@ -457,7 +459,8 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
       },
       (error) => {
         logError("locations.slice", error);
-      }
+      },
+      currentUserIsGm(getState())
     );
 
     // GM rows are always subscribed: the database filters them, so players
@@ -498,7 +501,8 @@ export const createLocationsSlice: CreateSliceType<LocationsSlice> = (
       },
       (error) => {
         logError("locations.slice", error);
-      }
+      },
+      currentUserIsGm(getState())
     );
 
     return () => {

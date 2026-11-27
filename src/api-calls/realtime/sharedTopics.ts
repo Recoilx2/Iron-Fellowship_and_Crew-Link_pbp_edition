@@ -4,10 +4,9 @@ import type { BroadcastBinding } from "api-calls/realtime/listenToRows";
 
 /**
  * Canonical names of the private topics published by the shared-broadcast
- * triggers (migration 20261128000002). `listenToRows` appends its per-
- * subscription suffix, so callers pass only the canonical value here.
- * The GM family is best-effort for players: its RLS policy denies the join,
- * and `optional` bindings keep that denial out of onError.
+ * triggers (migration 20261128000002). Broadcast bindings join these names
+ * exactly; the GM family is only bound by GMs, since a player's join would
+ * be denied by RLS.
  */
 
 export type SharedFamily =
@@ -38,9 +37,10 @@ export function channelSharedTopic(channelId: string): string {
 }
 
 /**
- * Both families for one campaign. The shared family is required (the
- * listener's membership is checked at join); the GM family is optional so a
- * player can keep the shared subscription when the GM one is denied.
+ * The campaign's shared topic, plus its GM topic only for GMs. A player
+ * joining campaign-gm:* is denied by RLS; doing so on every listener burns
+ * authorize probes and adds a REST fetch/reconcile for a join that can
+ * never succeed. Callers derive `isGM` from the current campaign roster.
  */
 export function campaignBroadcastBindings<Row>(
   campaignId: string,
@@ -48,9 +48,10 @@ export function campaignBroadcastBindings<Row>(
   make: () => Omit<
     BroadcastBinding<Row>,
     "type" | "event" | "topic" | "optional"
-  >
+  >,
+  isGM = false
 ): Array<BroadcastBinding<Row>> {
-  return [
+  const bindings: Array<BroadcastBinding<Row>> = [
     {
       ...make(),
       type: "broadcast",
@@ -58,14 +59,17 @@ export function campaignBroadcastBindings<Row>(
       topic: campaignSharedTopic(campaignId, family),
       optional: false,
     },
-    {
+  ];
+  if (isGM) {
+    bindings.push({
       ...make(),
       type: "broadcast",
       event: "*",
       topic: campaignGmTopic(campaignId, family),
       optional: true,
-    },
-  ];
+    });
+  }
+  return bindings;
 }
 
 /**
