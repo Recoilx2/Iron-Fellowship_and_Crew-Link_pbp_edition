@@ -1,0 +1,190 @@
+e2e	Run the browser tests (zero skips allowed)	﻿2026-11-27T22:53:53.4401559Z ##[group]Run ENV_FILE=.env.live tests/e2e.sh
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:53:53.4401773Z ^[[36;1mENV_FILE=.env.live tests/e2e.sh^[[0m
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:53:53.4428611Z shell: /usr/bin/bash -e {0}
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:53:53.4428770Z ##[endgroup]
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:53:53.4686203Z e2e: browser tests against http://localhost:8080 (gateway http://localhost:8000)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:53:54.7442485Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:53:54.7443277Z Running 42 tests using 1 worker
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:53:54.7443508Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:53:56.8054071Z   ✓   1 [chromium] › e2e/campaign-access.spec.ts:55:3 › campaign access › a member opens a campaign they belong to and sees its screen (1.1s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:54:00.1484617Z   ✓   2 [chromium] › e2e/campaign-access.spec.ts:66:3 › campaign access › an outsider cannot open a campaign they do not belong to (3.2s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:54:42.5497651Z   ✓   3 [chromium] › e2e/chat-active-character.spec.ts:80:3 › active character › retire, add new, post as new, then make the old one active again (42.0s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:54:53.8733238Z   ✓   4 [chromium] › e2e/chat-channels.spec.ts:54:3 › chat channels › a member opens a campaign on the Chat tab with its starting channels (11.0s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:54:55.0411853Z   ✓   5 [chromium] › e2e/chat-channels.spec.ts:68:3 › chat channels › a player sees no channel-management controls (1.1s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:55:17.7693365Z   ✓   6 [chromium] › e2e/chat-edit-delete.spec.ts:70:3 › chat post edits and deletes › an edit marks the post edited in both browsers (22.4s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:55:40.3842791Z   ✓   7 [chromium] › e2e/chat-edit-delete.spec.ts:119:3 › chat post edits and deletes › a GM delete leaves a deleted marker in both browsers (22.5s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:55:57.3537048Z   ✓   8 [chromium] › e2e/chat-images.spec.ts:70:3 › chat images › a picked image arrives inline in a second browser (16.6s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:56:20.6875823Z   ✓   9 [chromium] › e2e/chat-momentum-burn.spec.ts:126:3 › chat momentum burn on a posted roll › a player burns momentum on a posted roll, and a second browser sees the update (22.8s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:56:27.8040504Z   ✓  10 [chromium] › e2e/chat-post-search.spec.ts:161:3 › chat post search › pages the results and jumps to a post in the feed (6.4s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:56:34.1627773Z   ✓  11 [chromium] › e2e/chat-post-search.spec.ts:189:3 › chat post search › shared, private, DM and GM-only posts follow the reader's access (6.2s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:56:52.1169400Z   ✓  12 [chromium] › e2e/chat-posts.spec.ts:64:3 › chat text posts › a text post arrives live in a second browser (17.6s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:57:14.7519755Z   ✓  13 [chromium] › e2e/chat-posts.spec.ts:100:3 › chat text posts › an out-of-character post shows the display name and campaign character (22.6s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:57:33.7410631Z   ✘  14 [chromium] › e2e/chat-posts.spec.ts:165:3 › chat text posts › a GM post as a world NPC shows the NPC with a GM tag (18.7s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:57:46.2029944Z   ✓  15 [chromium] › e2e/chat-private-channels.spec.ts:59:3 › chat private channels › a GM creates a private channel for one member (11.5s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:57:57.5975223Z   ✓  16 [chromium] › e2e/chat-private-channels.spec.ts:80:3 › chat private channels › the chosen member sees the private channel (11.4s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:58:08.9873552Z   ✓  17 [chromium] › e2e/chat-private-channels.spec.ts:89:3 › chat private channels › another member does not see the private channel (11.3s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:58:21.9979478Z   ✓  18 [chromium] › e2e/chat-rolls.spec.ts:66:3 › chat rolls from the composer › a dice roll attaches to the draft and posts as a one-liner (12.7s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:58:28.7081785Z   ✓  19 [chromium] › e2e/chat-rolls.spec.ts:131:3 › chat rolls from the composer › a GM-only roll never reaches players (6.6s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:58:48.9411391Z   ✘  20 [chromium] › e2e/chat-sheet-rolls.spec.ts:72:3 › sheet rolls land in the starting IC channel › a custom dice roll from the sheet posts as the character (19.7s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:59:12.4190481Z   ✘  21 [chromium] › e2e/chat-typing.spec.ts:55:3 › chat typing indicators › another member sees typing, and blur or sending clears it (22.6s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:59:29.3091395Z   ✓  22 [chromium] › e2e/email-notifications.spec.ts:120:3 › chat email notifications › the global switch turns member email off and back on (16.1s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:59:35.6930256Z   ✓  23 [chromium] › e2e/email-notifications.spec.ts:143:3 › chat email notifications › the channel switch opts in and out of one channel (6.4s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T22:59:47.0251721Z   ✓  24 [chromium] › e2e/email-notifications.spec.ts:159:3 › chat email notifications › an email link loads and highlights a post outside the live window (11.2s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:00:10.6065181Z   ✓  25 [chromium] › e2e/gm-assistant-outline-revision.spec.ts:204:3 › outline revisions › a GM requests a revision, applies it behind a confirmation, then undoes it (13.2s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:00:15.5783707Z   ✓  26 [chromium] › e2e/gm-assistant-outline.spec.ts:85:3 › campaign outline › a GM writes the outline and a co-GM sees it live (4.5s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:00:17.2689438Z   ✓  27 [chromium] › e2e/gm-assistant-outline.spec.ts:117:3 › campaign outline › a player in the same campaign can't find the outline anywhere (1.6s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:00:22.8102245Z   ✓  28 [chromium] › e2e/gm-assistant.spec.ts:149:3 › gm assistant panel › a GM opens the assistant, sees the streamed reply and sends it to the composer (2.3s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:00:25.3837360Z   ✓  29 [chromium] › e2e/gm-assistant.spec.ts:217:3 › gm assistant panel › on desktop the assistant takes the side pane's place and leaves the chat feed uncovered (2.6s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:00:27.4777994Z   ✓  30 [chromium] › e2e/gm-assistant.spec.ts:287:3 › gm assistant panel › a GM opens the Context tab, sees option groups and jumps there from the size bar (2.1s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:00:31.8212260Z   ✓  31 [chromium] › e2e/gm-assistant.spec.ts:331:3 › gm assistant panel › a player in the same campaign sees no Assistant button (1.3s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:00:33.2358955Z   ✓  32 [chromium] › e2e/my-notes.spec.ts:75:3 › my notes › a member opens My notes from the chat side screens on desktop (1.1s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:00:34.3170132Z   ✓  33 [chromium] › e2e/my-notes.spec.ts:84:3 › my notes › a member opens My notes from the chat side screens at mid widths (1.1s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:00:35.4168704Z   ✓  34 [chromium] › e2e/my-notes.spec.ts:94:3 › my notes › the campaign Notes screen is My notes (1.1s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:00:36.4804231Z   ✓  35 [chromium] › e2e/my-notes.spec.ts:109:3 › my notes › a member opens My notes from the bottom navigation on phones (1.1s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:00:47.7923376Z   ✓  36 [chromium] › e2e/my-notes.spec.ts:131:3 › my notes › a member reaches Locations, NPCs and Lore from the phone World screen (11.2s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:00:51.3927554Z   ✓  37 [chromium] › e2e/rules-page.spec.ts:153:3 › rules page › a signed-in person opens Rules from the nav rail on desktop (3.4s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:00:54.9779495Z   ✓  38 [chromium] › e2e/rules-page.spec.ts:164:3 › rules page › a signed-in person opens Rules from the bottom navigation on phones (3.6s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:00:55.7655854Z   ✓  39 [chromium] › e2e/rules-page.spec.ts:176:3 › rules page › a signed-out visitor is sent to log in (777ms)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:00:57.1732750Z   ✓  40 [chromium] › e2e/rules-page.spec.ts:182:3 › rules page › the five-item bottom navigation fits a 320 px phone (1.3s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:00.7006460Z   ✓  41 [chromium] › e2e/rulesets-mounted.spec.ts:48:3 › mounted rulesets › a mounted expansion is selectable and its move renders in Rules (3.3s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.0138979Z   ✓  42 [chromium] › e2e/rulesets-replacement.spec.ts:48:3 › replaced base ruleset › uses the package's branding and rules content (2.1s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1082840Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1087882Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1096588Z   1) [chromium] › e2e/chat-posts.spec.ts:165:3 › chat text posts › a GM post as a world NPC shows the NPC with a GM tag 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1097483Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1097664Z     Error: expect(locator).toBeVisible() failed
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1097797Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1098057Z     Locator: getByText('E2E Elder').first()
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1098408Z     Expected: visible
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1098678Z     Timeout: 15000ms
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1098958Z     Error: element(s) not found
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1099317Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1099703Z     Call log:
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1100174Z       - Expect "toBeVisible" getByText('E2E Elder').first() with timeout 15000ms
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1100654Z       - waiting for getByText('E2E Elder').first()
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1100874Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1100883Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1101072Z       224 |         gmPage.getByText("GM", { exact: true }).first()
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1101439Z       225 |       ).toBeVisible();
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1101869Z     > 226 |       await expect(playerPage.getByText("E2E Elder").first()).toBeVisible();
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1102355Z           |                                                               ^
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1102806Z       227 |       await expect(playerPage.getByText(text, { exact: true })).toBeVisible();
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1103466Z       228 |       await expect(
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1103806Z       229 |         playerPage.getByText("GM", { exact: true }).first()
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1104528Z         at /home/runner/work/Iron-Fellowship_and_Crew-Link_pbp_edition/Iron-Fellowship_and_Crew-Link_pbp_edition/e2e/chat-posts.spec.ts:226:63
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1105004Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1105569Z     attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1106277Z     test-results/chat-posts-chat-text-posts-567e7-shows-the-NPC-with-a-GM-tag-chromium/test-failed-1.png
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1107060Z     ────────────────────────────────────────────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1107343Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1107722Z     attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1108404Z     test-results/chat-posts-chat-text-posts-567e7-shows-the-NPC-with-a-GM-tag-chromium/test-failed-2.png
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1109139Z     ────────────────────────────────────────────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1109411Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1109858Z     Error Context: test-results/chat-posts-chat-text-posts-567e7-shows-the-NPC-with-a-GM-tag-chromium/error-context.md
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1110347Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1110768Z     Error Context: test-results/chat-posts-chat-text-posts-567e7-shows-the-NPC-with-a-GM-tag-chromium/error-context.md
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1111252Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1111652Z     attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1112378Z     test-results/chat-posts-chat-text-posts-567e7-shows-the-NPC-with-a-GM-tag-chromium/trace.zip
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1113618Z     Usage:
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1113743Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1114218Z         npx playwright show-trace test-results/chat-posts-chat-text-posts-567e7-shows-the-NPC-with-a-GM-tag-chromium/trace.zip
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1114728Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1115095Z     ────────────────────────────────────────────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1115671Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1116265Z   2) [chromium] › e2e/chat-sheet-rolls.spec.ts:72:3 › sheet rolls land in the starting IC channel › a custom dice roll from the sheet posts as the character 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1116745Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1116889Z     Error: expect(locator).toBeVisible() failed
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1117103Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1117303Z     Locator: getByRole('button', { name: /^1d6: \d+ \(\d+\)$/ })
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1117644Z     Expected: visible
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1117879Z     Timeout: 15000ms
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1118138Z     Error: element(s) not found
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1118511Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1118605Z     Call log:
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1119035Z       - Expect "toBeVisible" getByRole('button', { name: /^1d6: \d+ \(\d+\)$/ }) with timeout 15000ms
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1119609Z       - waiting for getByRole('button', { name: /^1d6: \d+ \(\d+\)$/ })
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1119876Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1119882Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1120018Z       111 |         name: /^1d6: \d+ \(\d+\)$/,
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1120305Z       112 |       });
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1120592Z     > 113 |       await expect(oneLiner).toBeVisible();
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1120906Z           |                              ^
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1121342Z       114 |       await expect(playerPage.getByText("E2E Kira").first()).toBeVisible();
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1121764Z       115 |       await expect(
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1122134Z       116 |         gmPage.getByRole("button", { name: /^1d6: \d+ \(\d+\)$/ })
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1137930Z         at /home/runner/work/Iron-Fellowship_and_Crew-Link_pbp_edition/Iron-Fellowship_and_Crew-Link_pbp_edition/e2e/chat-sheet-rolls.spec.ts:113:30
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1138324Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1138640Z     attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1139088Z     test-results/chat-sheet-rolls-sheet-rol-2d34c-heet-posts-as-the-character-chromium/test-failed-1.png
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1139556Z     ────────────────────────────────────────────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1139732Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1139958Z     attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1140382Z     test-results/chat-sheet-rolls-sheet-rol-2d34c-heet-posts-as-the-character-chromium/test-failed-2.png
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1140831Z     ────────────────────────────────────────────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1140995Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1141274Z     Error Context: test-results/chat-sheet-rolls-sheet-rol-2d34c-heet-posts-as-the-character-chromium/error-context.md
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1141557Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1141812Z     Error Context: test-results/chat-sheet-rolls-sheet-rol-2d34c-heet-posts-as-the-character-chromium/error-context.md
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1142089Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1142317Z     attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1142732Z     test-results/chat-sheet-rolls-sheet-rol-2d34c-heet-posts-as-the-character-chromium/trace.zip
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1143203Z     Usage:
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1143280Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1143559Z         npx playwright show-trace test-results/chat-sheet-rolls-sheet-rol-2d34c-heet-posts-as-the-character-chromium/trace.zip
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1143850Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1144054Z     ────────────────────────────────────────────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1144216Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1144743Z   3) [chromium] › e2e/chat-typing.spec.ts:55:3 › chat typing indicators › another member sees typing, and blur or sending clears it 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1145014Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1145131Z     Error: expect(locator).toContainText(expected) failed
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1145280Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1145371Z     Locator: getByTestId('typing-indicator')
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1145940Z     Expected substring: "e2e-player is typing…"
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1146310Z     Received string:    ""
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1146543Z     Timeout: 10000ms
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1146673Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1146804Z     Call log:
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1147169Z       - Expect "toContainText" getByTestId('typing-indicator') with timeout 10000ms
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1147612Z       - waiting for getByTestId('typing-indicator')
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1148438Z         24 × locator resolved to <span aria-live="polite" data-testid="typing-indicator" class="MuiTypography-root MuiTypography-caption css-1oi2y5e"></span>
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1149115Z            - unexpected value ""
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1149283Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1149289Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1149472Z       81 |       const halfPost = `still thinking ${Date.now()}`;
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1149842Z       82 |       await composer.fill(halfPost);
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1150374Z     > 83 |       await expect(gmIndicator).toContainText("e2e-player is typing…", {
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1150784Z          |                                 ^
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1151089Z       84 |         timeout: 10_000,
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1151338Z       85 |       });
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1151636Z       86 |       await expect(playerIndicator).toHaveText("");
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1152320Z         at /home/runner/work/Iron-Fellowship_and_Crew-Link_pbp_edition/Iron-Fellowship_and_Crew-Link_pbp_edition/e2e/chat-typing.spec.ts:83:33
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1152785Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1153337Z     attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1154076Z     test-results/chat-typing-chat-typing-in-d0c7e-d-blur-or-sending-clears-it-chromium/test-failed-1.png
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1154820Z     ────────────────────────────────────────────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1155090Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1155466Z     attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1156171Z     test-results/chat-typing-chat-typing-in-d0c7e-d-blur-or-sending-clears-it-chromium/test-failed-2.png
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1156863Z     ────────────────────────────────────────────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1157028Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1157291Z     Error Context: test-results/chat-typing-chat-typing-in-d0c7e-d-blur-or-sending-clears-it-chromium/error-context.md
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1157572Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1157822Z     Error Context: test-results/chat-typing-chat-typing-in-d0c7e-d-blur-or-sending-clears-it-chromium/error-context.md
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1158295Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1158689Z     attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1159121Z     test-results/chat-typing-chat-typing-in-d0c7e-d-blur-or-sending-clears-it-chromium/trace.zip
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1159414Z     Usage:
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1159490Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1159762Z         npx playwright show-trace test-results/chat-typing-chat-typing-in-d0c7e-d-blur-or-sending-clears-it-chromium/trace.zip
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1160167Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1160367Z     ────────────────────────────────────────────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1160529Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1160583Z   3 failed
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1160932Z     [chromium] › e2e/chat-posts.spec.ts:165:3 › chat text posts › a GM post as a world NPC shows the NPC with a GM tag 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1161522Z     [chromium] › e2e/chat-sheet-rolls.spec.ts:72:3 › sheet rolls land in the starting IC channel › a custom dice roll from the sheet posts as the character 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1162122Z     [chromium] › e2e/chat-typing.spec.ts:55:3 › chat typing indicators › another member sees typing, and blur or sending clears it 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.1162446Z   39 passed (7.2m)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.2269773Z e2e: 42 browser test(s): 39 passed, 3 failed, 0 flaky, 0 skipped
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T23:01:03.2321401Z ##[error]Process completed with exit code 1.
