@@ -61,13 +61,14 @@ describe("getGameSystem", () => {
     expect(getGameSystem()).toBe(GAME_SYSTEMS.STARFORGED);
   });
 
-  it("ignores an unknown configured value", async () => {
+  it("accepts an arbitrary configured ruleset id", async () => {
     setHostname("localhost");
-    const { getGameSystem } = await loadWithEnv({
-      VITE_GAME_SYSTEM: "unknown-system",
+    const { getGameSystem, getIsGameSystemConfigured } = await loadWithEnv({
+      VITE_GAME_SYSTEM: "frontier",
     });
 
-    expect(getGameSystem()).toBe(GAME_SYSTEMS.IRONSWORN);
+    expect(getGameSystem()).toBe("frontier");
+    expect(getIsGameSystemConfigured()).toBe(true);
   });
 
   it("reports whether the game system is configured", async () => {

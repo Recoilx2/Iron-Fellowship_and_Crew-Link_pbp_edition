@@ -1,8 +1,16 @@
 import { Datasworn } from "@datasworn-community/core";
-import { getSystem } from "hooks/useGameSystem";
-import { GAME_SYSTEMS } from "types/GameSystems.type";
 import { logError } from "functions/errorReference";
-import { loadMountedManifest } from "./mountedRulesets";
+import {
+  getActiveRulesetId,
+  setActiveRulesetId,
+} from "data/activeRuleset";
+import { applyMountedBranding } from "config/branding.config";
+import { applyMechanics } from "config/mechanics.config";
+import {
+  loadMountedManifest,
+  parseRulesetBranding,
+  parseRulesetMechanics,
+} from "./mountedRulesets";
 
 export interface IRulesetConfig {
   id: string;
@@ -209,12 +217,6 @@ export const includedExpansions: Record<
 // These preserve the existing interface expected by rules.slice.ts,
 // homebrew.slice.ts, useDataswornTree.ts, and baseRules.ts.
 
-const gameSystem = getSystem();
-const activeRulesetId =
-  gameSystem === GAME_SYSTEMS.IRONSWORN
-    ? ironswornConfig.id
-    : starforgedConfig.id;
-
 let ruleset: Datasworn.Ruleset | undefined = undefined;
 const defaultExpansions: Record<string, Datasworn.Expansion> = {};
 const thirdPartyExpansions: Record<string, Datasworn.Expansion> = {};
@@ -223,7 +225,7 @@ const rulesetLoadPromises: Record<string, Promise<Datasworn.Ruleset>> = {};
 const expansionLoadPromises: Record<string, Promise<Datasworn.Expansion>> = {};
 
 export function preloadActiveRuleset(): Promise<Datasworn.Ruleset> {
-  return loadIncludedRuleset(activeRulesetId);
+  return loadIncludedRuleset(getActiveRulesetId());
 }
 
 export function findIncludedExpansionConfig(
@@ -242,17 +244,20 @@ let mountedPackagesRegistration: Promise<void> | undefined;
 /**
  * Adds operator-supplied packages to the same registries the built-ins use,
  * so rebuildRules(), useDataswornTree(), homebrew loading and the expansion
- * selector all see them. Called from loadBaseRuleset(), not at import time.
- * A replacing ruleset is deliberately ignored here (see #218).
+ * selector all see them. Called from bootstrapRules(), before any consumer
+ * reads the derived defaults. A replacing ruleset also becomes the active
+ * base id and supplies branding and mechanics overrides from its package.
  */
 export function registerMountedPackages(): Promise<void> {
-  mountedPackagesRegistration ??= loadMountedManifest(activeRulesetId)
+  mountedPackagesRegistration ??= loadMountedManifest(getActiveRulesetId())
     .then(({ packages }) => {
-      for (const { ref, data } of packages) {
+      // Register rulesets first: a replacing ruleset changes the active id
+      // that its accompanying expansions must be filed under.
+      const ordered = [...packages].sort(
+        (a, b) => (b.ref.type === "ruleset" ? 1 : 0) - (a.ref.type === "ruleset" ? 1 : 0),
+      );
+      for (const { ref, data } of ordered) {
         if (ref.type === "ruleset") {
-          // TODO(#218): `replacesBase` needs async bootstrap before defaults
-          // are read and is blocked on the mechanics/branding decision #208.
-          if (ref.replacesBase) continue;
           if (includedRulesets[ref.id]) {
             logError(
               "rulesets",
@@ -268,6 +273,11 @@ export function registerMountedPackages(): Promise<void> {
             isHomebrew: false,
             load: async () => ruleset,
           };
+          if (ref.replacesBase) {
+            setActiveRulesetId(ref.id);
+            applyMountedBranding(parseRulesetBranding(data));
+            applyMechanics(parseRulesetMechanics(data));
+          }
         } else if (findIncludedExpansionConfig(ref.id)) {
           logError(
             "rulesets",
@@ -284,7 +294,7 @@ export function registerMountedPackages(): Promise<void> {
             licenseInfo: ref.licenseInfo,
             load: async () => expansion,
           };
-          (includedExpansions[activeRulesetId] ??= {})[ref.id] = config;
+          (includedExpansions[getActiveRulesetId()] ??= {})[ref.id] = config;
           thirdPartyExpansions[ref.id] = expansion;
         }
       }
@@ -293,8 +303,13 @@ export function registerMountedPackages(): Promise<void> {
   return mountedPackagesRegistration;
 }
 
+/** Clears the cached registration for tests that change the mounted manifest. */
+export function resetMountedPackagesRegistration(): void {
+  mountedPackagesRegistration = undefined;
+}
+
 export async function loadIncludedRuleset(
-  rulesetId = activeRulesetId
+  rulesetId = getActiveRulesetId(),
 ): Promise<Datasworn.Ruleset> {
   if (ruleset?._id === rulesetId) {
     return ruleset;
@@ -306,7 +321,7 @@ export async function loadIncludedRuleset(
   }
 
   rulesetLoadPromises[rulesetId] ??= config.load().then((loadedRuleset) => {
-    if (rulesetId === activeRulesetId) {
+    if (rulesetId === getActiveRulesetId()) {
       ruleset = loadedRuleset;
     }
     return loadedRuleset;

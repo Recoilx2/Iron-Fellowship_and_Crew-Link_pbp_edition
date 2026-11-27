@@ -10,14 +10,13 @@ import { AssetDocument } from "api-calls/assets/_asset.type";
 import { AssetCard } from "components/features/assets/AssetCard";
 import { AssetCardDialog } from "components/features/assets/AssetCardDialog";
 import { SectionHeading } from "components/shared/SectionHeading";
-import { useGameSystem } from "hooks/useGameSystem";
+import { isStarforgedRuleset } from "data/activeRuleset";
 import { useConfirm } from "material-ui-confirm";
 import { useState } from "react";
 import { useStore } from "stores/store";
-import { GAME_SYSTEMS } from "types/GameSystems.type";
 
 export function SharedAssetSection() {
-  const isStarforged = useGameSystem().gameSystem === GAME_SYSTEMS.STARFORGED;
+  const isStarforged = isStarforgedRuleset();
 
   const [isAssetDialogOpen, setIsAssetDialogOpen] = useState<boolean>(false);
 

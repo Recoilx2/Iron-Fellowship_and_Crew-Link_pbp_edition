@@ -15,11 +15,14 @@ import { SectionHeading } from "components/shared/SectionHeading";
 import { Clock } from "components/features/charactersAndCampaigns/Clocks/Clock";
 import { ClockDialog } from "components/features/charactersAndCampaigns/Clocks/ClockDialog";
 import { useCampaignType } from "hooks/useCampaignType";
-import { useGameSystem } from "hooks/useGameSystem";
 import { useIsMobile } from "hooks/useIsMobile";
 import { useId, useMemo, useRef, useState } from "react";
 import { useStore } from "stores/store";
-import { GAME_SYSTEMS } from "types/GameSystems.type";
+import {
+  getActiveRulesetId,
+  isIronswornRuleset,
+  isStarforgedRuleset,
+} from "data/activeRuleset";
 import {
   ProgressTrack as IProgressTrack,
   SceneChallenge,
@@ -69,8 +72,16 @@ const allTrackTypes: TrackSectionTracks[] = [
 export function UnifiedTracksSection(props: UnifiedTracksSectionProps) {
   const { mode, headingBreakContainer } = props;
 
-  const isStarforged = useGameSystem().gameSystem === GAME_SYSTEMS.STARFORGED;
-  const isIronsworn = useGameSystem().gameSystem === GAME_SYSTEMS.IRONSWORN;
+  // Track labels and availability follow the active base ruleset, not the
+  // game system baked into the image: a mounted replacement can rename the
+  // core tracks while the shipped games keep their existing wording.
+  const activeRulesetId = getActiveRulesetId();
+  const isStarforged = isStarforgedRuleset(activeRulesetId);
+  const isIronsworn = isIronswornRuleset(activeRulesetId);
+  const progressTracks = useStore((store) => store.rules.progressTracks);
+  const labelOptions = { progressTracks, activeRulesetId };
+  const labelFor = (trackType: TrackSectionTracks) =>
+    getTrackTypeLabel(trackType, isStarforged, labelOptions);
   const isDelveEnabled = useStore((store) =>
     store.rules.expansionIds.includes("delve")
   );
@@ -136,6 +147,8 @@ export function UnifiedTracksSection(props: UnifiedTracksSectionProps) {
     isIronsworn,
     isLodestarEnabled,
     isStarforged,
+    progressTracks,
+    activeRulesetId,
   });
 
   const canChooseCreateSource = mode === "character" && isInCampaign;
@@ -322,7 +335,7 @@ export function UnifiedTracksSection(props: UnifiedTracksSectionProps) {
       >
         {availableTrackTypes.map((trackType) => (
           <MenuItem key={trackType} onClick={() => openCreateDialog(trackType)}>
-            <ListItemText primary={getTrackTypeLabel(trackType, isStarforged)} />
+            <ListItemText primary={labelFor(trackType)} />
           </MenuItem>
         ))}
       </Menu>
@@ -349,7 +362,7 @@ export function UnifiedTracksSection(props: UnifiedTracksSectionProps) {
                 )}
               <UnifiedTrackListItem
                 item={item}
-                isStarforged={isStarforged}
+                labelFor={labelFor}
                 showSourceChip={mode === "campaign" || isInCampaign}
               />
             </Box>
@@ -381,7 +394,7 @@ export function UnifiedTracksSection(props: UnifiedTracksSectionProps) {
             open={!!createTrackType}
             handleClose={closeCreateDialog}
             trackType={createTrackType}
-            trackTypeName={getTrackTypeLabel(createTrackType, isStarforged)}
+            trackTypeName={labelFor(createTrackType)}
             createScopeLabel={canChooseCreateSource ? "Shared" : undefined}
             createScopeChecked={
               canChooseCreateSource ? createSource === "campaign" : undefined
@@ -401,10 +414,10 @@ export function UnifiedTracksSection(props: UnifiedTracksSectionProps) {
 
 function UnifiedTrackListItem(props: {
   item: UnifiedTrackItem;
-  isStarforged: boolean;
+  labelFor: (trackType: TrackSectionTracks) => string;
   showSourceChip: boolean;
 }) {
-  const { item, isStarforged, showSourceChip } = props;
+  const { item, labelFor, showSourceChip } = props;
   const { track } = item;
 
   const [editing, setEditing] = useState(false);
@@ -417,7 +430,7 @@ function UnifiedTrackListItem(props: {
   const metadata = (
     <Stack direction={"row"} spacing={1} mb={1} flexWrap={"wrap"} useFlexGap>
       {showSourceChip && <Chip size={"small"} label={item.sourceLabel} />}
-      <Chip size={"small"} label={getTrackTypeLabel(track.type, isStarforged)} />
+      <Chip size={"small"} label={labelFor(track.type)} />
     </Stack>
   );
 
@@ -520,7 +533,7 @@ function UnifiedTrackListItem(props: {
             open={editing}
             handleClose={() => setEditing(false)}
             trackType={TrackTypes.SceneChallenge}
-            trackTypeName={getTrackTypeLabel(track.type, isStarforged)}
+            trackTypeName={labelFor(track.type)}
             initialTrack={track}
             onDelete={
               canDelete
@@ -581,7 +594,7 @@ function UnifiedTrackListItem(props: {
           open={editing}
           handleClose={() => setEditing(false)}
           trackType={track.type as TrackSectionProgressTracks}
-          trackTypeName={getTrackTypeLabel(track.type, isStarforged)}
+          trackTypeName={labelFor(track.type)}
           initialTrack={track as IProgressTrack | SceneChallenge}
           onDelete={
             canDelete

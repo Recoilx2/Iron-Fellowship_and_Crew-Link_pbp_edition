@@ -1,5 +1,10 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { createRulesSlice } from "../rules.slice";
+import {
+  resetActiveRulesetId,
+  setActiveRulesetId,
+} from "data/activeRuleset";
+import { applyMechanics, resetMechanics } from "config/mechanics.config";
 
 const baseRuleset = {
   _id: "classic",
@@ -23,6 +28,20 @@ const delveExpansion = {
   truths: {},
   rules: {
     stats: { shadow: { label: "Shadow" } },
+    condition_meters: {},
+    special_tracks: {},
+    impacts: {},
+  },
+};
+
+const replacementRuleset = {
+  _id: "frontier",
+  oracles: {},
+  moves: {},
+  assets: {},
+  truths: {},
+  rules: {
+    stats: { grit: { label: "Grit" } },
     condition_meters: {},
     special_tracks: {},
     impacts: {},
@@ -89,6 +108,8 @@ function createTestState(): TestState {
 
 describe("createRulesSlice lazy loading", () => {
   beforeEach(() => {
+    resetActiveRulesetId();
+    resetMechanics();
     delete rulesetsMock.defaultExpansions.delve;
     delete rulesetsMock.thirdPartyExpansions.delve;
     delete rulesetsMock.thirdPartyExpansions.mounted_e2e;
@@ -105,6 +126,11 @@ describe("createRulesSlice lazy loading", () => {
       rulesetsMock.defaultExpansions.delve = delveExpansion;
       return delveExpansion;
     });
+  });
+
+  afterEach(() => {
+    resetActiveRulesetId();
+    resetMechanics();
   });
 
   it("loads and applies the base ruleset on demand", async () => {
@@ -144,6 +170,23 @@ describe("createRulesSlice lazy loading", () => {
     expect(rulesetsMock.loadIncludedExpansion).toHaveBeenCalledWith("delve");
     expect(state.rules.stats).toHaveProperty("edge");
     expect(state.rules.stats).toHaveProperty("shadow");
+  });
+
+  it("applies a replacing ruleset and rebuilds its progress tracks", async () => {
+    rulesetsMock.registerMountedPackages.mockImplementation(async () => {
+      setActiveRulesetId("frontier");
+      applyMechanics({ progressTracks: ["Oath", "Trail", "Peril"] });
+    });
+    rulesetsMock.loadIncludedRuleset.mockResolvedValue(replacementRuleset);
+
+    const state = createTestState();
+
+    await state.rules.loadBaseRuleset();
+
+    expect(state.rules.activeRulesetId).toBe("frontier");
+    expect(state.rules.baseRuleset?._id).toBe("frontier");
+    expect(state.rules.stats).toHaveProperty("grit");
+    expect(state.rules.progressTracks).toEqual(["Oath", "Trail", "Peril"]);
   });
 
   it("triggers included expansion loading when expansion IDs change", async () => {

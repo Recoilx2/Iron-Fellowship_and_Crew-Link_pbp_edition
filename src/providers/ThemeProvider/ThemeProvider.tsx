@@ -2,17 +2,13 @@ import { PropsWithChildren, useCallback, useState } from "react";
 import { CssBaseline, ThemeProvider as MuiThemeProvider } from "@mui/material";
 import { getTheme } from "./themes";
 import { ThemeContext } from "./ThemeContext";
-import { useGameSystemValue } from "hooks/useGameSystemValue";
-import { GAME_SYSTEMS } from "types/GameSystems.type";
+import { getAppBranding } from "config/branding.config";
 import { ThemeType, Themes } from "./themes/theme.types";
 
 export function ThemeProvider(props: PropsWithChildren) {
   const { children } = props;
 
-  const defaultTheme = useGameSystemValue({
-    [GAME_SYSTEMS.IRONSWORN]: Themes.Sunset,
-    [GAME_SYSTEMS.STARFORGED]: Themes.Eidolon,
-  });
+  const defaultTheme = getAppBranding().theme;
   const [theme, setTheme] = useState<Themes>(defaultTheme);
   const [currentThemeType, setCurrentThemeType] = useState<ThemeType>(
     localStorage.getItem("themeType") === ThemeType.Dark

@@ -89,8 +89,9 @@ export const createWorldSlice: CreateSliceType<WorldSlice> = (...params) => {
     },
     createWorld: () => {
       const system = getSystem();
+      // Unknown (operator-supplied) rulesets reuse the Ironsworn setting.
       const defaultSettingKey =
-        system === GAME_SYSTEMS.IRONSWORN ? "ironlands" : "the_forge";
+        system === GAME_SYSTEMS.STARFORGED ? "the_forge" : "ironlands";
       return createWorld({
         name: "New World",
         settingKey: defaultSettingKey,

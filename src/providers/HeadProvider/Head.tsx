@@ -1,6 +1,5 @@
-import { useGameSystemValue } from "hooks/useGameSystemValue";
 import { Helmet } from "react-helmet-async";
-import { appDetails } from "config/appDetails.config";
+import { getAppBranding } from "config/branding.config";
 import { getPageTitle } from "./getPageTitle";
 
 export interface HeadProps {
@@ -12,7 +11,7 @@ export interface HeadProps {
 export function Head(props: HeadProps) {
   const { title, description, openGraphImageSrc } = props;
 
-  const details = useGameSystemValue(appDetails);
+  const details = getAppBranding();
   const pageTitle = getPageTitle(title, details.title);
 
   return (

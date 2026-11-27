@@ -2,8 +2,7 @@ import { Dialog, DialogContent, Stack } from "@mui/material";
 import { HomebrewLegacyTrackDocument } from "api-calls/homebrew/rules/legacyTracks/_homebrewLegacyTrack.type";
 import { DialogTitleWithCloseButton } from "components/shared/DialogTitleWithCloseButton";
 import { MarkdownRenderer } from "components/shared/MarkdownRenderer";
-import { useGameSystem } from "hooks/useGameSystem";
-import { GAME_SYSTEMS } from "types/GameSystems.type";
+import { isIronswornRuleset } from "data/activeRuleset";
 import { LegacyTrack } from "pages/Character/CharacterSheetPage/Tabs/TracksSection/LegacyTrack";
 import { ProgressTrack } from "components/features/ProgressTrack";
 
@@ -16,7 +15,7 @@ export interface LegacyTrackPreviewDialogProps {
 export function LegacyTrackPreviewDialog(props: LegacyTrackPreviewDialogProps) {
   const { open, onClose, legacyTrack } = props;
 
-  const isIronsworn = useGameSystem().gameSystem === GAME_SYSTEMS.IRONSWORN;
+  const isIronsworn = isIronswornRuleset();
 
   return (
     <Dialog open={open} onClose={onClose}>

@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import {
   loadMountedManifest,
   MOUNTED_MANIFEST_PATH,
+  parseRulesetBranding,
+  parseRulesetMechanics,
   type MountedManifest,
 } from "../mountedRulesets";
 
@@ -71,13 +73,7 @@ function stubFetch(responses: Record<string, unknown>) {
 
 const fixture = (name: string) =>
   JSON.parse(
-    readFileSync(
-      new URL(
-        `../../../supabase/site/config/rulesets/${name}`,
-        import.meta.url,
-      ),
-      "utf8",
-    ),
+    readFileSync(new URL(`../../../supabase/site/${name}`, import.meta.url), "utf8"),
   );
 
 describe("loadMountedManifest", () => {
@@ -248,8 +244,31 @@ describe("loadMountedManifest", () => {
     expect(logError).toHaveBeenCalledTimes(2);
   });
 
-  it("ignores a replacing ruleset, leaving base replacement to #218", async () => {
+  it("loads a replacing ruleset with its branding and mechanics", async () => {
     const fetchMock = stubFetch({
+      [MOUNTED_MANIFEST_PATH]: fixture("config-replacement/manifest.json"),
+      "/config/rulesets/frontier.json": fixture("config-replacement/frontier.json"),
+    });
+
+    const result = await loadMountedManifest("classic");
+
+    expect(result.packages.map(({ ref }) => ref.id)).toEqual(["frontier"]);
+    expect(result.packages[0].ref.replacesBase).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith("/config/rulesets/frontier.json");
+    expect(parseRulesetBranding(result.packages[0].data)).toMatchObject({
+      appName: "Frontier Fellowship",
+      theme: "hinterlands",
+      faviconPath: "/config/rulesets/frontier-favicon.svg",
+    });
+    expect(parseRulesetMechanics(result.packages[0].data)).toMatchObject({
+      actionTotalCap: 12,
+      progressTracks: ["Oath", "Trail", "Peril"],
+    });
+    expect(logError).not.toHaveBeenCalled();
+  });
+
+  it("accepts expansions built for the base a package replaces", async () => {
+    stubFetch({
       [MOUNTED_MANIFEST_PATH]: manifest({
         ruleset: {
           id: "replacement",
@@ -259,20 +278,64 @@ describe("loadMountedManifest", () => {
           replacesBase: true,
         },
       }),
+      "/config/rulesets/replacement.json": {
+        _id: "replacement",
+        type: "ruleset",
+        datasworn_version: "0.3.0",
+        ...source,
+        rules: {
+          stats: {},
+          condition_meters: {},
+          special_tracks: {},
+          impacts: {},
+          tags: {},
+        },
+        oracles: {},
+        moves: {},
+        assets: {},
+      },
+      [PACKAGE_PATH]: expansion({ ruleset: "classic" }),
     });
 
     const result = await loadMountedManifest("classic");
 
-    expect(result.packages).toEqual([]);
+    expect(result.packages.map(({ ref }) => ref.id)).toEqual([
+      "replacement",
+      "mounted_e2e",
+    ]);
+    expect(logError).not.toHaveBeenCalled();
+  });
+
+  it("skips invalid branding and mechanics overrides, keeping the ruleset", async () => {
+    const data = fixture("config-replacement/frontier.json");
+    data["x-branding"] = { theme: "unknown-theme" };
+    data["x-mechanics"] = { actionTotalCap: 0 };
+    stubFetch({
+      [MOUNTED_MANIFEST_PATH]: fixture("config-replacement/manifest.json"),
+      "/config/rulesets/frontier.json": data,
+    });
+
+    const result = await loadMountedManifest("classic");
+
+    expect(result.packages.map(({ ref }) => ref.id)).toEqual(["frontier"]);
+    expect(parseRulesetBranding(result.packages[0].data)).toBeUndefined();
+    expect(parseRulesetMechanics(result.packages[0].data)).toBeUndefined();
+    expect(logError).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses a branding asset path that escapes the mount", () => {
     expect(
-      fetchMock.mock.calls.every(([url]) => url !== "/config/rulesets/replacement.json"),
-    ).toBe(true);
+      parseRulesetBranding({
+        "x-branding": { faviconPath: "/config/rulesets/../../etc/passwd" },
+      }),
+    ).toBeUndefined();
+    expect(logError).toHaveBeenCalled();
   });
 
   it("accepts the Datasworn fixture shipped in the stack template", async () => {
     stubFetch({
-      [MOUNTED_MANIFEST_PATH]: fixture("manifest.json"),
-      [PACKAGE_PATH]: fixture("mounted_e2e.json"),
+      [MOUNTED_MANIFEST_PATH]: fixture("config/rulesets/manifest.json"),
+      [PACKAGE_PATH]: fixture("config/rulesets/mounted_e2e.json"),
     });
 
     const result = await loadMountedManifest("classic");
