@@ -1,6 +1,10 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { Unsubscribe as PlainUnsubscribe } from "api-calls/helpers.type";
-import { listenToRows } from "api-calls/realtime/listenToRows";
+import {
+  broadcastRowsBinding,
+  listenToRows,
+} from "api-calls/realtime/listenToRows";
+import { campaignBroadcastBindings } from "api-calls/realtime/sharedTopics";
 import {
   CHARACTER_NOTES_TABLE,
   CAMPAIGN_NOTES_TABLE,
@@ -39,6 +43,17 @@ export function listenToNotes(
         client,
         channelName: constructCampaignNotesChannelName(campaignId),
         bindings: [
+          // Dual bindings during the migration: the broadcast topics are the
+          // target, postgres_changes keeps this area green until the flip.
+          ...campaignBroadcastBindings<CampaignNoteRow>(
+            campaignId,
+            "notes",
+            () =>
+              broadcastRowsBinding<CampaignNoteRow>({
+                table: CAMPAIGN_NOTES_TABLE,
+                getKey: (row) => row.id,
+              })
+          ),
           {
             type: "postgres_changes",
             table: CAMPAIGN_NOTES_TABLE,

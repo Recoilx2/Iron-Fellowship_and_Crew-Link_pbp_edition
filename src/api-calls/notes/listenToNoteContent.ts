@@ -1,6 +1,10 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { Unsubscribe as PlainUnsubscribe } from "api-calls/helpers.type";
-import { listenToRows } from "api-calls/realtime/listenToRows";
+import {
+  broadcastRefreshBinding,
+  listenToRows,
+} from "api-calls/realtime/listenToRows";
+import { campaignBroadcastBindings } from "api-calls/realtime/sharedTopics";
 import {
   CHARACTER_NOTE_CONTENTS_TABLE,
   CAMPAIGN_NOTE_CONTENTS_TABLE,
@@ -68,10 +72,21 @@ export function listenToNoteContent(
       onError,
     });
   }
+  if (!campaignId) {
+    onError("Either campaign or character ID is required.");
+    return () => {};
+  }
   return listenToRows<CampaignNoteContentRow>({
     client,
     channelName: constructCampaignNoteContentChannelName(noteId),
     bindings: [
+      // Yjs bytes are opaque and large: the trigger publishes a refresh
+      // signal and this listener reads the content through fetchRows.
+      ...campaignBroadcastBindings<CampaignNoteContentRow>(
+        campaignId,
+        "notes",
+        () => broadcastRefreshBinding({ topic: "" })
+      ),
       {
         type: "postgres_changes",
         table: CAMPAIGN_NOTE_CONTENTS_TABLE,

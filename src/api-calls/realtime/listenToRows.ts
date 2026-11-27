@@ -9,9 +9,10 @@ import type { Unsubscribe } from "api-calls/helpers.type";
  *
  * Two binding kinds are supported: plain row streaming for rows only their
  * owner sees, and database broadcasts on private topics for shared campaign
- * data. Broadcast delivery is deferred per ADR 0002 (no production callers
- * yet): every current caller uses plain row streaming only. Neither
- * mechanism delivers an initial snapshot
+ * data. A broadcast binding can override the topic it joins (multiple
+ * bindings may name different topics, e.g. one per campaign or channel);
+ * every topic still gets its own per-subscription suffix. Neither mechanism
+ * delivers an initial snapshot
  * or replays missed events, so the fetch-on-subscribe (and re-fetch on every
  * later subscribe) is what keeps subscribers current.
  *
@@ -44,16 +45,118 @@ export interface PostgresChangesBinding<T> {
   toChange: (payload: PostgresChangePayload<T>) => RowChange<T> | null;
 }
 
+export interface BroadcastMessage {
+  event: string;
+  payload: unknown;
+}
+
 export interface BroadcastBinding<T> {
   type: "broadcast";
   event: string;
-  toChange: (message: {
-    event: string;
-    payload: unknown;
-  }) => RowChange<T> | null;
+  /**
+   * Canonical topic to join (e.g. `campaign-shared:<id>:notes`). The helper
+   * appends its `:sub-<salt>-<n>` suffix, so presence/auth still match the
+   * membership-checked realtime policies. Without an override the binding
+   * joins `channelName`, as before.
+   */
+  topic?: string;
+  /**
+   * A best-effort topic (the `campaign-gm:*` family for players, for
+   * instance): a failed join is not surfaced through onError, but a
+   * successful one still refreshes and delivers rows.
+   */
+  optional?: boolean;
+  toChange: (message: BroadcastMessage) => RowChange<T> | null;
 }
 
 export type RowBinding<T> = PostgresChangesBinding<T> | BroadcastBinding<T>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Reads a `realtime.broadcast_changes()` message (or the key-only DELETE and
+ * `refresh` signals published by the shared-topic triggers) into the same
+ * RowChange a postgres_changes binding produces. `project` keeps the row
+ * identical to the columns `fetchRows` selects; `getKey` handles composite
+ * keys. Messages for other tables are ignored: a campaign topic can carry
+ * several families, and each listener only owns one of them.
+ */
+export function broadcastRowChange<T>(
+  message: BroadcastMessage,
+  params: {
+    getKey: (row: T) => string | null;
+    table?: string;
+    project?: (row: Record<string, unknown>) => T;
+  }
+): RowChange<T> | null {
+  const payload = isRecord(message.payload) ? message.payload : null;
+  if (!payload) return null;
+  if (message.event === "refresh" || payload.kind === "refresh") {
+    return { kind: "refresh" };
+  }
+  if (
+    params.table !== undefined &&
+    payload.table !== undefined &&
+    payload.table !== params.table
+  ) {
+    return null;
+  }
+  const operation =
+    typeof payload.operation === "string"
+      ? payload.operation.toUpperCase()
+      : message.event.toUpperCase();
+  const project = params.project ?? ((row: Record<string, unknown>) => row as T);
+  if (operation === "DELETE") {
+    const old = isRecord(payload.old_record)
+      ? payload.old_record
+      : isRecord(payload.record)
+        ? payload.record
+        : null;
+    const key = old
+      ? params.getKey(project(old))
+      : typeof payload.id === "string"
+        ? payload.id
+        : null;
+    return key !== null ? { kind: "remove", key } : null;
+  }
+  if (!isRecord(payload.record)) return null;
+  const row = project(payload.record);
+  const key = params.getKey(row);
+  return key !== null ? { kind: "upsert", row } : null;
+}
+
+/** A broadcast binding that streams full rows, key-only deletes and refresh. */
+export function broadcastRowsBinding<T>(params: {
+  topic?: string;
+  optional?: boolean;
+  table?: string;
+  getKey: (row: T) => string | null;
+  project?: (row: Record<string, unknown>) => T;
+}): BroadcastBinding<T> {
+  return {
+    type: "broadcast",
+    event: "*",
+    topic: params.topic,
+    optional: params.optional,
+    toChange: (message) => broadcastRowChange(message, params),
+  };
+}
+
+/** A refresh-only binding for large content tables (no rows on the wire). */
+export function broadcastRefreshBinding(params: {
+  topic: string;
+  optional?: boolean;
+}): BroadcastBinding<never> {
+  return {
+    type: "broadcast",
+    event: "refresh",
+    topic: params.topic,
+    optional: params.optional,
+    toChange: () => ({ kind: "refresh" }),
+  };
+}
 
 /**
  * How often a settled listener re-fetches to heal events the server
@@ -124,11 +227,36 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
   } = params;
 
   // Channels are always private: database broadcasts only reach private
-  // topics, so a public channel would silently receive nothing. The topic
-  // is unique per subscription (see nextSubscriptionId above): sharing one
-  // topic across subscriptions throws once the channel is subscribed.
-  const topic = `${channelName}:sub-${subscriptionSalt}-${++nextSubscriptionId}`;
-  const channel = client.channel(topic, { config: { private: true } });
+  // topics, so a public channel would silently receive nothing. Each
+  // canonical topic (the requested channel name, or a broadcast binding's
+  // override) gets its own subscription-unique topic: sharing one topic
+  // across subscriptions throws once the channel is subscribed.
+  interface OpenChannel {
+    canonical: string;
+    topic: string;
+    channel: ReturnType<SupabaseClient["channel"]>;
+    optional: boolean;
+  }
+  const openChannels = new Map<string, OpenChannel>();
+
+  const channelFor = (canonical: string, optional: boolean): OpenChannel => {
+    const existing = openChannels.get(canonical);
+    if (existing) {
+      // One failed optional subscription must not surface an error when the
+      // same topic is also used by a required binding.
+      existing.optional = existing.optional && optional;
+      return existing;
+    }
+    const topic = `${canonical}:sub-${subscriptionSalt}-${++nextSubscriptionId}`;
+    const open: OpenChannel = {
+      canonical,
+      topic,
+      channel: client.channel(topic, { config: { private: true } }),
+      optional,
+    };
+    openChannels.set(canonical, open);
+    return open;
+  };
 
   let rows = new Map<string, T>();
   let pending: Array<RowChange<T>> = [];
@@ -255,72 +383,99 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
     }
   };
 
+  // Bindings are registered before subscribe(): realtime-js throws when a
+  // postgres_changes .on() is added to an already-subscribed channel.
+  const bindingsByChannel = new Map<OpenChannel, RowBinding<T>[]>();
+  const addBinding = (open: OpenChannel, binding: RowBinding<T>) => {
+    const list = bindingsByChannel.get(open) ?? [];
+    list.push(binding);
+    bindingsByChannel.set(open, list);
+  };
   for (const binding of bindings) {
     if (binding.type === "postgres_changes") {
-      channel.on(
-        "postgres_changes",
-        {
-          event: binding.event ?? "*",
-          schema: binding.schema ?? "public",
-          table: binding.table,
-          ...(binding.filter === undefined
-            ? {}
-            : { filter: binding.filter }),
-        },
-        (payload) =>
-          handleChange(
-            binding.toChange(payload as unknown as PostgresChangePayload<T>)
-          )
-      );
+      // Owner-only listeners keep exactly one channel and one binding set.
+      addBinding(channelFor(channelName, false), binding);
     } else {
-      channel.on("broadcast", { event: binding.event }, (payload) =>
-        handleChange(
-          binding.toChange(
-            payload as unknown as { event: string; payload: unknown }
-          )
-        )
+      addBinding(
+        channelFor(binding.topic ?? channelName, binding.optional ?? false),
+        binding
       );
     }
   }
+  if (bindingsByChannel.size === 0) {
+    // With no bindings the fetch-on-subscribe and reconcile backstop are
+    // still useful; open the primary channel so both run.
+    bindingsByChannel.set(channelFor(channelName, false), []);
+  }
 
-  channel.subscribe((status, subscribeError) => {
-    if (removed) return;
-    // Every (re-)subscribe re-fetches: missed events are never replayed, so
-    // the fresh select is what catches the subscriber up after a reconnect.
-    if (status === "SUBSCRIBED") {
-      void refresh();
-      // The reconcile timer starts with the first live subscription, not at
-      // construction: polling REST before the channel is live serves
-      // nothing. Guarded exactly like refresh (epoch/removed/refreshing)
-      // and cleared below.
-      if (timer === undefined) {
-        timer = setInterval(() => {
-          if (!removed) void refresh({ silent: true });
-        }, RECONCILE_INTERVAL_MS);
+  for (const [open, channelBindings] of bindingsByChannel) {
+    const { channel } = open;
+    for (const binding of channelBindings) {
+      if (binding.type === "postgres_changes") {
+        channel.on(
+          "postgres_changes",
+          {
+            event: binding.event ?? "*",
+            schema: binding.schema ?? "public",
+            table: binding.table,
+            ...(binding.filter === undefined
+              ? {}
+              : { filter: binding.filter }),
+          },
+          (payload) =>
+            handleChange(
+              binding.toChange(payload as unknown as PostgresChangePayload<T>)
+            )
+        );
+      } else {
+        channel.on("broadcast", { event: binding.event }, (payload) =>
+          handleChange(binding.toChange(payload as unknown as BroadcastMessage))
+        );
       }
-      return;
     }
-    // SUBSCRIBED is the only success signal. Anything else means the channel
-    // will never deliver rows, so surface it: without this the subscriber
-    // stalls with no fetch and no error, and every failure looks identical.
-    if (
-      status === "CHANNEL_ERROR" ||
-      status === "TIMED_OUT" ||
-      status === "CLOSED"
-    ) {
-      const detail =
-        subscribeError instanceof Error
-          ? `: ${subscribeError.message}`
-          : subscribeError !== undefined && subscribeError !== null
-            ? `: ${String(subscribeError)}`
-            : "";
-      onError?.(
-        new Error(`realtime subscribe ${status}${detail}`, {
-          cause: subscribeError,
-        })
-      );
-    }
-  });
+
+    channel.subscribe((status, subscribeError) => {
+      if (removed) return;
+      // Every (re-)subscribe re-fetches: missed events are never replayed, so
+      // the fresh select is what catches the subscriber up after a reconnect.
+      if (status === "SUBSCRIBED") {
+        void refresh();
+        // The reconcile timer starts with the first live subscription, not at
+        // construction: polling REST before the channel is live serves
+        // nothing. Guarded exactly like refresh (epoch/removed/refreshing)
+        // and cleared below.
+        if (timer === undefined) {
+          timer = setInterval(() => {
+            if (!removed) void refresh({ silent: true });
+          }, RECONCILE_INTERVAL_MS);
+        }
+        return;
+      }
+      // SUBSCRIBED is the only success signal. Anything else means the channel
+      // will never deliver rows, so surface it: without this the subscriber
+      // stalls with no fetch and no error, and every failure looks identical.
+      // Best-effort topics (campaign-gm for players) are exempt: their RLS
+      // denial is expected, and the required topic still drives the fetch.
+      if (
+        !open.optional &&
+        (status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          status === "CLOSED")
+      ) {
+        const detail =
+          subscribeError instanceof Error
+            ? `: ${subscribeError.message}`
+            : subscribeError !== undefined && subscribeError !== null
+              ? `: ${String(subscribeError)}`
+              : "";
+        onError?.(
+          new Error(`realtime subscribe ${status}${detail}`, {
+            cause: subscribeError,
+          })
+        );
+      }
+    });
+  }
 
   return () => {
     if (removed) return;
@@ -330,6 +485,34 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
       clearInterval(timer);
       timer = undefined;
     }
-    void client.removeChannel(channel);
+    for (const open of openChannels.values()) {
+      void client.removeChannel(open.channel);
+    }
+  };
+}
+
+/**
+ * Some topics need a small lookup first (a world's campaigns, a
+ * conversation's campaign, a campaign's channel ids). This opens the
+ * listener once the lookup resolves and returns a valid unsubscribe
+ * immediately: a listener torn down before resolution never opens a socket.
+ */
+export function listenToRowsDeferred<T>(
+  build: () => Promise<ListenToRowsParams<T> | null>,
+  onError?: (error: unknown) => void
+): Unsubscribe {
+  let stop: Unsubscribe | undefined;
+  let removed = false;
+  void build()
+    .then((params) => {
+      if (removed || !params) return;
+      stop = listenToRows(params);
+    })
+    .catch((error: unknown) => {
+      if (!removed) onError?.(error);
+    });
+  return () => {
+    removed = true;
+    stop?.();
   };
 }
