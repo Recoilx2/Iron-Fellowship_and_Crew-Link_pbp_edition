@@ -32,6 +32,7 @@ describe("assistant proposal state migration (#148)", () => {
       "20261128000001_chat_post_email_outbox.sql",
       "20261121000008_assistant_messages_applied_version_index.sql",
       "20261127000000_chat_post_search.sql",
+      "20261128000002_realtime_shared_broadcasts.sql",
     ]);
     for (const other of readdirSync(dir).filter(
       (f) => /^\d{14}_/.test(f) && f !== stateFile() && !landedLater.has(f)

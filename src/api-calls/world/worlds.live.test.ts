@@ -548,8 +548,13 @@ describe.skipIf(!config)("worlds end to end", () => {
         content: encodeNoteContent(new Uint8Array([4, 5, 6])),
       });
     expect(publicBytes.error).toBeNull();
-    await waitFor(() =>
-      notes.some((content) => content?.length === 3) ? notes : null
+    // This is a nested two-channel subscription (note ids, then content) and
+    // CI runs 30 live files in parallel: the default 30s wait is not enough
+    // when the inner channel's reconcile tick slips. The test itself allows
+    // 120s, so use it explicitly rather than relying on the default.
+    await waitFor(
+      () => (notes.some((content) => content?.length === 3) ? notes : null),
+      120000
     );
     await new Promise((resolve) => setTimeout(resolve, 3000));
     expect(details.every((entry) => entry === undefined)).toBe(true);

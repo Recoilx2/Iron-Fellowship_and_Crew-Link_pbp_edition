@@ -52,6 +52,7 @@ describe("removed campaign members keep no private access migration (#117)", () 
       "20261121000007_assistant_proposal_state.sql",
       "20261121000008_assistant_messages_applied_version_index.sql",
       "20261127000000_chat_post_search.sql",
+      "20261128000002_realtime_shared_broadcasts.sql",
     ]);
     const others = readdirSync(dir).filter(
       (f) => /^\d{14}_.*\.sql$/.test(f) && f !== mine && !landedLater.has(f)
