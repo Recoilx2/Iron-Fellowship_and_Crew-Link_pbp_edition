@@ -73,3 +73,24 @@ line per harness, what the setup session checked from inside the harness's shell
 
 <!-- Rules that apply only to this project, each naming the incident that
 caused it. General rules go to the master copy instead. -->
+
+- **No Docker in the agent sandbox.** Never install or start it. The verify
+  command covers lint, types, `npm test` and `npm run test:supabase`; the stack
+  tests (`src/**/*.live.test.ts`) skip without a stack, so a green verify says
+  nothing about them. They and the Playwright browser tests (`e2e/`) run only in
+  the `live` and `e2e` jobs of `.github/workflows/supabase-smoke.yml` on every
+  PR, and `ticket.py merge` refuses while those checks fail or are pending. To
+  run them on a machine with Docker, see the headers of `supabase/tests/live.sh`
+  and `supabase/tests/e2e.sh` (`npm run test:e2e`); both fail on any skipped
+  test. (Incident: the sandbox has no Docker; rule since 6bdfe659, 2026-11-11.)
+- **UI tickets add a browser test** for their main flow under `e2e/`. The
+  orchestrator writes it into the ticket's Acceptance criteria, proved by the
+  PR's `e2e` job, because the implementer reads the ticket, not this file.
+  (Incident: browser tests added in CI, #107, 2026-11-13.)
+- **Fork: file only on origin.** `origin` is
+  Recoilx2/Iron-Fellowship_and_Crew-Link_pbp_edition, a fork of
+  scottbenton/Iron-Fellowship_and_Crew-Link; never file issues or PRs upstream.
+  `gh` targets origin because `git config remote.origin.gh-resolved` is
+  `base`; keep it so. (Incident: `gh` can default a fork to its upstream
+  parent; rule since 898ebaf5, 2026-11-11.)
+

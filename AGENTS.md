@@ -1,66 +1,38 @@
-## Start here
+# Agent rules
 
-The work is three specs, done in this order:
+Shared by every harness.
 
-1. **Spec: Supabase foundation and Docker stack** (#11)
-2. **Spec: Chat-first campaign screen (chat v1)** (#9)
-3. **Spec: GM assistant (v1)** (#10)
+**What this is.** Tickets, decisions, handoffs and reviews live on GitHub; read
+them to pick up where the last agent stopped. Work like a careful engineer:
+diagnose before fixing, research what you don't know, plan before building,
+prove "done", and stop and ask rather than repeat a fix that failed.
 
-To pick a ticket:
-
-- Take the lowest-numbered open issue labelled `ready-for-agent` that has no assignee and no open blockers. Check its blockers with `gh api repos/{owner}/{repo}/issues/<n> --jq .issue_dependencies_summary.blocked_by` (0 means you can start).
-- Never pick up issues labelled `spec` or `wayfinder:*`. Specs are parents, and wayfinder tickets are decisions for the human.
-- Before starting, read the ticket's parent spec, `GLOSSARY.md` and `docs/adr/`.
-
-## Worktrees
-
-Create every worktree or scratch copy of the repo under `.opencode/worktrees/` inside this repo, never in the workspace directory.
-
-## Testing
-
-The agent sandbox has no Docker. Run the plain tests (`npm test`), lint and the type-check locally. Tests that need the local Supabase stack run in GitHub Actions on every pull request: push your branch, open the PR, and check its CI result before merging (see **Merging**). Don't try to install or start Docker in the sandbox.
-
-The stack tests (`src/**/*.live.test.ts`) skip without a stack, so plain `npm test` stays green. Against one local copy they run via `supabase/tests/live.sh` (see its header; it fails the run when any test is skipped). In CI the `live` job in `.github/workflows/supabase-smoke.yml` starts one copy from the template and runs that script on every pull request.
-
-Browser tests (Playwright, spec #9) run against one running copy plus the site container it serves. Start the copy from `supabase/` (generate the env first with `python3 bin/gen-env.py --copy ironsworn --port 8000 --out .env.live`, then `ENV_FILE=.env.live docker compose -p live --env-file .env.live -f docker-compose.yml up -d --build`), then run `npm run test:e2e` from the repo root (it fails the run when any browser test is skipped). The first run on a machine also needs `npx playwright install chromium`. In CI the `e2e` job in `.github/workflows/supabase-smoke.yml` does all of this on every pull request and keeps traces and screenshots as CI artifacts on failure. UI tickets add a browser test for their main flow under `e2e/`.
-
-## Merging
-
-A PR merges when, on its final commit, CI is green (including the `live` and `e2e` jobs) and a **reviewer** has passed it, with every finding fixed or answered on the PR. The reviewer is a fresh agent that did not write the code, given the diff, the ticket and its parent spec. After fixes, the reviewer re-checks the changed lines.
-
-- **Ticket PR into an `integration/*` branch:** the agent merges it, deletes the ticket branch, removes `needs-review` and closes the ticket (merges into `integration/*` don't auto-close issues).
-- **Integration branch into `prod`:** the agent opens the PR, gets it green and passed, and merges it. The human is the architect: they rule on `ready-for-human` and `wayfinder:*` tickets and answer `needs-info` handoffs, but take no part in merging.
-
-## Agent skills
-
-### Issue tracker
-
-Issues live in GitHub Issues on Recoilx2/Iron-Fellowship_and_Crew-Link_pbp_edition (a fork; never file upstream). See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-The default five triage labels, plus the `in-progress` / `needs-review` / `spec` workflow labels. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
-
-### When something fails
-
-One ladder per failure. Run it in order, then stop.
-
-1. **Evidence first.** Commit the logs, artifacts and rejected drafts on the
-   ticket branch before diagnosing. Uncommitted `/tmp` evidence has been lost
-   before. Before the ticket's PR merges, delete the evidence in its own
-   commit, so it stays in the branch history but never in an integration
-   branch's tree.
-2. **Diagnose.** Dispatch a subagent with the `diagnosing-bugs` skill. The
-   diagnosis must check whether the failing rule matches the spec or ADR it
-   comes from. If the rule itself is wrong, stop and report; don't fix code
-   around it.
-3. **Fix** through the normal flow: a ticket, then a PR merged per
-   **Merging**. Zero-paid probes are the "try".
-4. **Still failing?** Run the `moa` skill (mixture of agents: independent
-   agents propose a fix) once, and take its fix through the same flow.
-5. **Any second failure, of any kind:** stop and post a handoff (`stuck` →
-   `needs-info`).
+- **Roles.** Each session is the orchestrator or the implementer; the owner
+  (or orchestrator) says which. Sign as `<role>` (or `<role>#<n>` for a tagged
+  sub-agent): `— implementer#2`. Set `AGENT_SIGNATURE` at launch or pass `--as`.
+  One session may play both roles, with sub-agents; see `docs/agents/orchestrator.md`,
+  which the orchestrator also reads. The owner is the architect.
+- **GitHub** is the only channel between roles; rules in
+  `docs/agents/contract.md`. Write to it only through
+  `python3 tools/agents/ticket.py` (labels, claims, handoffs, reviews,
+  comments, merges, closes); the contract lists the four raw `gh` writes.
+- **All work** starts with the `bt-work` skill's **Session start** block
+  (it runs `setup.py check --quick`; hooks may not); load only the step file
+  the router points to. Use the `bt-` skills. Can't load skills? Follow
+  `.agents/skills/<name>/SKILL.md` (or `.claude/skills/<name>/SKILL.md`). State
+  your role, model and effort to the owner, from the `Roles:` line the check
+  prints.
+- **Context.** Hand reading, searching, building and reviewing to fresh
+  sub-agents with a short brief; they return 200 words or fewer. Post a
+  Report when `next` says Checkpoint due.
+- **Writing to the owner:** `docs/agents/reporting.md`.
+- **Temp files** go in `.work/` (gitignored); a ticket's `.work/tickets/<n>/`
+  is in its worktree. Worktrees go where `ticket.py worktree` says. Name
+  files written elsewhere in your handoff.
+- **Numbers** come from code or tool output you just ran (name the command);
+  otherwise write "unmeasured".
+- **Refused?** Follow the message; never run that command another way.
+- **Unclear?** Do what the owner said, not what you guess they meant; if a
+  request could mean more, ask one short question first.
+- **Paid calls** (the product's calls to paid APIs) need the owner's
+  approval of that run.
