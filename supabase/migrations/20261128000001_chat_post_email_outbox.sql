@@ -59,7 +59,7 @@ BEGIN
   END IF;
 
   INSERT INTO public.chat_post_email_outbox (post_id, recipient_user_id)
-  SELECT c.recipient_user_id, v_post_id
+  SELECT v_post_id, c.recipient_user_id
   FROM public.chat_post_email_candidates(v_post_id) AS c
   ON CONFLICT (post_id, recipient_user_id) DO NOTHING;
 

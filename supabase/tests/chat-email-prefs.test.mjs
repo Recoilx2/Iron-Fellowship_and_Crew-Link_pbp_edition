@@ -132,7 +132,7 @@ describe("chat email preference and outbox migrations (#203)", () => {
     // Both target columns must be supplied: one expression for two columns
     // is a Postgres error that made every post insert fail (PR #216 CI).
     assert.ok(
-      /INSERT INTO public\.chat_post_email_outbox \(post_id, recipient_user_id\)\s+SELECT c\.recipient_user_id, v_post_id\s+FROM public\.chat_post_email_candidates\(v_post_id\) AS c/.test(outbox),
+      /INSERT INTO public\.chat_post_email_outbox \(post_id, recipient_user_id\)\s+SELECT v_post_id, c\.recipient_user_id\s+FROM public\.chat_post_email_candidates\(v_post_id\) AS c/.test(outbox),
       "the outbox INSERT does not supply both post_id and recipient_user_id"
     );
     assert.ok(
