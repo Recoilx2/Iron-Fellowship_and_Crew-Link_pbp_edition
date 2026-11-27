@@ -53,7 +53,7 @@ test.describe("mounted rulesets", () => {
     await expect(page.getByText("E2E Mounted Character").first()).toBeVisible();
 
     // The expansion is listed in the same selector as the built-in ones.
-    await page.locator('button[aria-haspopup="menu"]').first().click();
+    await page.getByRole("button", { name: "Character Settings" }).click();
     await page.getByRole("menuitem", { name: "Expansions & Homebrew" }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();

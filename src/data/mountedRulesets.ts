@@ -255,7 +255,7 @@ export async function loadMountedManifest(
     }
 
     try {
-      const response = await fetch(url);
+      const response = await fetch(url.pathname);
       if (!response.ok) {
         throw new Error(`${ref.path}: HTTP ${response.status}`);
       }

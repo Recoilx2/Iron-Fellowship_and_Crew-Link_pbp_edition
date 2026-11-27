@@ -129,6 +129,9 @@ describe("loadMountedManifest", () => {
     expect(result.packages[0].data._id).toBe("mounted_ruleset");
     expect(result.packages[1].data._id).toBe("mounted_e2e");
     expect(fetchMock).toHaveBeenCalledTimes(3);
+    // The validation URL uses a synthetic origin; fetches must stay
+    // same-origin by going through the root-relative pathname.
+    expect(fetchMock).toHaveBeenCalledWith("/config/rulesets/mounted_e2e.json");
     expect(logError).not.toHaveBeenCalled();
   });
 
