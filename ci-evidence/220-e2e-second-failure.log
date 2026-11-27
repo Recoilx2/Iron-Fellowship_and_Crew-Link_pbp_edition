@@ -1,0 +1,95 @@
+e2e	Run the browser tests (zero skips allowed)	﻿2026-11-27T20:46:43.7032985Z ##[group]Run ENV_FILE=.env.live tests/e2e.sh
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:46:43.7033379Z ^[[36;1mENV_FILE=.env.live tests/e2e.sh^[[0m
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:46:43.7065353Z shell: /usr/bin/bash -e {0}
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:46:43.7065631Z ##[endgroup]
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:46:43.7404702Z e2e: browser tests against http://localhost:8080 (gateway http://localhost:8000)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:46:45.4297856Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:46:45.4298516Z Running 41 tests using 1 worker
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:46:45.4299960Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:46:48.7219295Z   ✓   1 [chromium] › e2e/campaign-access.spec.ts:55:3 › campaign access › a member opens a campaign they belong to and sees its screen (1.9s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:46:52.2347986Z   ✓   2 [chromium] › e2e/campaign-access.spec.ts:66:3 › campaign access › an outsider cannot open a campaign they do not belong to (3.3s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:46:59.7161034Z   ✓   3 [chromium] › e2e/chat-active-character.spec.ts:80:3 › active character › retire, add new, post as new, then make the old one active again (6.9s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:47:01.8777166Z   ✓   4 [chromium] › e2e/chat-channels.spec.ts:54:3 › chat channels › a member opens a campaign on the Chat tab with its starting channels (1.7s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:47:03.7194845Z   ✓   5 [chromium] › e2e/chat-channels.spec.ts:68:3 › chat channels › a player sees no channel-management controls (1.7s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:47:10.8280477Z   ✓   6 [chromium] › e2e/chat-edit-delete.spec.ts:70:3 › chat post edits and deletes › an edit marks the post edited in both browsers (6.7s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:47:17.6021420Z   ✓   7 [chromium] › e2e/chat-edit-delete.spec.ts:119:3 › chat post edits and deletes › a GM delete leaves a deleted marker in both browsers (6.7s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:47:22.0247079Z   ✓   8 [chromium] › e2e/chat-images.spec.ts:70:3 › chat images › a picked image arrives inline in a second browser (3.8s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:47:31.1904973Z   ✓   9 [chromium] › e2e/chat-momentum-burn.spec.ts:126:3 › chat momentum burn on a posted roll › a player burns momentum on a posted roll, and a second browser sees the update (8.3s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:47:36.6682320Z   ✓  10 [chromium] › e2e/chat-post-search.spec.ts:161:3 › chat post search › pages the results and jumps to a post in the feed (4.3s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:47:48.9169410Z   ✓  11 [chromium] › e2e/chat-post-search.spec.ts:189:3 › chat post search › shared, private, DM and GM-only posts follow the reader's access (12.0s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:47:55.4029822Z   ✓  12 [chromium] › e2e/chat-posts.spec.ts:64:3 › chat text posts › a text post arrives live in a second browser (6.0s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:48:02.1324824Z   ✓  13 [chromium] › e2e/chat-posts.spec.ts:100:3 › chat text posts › an out-of-character post shows the display name and campaign character (6.7s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:48:08.5106125Z   ✓  14 [chromium] › e2e/chat-posts.spec.ts:165:3 › chat text posts › a GM post as a world NPC shows the NPC with a GM tag (6.2s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:48:12.8577742Z   ✓  15 [chromium] › e2e/chat-private-channels.spec.ts:59:3 › chat private channels › a GM creates a private channel for one member (3.7s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:48:15.3793569Z   ✓  16 [chromium] › e2e/chat-private-channels.spec.ts:80:3 › chat private channels › the chosen member sees the private channel (2.5s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:48:17.8579558Z   ✓  17 [chromium] › e2e/chat-private-channels.spec.ts:89:3 › chat private channels › another member does not see the private channel (2.3s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:48:25.5205144Z   ✓  18 [chromium] › e2e/chat-rolls.spec.ts:66:3 › chat rolls from the composer › a dice roll attaches to the draft and posts as a one-liner (7.2s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:48:35.2066610Z   ✓  19 [chromium] › e2e/chat-rolls.spec.ts:131:3 › chat rolls from the composer › a GM-only roll never reaches players (9.6s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:48:45.0115010Z   ✓  20 [chromium] › e2e/chat-sheet-rolls.spec.ts:72:3 › sheet rolls land in the starting IC channel › a custom dice roll from the sheet posts as the character (9.2s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:48:50.7971510Z   ✓  21 [chromium] › e2e/chat-typing.spec.ts:55:3 › chat typing indicators › another member sees typing, and blur or sending clears it (5.2s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:48:55.3328739Z   ✓  22 [chromium] › e2e/email-notifications.spec.ts:120:3 › chat email notifications › the global switch turns member email off and back on (3.9s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:48:58.0288262Z   ✓  23 [chromium] › e2e/email-notifications.spec.ts:143:3 › chat email notifications › the channel switch opts in and out of one channel (2.7s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:49:01.0238336Z   ✓  24 [chromium] › e2e/email-notifications.spec.ts:159:3 › chat email notifications › an email link loads and highlights a post outside the live window (2.9s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:49:22.1577928Z   ✓  25 [chromium] › e2e/gm-assistant-outline-revision.spec.ts:204:3 › outline revisions › a GM requests a revision, applies it behind a confirmation, then undoes it (14.2s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:49:30.3532274Z   ✓  26 [chromium] › e2e/gm-assistant-outline.spec.ts:85:3 › campaign outline › a GM writes the outline and a co-GM sees it live (7.5s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:49:33.4533928Z   ✓  27 [chromium] › e2e/gm-assistant-outline.spec.ts:117:3 › campaign outline › a player in the same campaign can't find the outline anywhere (2.9s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:49:41.2450837Z   ✓  28 [chromium] › e2e/gm-assistant.spec.ts:149:3 › gm assistant panel › a GM opens the assistant, sees the streamed reply and sends it to the composer (4.2s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:49:45.2468350Z   ✓  29 [chromium] › e2e/gm-assistant.spec.ts:217:3 › gm assistant panel › on desktop the assistant takes the side pane's place and leaves the chat feed uncovered (4.0s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:49:48.2276326Z   ✓  30 [chromium] › e2e/gm-assistant.spec.ts:287:3 › gm assistant panel › a GM opens the Context tab, sees option groups and jumps there from the size bar (3.0s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:49:54.1868661Z   ✓  31 [chromium] › e2e/gm-assistant.spec.ts:331:3 › gm assistant panel › a player in the same campaign sees no Assistant button (2.7s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:49:56.5719058Z   ✓  32 [chromium] › e2e/my-notes.spec.ts:75:3 › my notes › a member opens My notes from the chat side screens on desktop (1.9s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:49:58.3878407Z   ✓  33 [chromium] › e2e/my-notes.spec.ts:84:3 › my notes › a member opens My notes from the chat side screens at mid widths (1.8s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:00.1989418Z   ✓  34 [chromium] › e2e/my-notes.spec.ts:94:3 › my notes › the campaign Notes screen is My notes (1.8s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:02.0023284Z   ✓  35 [chromium] › e2e/my-notes.spec.ts:109:3 › my notes › a member opens My notes from the bottom navigation on phones (1.8s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:04.3728873Z   ✓  36 [chromium] › e2e/my-notes.spec.ts:131:3 › my notes › a member reaches Locations, NPCs and Lore from the phone World screen (2.2s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:09.3412388Z   ✓  37 [chromium] › e2e/rules-page.spec.ts:153:3 › rules page › a signed-in person opens Rules from the nav rail on desktop (4.7s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:14.0723584Z   ✓  38 [chromium] › e2e/rules-page.spec.ts:164:3 › rules page › a signed-in person opens Rules from the bottom navigation on phones (4.7s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:14.9253590Z   ✓  39 [chromium] › e2e/rules-page.spec.ts:176:3 › rules page › a signed-out visitor is sent to log in (842ms)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:16.9724222Z   ✓  40 [chromium] › e2e/rules-page.spec.ts:182:3 › rules page › the five-item bottom navigation fits a 320 px phone (1.9s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.4122167Z   ✘  41 [chromium] › e2e/rulesets-mounted.spec.ts:48:3 › mounted rulesets › a mounted expansion is selectable and its move renders in Rules (19.8s)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6010308Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6015818Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6027940Z   1) [chromium] › e2e/rulesets-mounted.spec.ts:48:3 › mounted rulesets › a mounted expansion is selectable and its move renders in Rules 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6029094Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6029447Z     Error: expect(locator).toBeVisible() failed
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6029884Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6030235Z     Locator: getByText('Mounted Moves', { exact: true })
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6030855Z     Expected: visible
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6031227Z     Timeout: 15000ms
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6031682Z     Error: element(s) not found
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6031978Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6032139Z     Call log:
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6032904Z       - Expect "toBeVisible" getByText('Mounted Moves', { exact: true }) with timeout 15000ms
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6034411Z       - waiting for getByText('Mounted Moves', { exact: true })
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6034925Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6034950Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6035204Z       71 |       .fill("Check the Mount");
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6036045Z       72 |     // While the filter is active the category header is a plain list item.
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6037200Z     > 73 |     await expect(page.getByText("Mounted Moves", { exact: true })).toBeVisible();
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6038467Z          |                                                                    ^
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6039411Z       74 |     const move = page.getByRole("button", { name: "Check the Mount" });
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6040554Z       75 |     await expect(move).toBeVisible();
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6041176Z       76 |     await move.click();
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6042550Z         at /home/runner/work/Iron-Fellowship_and_Crew-Link_pbp_edition/Iron-Fellowship_and_Crew-Link_pbp_edition/e2e/rulesets-mounted.spec.ts:73:68
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6043590Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6044472Z     attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6046000Z     test-results/rulesets-mounted-mounted-r-cda80-d-its-move-renders-in-Rules-chromium/test-failed-1.png
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6047801Z     ────────────────────────────────────────────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6048338Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6049242Z     Error Context: test-results/rulesets-mounted-mounted-r-cda80-d-its-move-renders-in-Rules-chromium/error-context.md
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6050235Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6051197Z     Error Context: test-results/rulesets-mounted-mounted-r-cda80-d-its-move-renders-in-Rules-chromium/error-context.md
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6052205Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6053059Z     attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6054502Z     test-results/rulesets-mounted-mounted-r-cda80-d-its-move-renders-in-Rules-chromium/trace.zip
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6055537Z     Usage:
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6055763Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6056752Z         npx playwright show-trace test-results/rulesets-mounted-mounted-r-cda80-d-its-move-renders-in-Rules-chromium/trace.zip
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6068093Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6068595Z     ────────────────────────────────────────────────────────────────────────────────────────────────
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6068957Z 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6069062Z   1 failed
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6069860Z     [chromium] › e2e/rulesets-mounted.spec.ts:48:3 › mounted rulesets › a mounted expansion is selectable and its move renders in Rules 
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.6070545Z   40 passed (3.9m)
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.7345075Z e2e: 41 browser test(s): 40 passed, 1 failed, 0 flaky, 0 skipped
+e2e	Run the browser tests (zero skips allowed)	2026-11-27T20:50:37.7403042Z ##[error]Process completed with exit code 1.
