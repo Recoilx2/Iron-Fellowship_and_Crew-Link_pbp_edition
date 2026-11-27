@@ -3,6 +3,15 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
+  broadcastRowsBinding,
+  listenToRows,
+} from "api-calls/realtime/listenToRows";
+import {
+  campaignGmTopic,
+  campaignSharedTopic,
+} from "api-calls/realtime/sharedTopics";
+
+import {
   adminClient,
   createPerson,
   deletePerson,
@@ -255,5 +264,133 @@ describe.skipIf(!config)("private broadcast topics against the local stack", () 
       (refresh.payload as Record<string, unknown>).kind ??
         (refresh.payload as { payload?: Record<string, unknown> }).payload?.kind
     ).toBe("refresh");
+  });
+
+  it("never streams a GM-only row id to a player listener", { timeout: 90000 }, async () => {
+    await setUpRoster();
+    const admin = adminClient(cfg);
+    const hiddenId = randomCampaignId();
+    const inserted = await admin.from("campaign_notes").insert({
+      id: hiddenId,
+      campaign_id: campaignId,
+      title: "GM secret",
+      shared: false,
+    });
+    expect(inserted.error).toBeNull();
+
+    const playerSeen: Array<Array<{ id: string }>> = [];
+    const gmSeen: Array<Array<{ id: string }>> = [];
+    const fetchNotes = (client: SupabaseClient) => async () => {
+      const { data, error } = await client
+        .from("campaign_notes")
+        .select("id, campaign_id, title, shared, sort_order, kind, created_by, created_at, updated_at")
+        .eq("campaign_id", campaignId);
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string }>;
+    };
+    interface NoteRow {
+      id: string;
+    }
+    const stops = [
+      listenToRows<NoteRow>({
+        client: player.client,
+        channelName: "campaign-notes:player",
+        bindings: [
+          broadcastRowsBinding<NoteRow>({
+            topic: campaignSharedTopic(campaignId, "notes"),
+            table: "campaign_notes",
+            getKey: (row) => row.id,
+          }),
+        ],
+        fetchRows: fetchNotes(player.client),
+        getKey: (row) => row.id,
+        onRows: (rows) => playerSeen.push(rows),
+      }),
+      listenToRows<NoteRow>({
+        client: gm.client,
+        channelName: "campaign-notes:gm",
+        bindings: [
+          broadcastRowsBinding<NoteRow>({
+            topic: campaignGmTopic(campaignId, "notes"),
+            table: "campaign_notes",
+            getKey: (row) => row.id,
+          }),
+        ],
+        fetchRows: fetchNotes(gm.client),
+        getKey: (row) => row.id,
+        onRows: (rows) => gmSeen.push(rows),
+      }),
+    ];
+
+    try {
+      await waitFor(() => (gmSeen.at(-1)?.some((row) => row.id === hiddenId) ? gmSeen : null));
+      expect(playerSeen.at(-1)?.some((row) => row.id === hiddenId)).toBe(false);
+
+      const deleted = await admin.from("campaign_notes").delete().eq("id", hiddenId);
+      expect(deleted.error).toBeNull();
+      await waitFor(() =>
+        gmSeen.at(-1)?.some((row) => row.id === hiddenId) ? null : gmSeen
+      );
+      // The GM-only id never reaches the player's rows, as an upsert or a
+      // delete: even the key stays on campaign-gm:* (#104 caveat a).
+      expect(
+        playerSeen.some((snapshot) => snapshot.some((row) => row.id === hiddenId))
+      ).toBe(false);
+    } finally {
+      stops.forEach((stop) => stop());
+    }
+  });
+
+  it("empties an open player listener within seconds of access revocation", { timeout: 90000 }, async () => {
+    await setUpRoster();
+    const admin = adminClient(cfg);
+    const noteId = randomCampaignId();
+    const inserted = await admin.from("campaign_notes").insert({
+      id: noteId,
+      campaign_id: campaignId,
+      title: "Shared",
+      shared: true,
+    });
+    expect(inserted.error).toBeNull();
+
+    const seen: Array<Array<{ id: string }>> = [];
+    const stop = listenToRows<{ id: string }>({
+      client: player.client,
+      channelName: "campaign-notes:revoke",
+      bindings: [
+        broadcastRowsBinding<{ id: string }>({
+          topic: campaignSharedTopic(campaignId, "notes"),
+          table: "campaign_notes",
+          getKey: (row) => row.id,
+        }),
+      ],
+      fetchRows: async () => {
+        const { data, error } = await player.client
+          .from("campaign_notes")
+          .select("id, campaign_id, title, shared, sort_order, kind, created_by, created_at, updated_at")
+          .eq("campaign_id", campaignId);
+        if (error) throw error;
+        return (data ?? []) as Array<{ id: string }>;
+      },
+      getKey: (row) => row.id,
+      onRows: (rows) => seen.push(rows),
+    });
+    try {
+      await waitFor(() => (seen.at(-1)?.some((row) => row.id === noteId) ? seen : null));
+      const started = Date.now();
+      const revoked = await admin
+        .from("campaign_members")
+        .delete()
+        .eq("campaign_id", campaignId)
+        .eq("user_id", player.userId);
+      expect(revoked.error).toBeNull();
+
+      // The membership trigger's refresh arrives in seconds. A 6 s bound
+      // still fails if this relies on the 10 s reconcile tick alone.
+      await waitFor(() => (seen.at(-1)?.length === 0 ? seen : null), 6000);
+      expect(Date.now() - started).toBeLessThan(10_000);
+    } finally {
+      stop();
+    }
   });
 });

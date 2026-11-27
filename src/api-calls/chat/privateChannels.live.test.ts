@@ -287,7 +287,9 @@ describe.skipIf(!config)("chat private channels and direct messages end to end",
     expect(postsSeen.at(-1)).toHaveLength(1);
 
     // The GM removes the player: the open list drops the channel and the
-    // open feed empties without re-subscribing.
+    // open feed empties without re-subscribing. The roster trigger's
+    // channel-shared refresh must converge well inside the 10 s tick.
+    const started = Date.now();
     const { error: removeError } = await gm.client.rpc("set_channel_members", {
       chid: channelId,
       member_ids: [],
@@ -299,8 +301,9 @@ describe.skipIf(!config)("chat private channels and direct messages end to end",
         postsSeen.at(-1)?.length === 0
           ? true
           : null,
-      60000
+      8000
     );
+    expect(Date.now() - started).toBeLessThan(10_000);
     expect(await readChannelsAs(player, campaignId)).toHaveLength(2);
     expect(await readPostsAs(player, channelId)).toEqual([]);
 
