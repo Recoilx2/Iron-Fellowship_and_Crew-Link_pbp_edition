@@ -108,6 +108,20 @@ describe("supabase compose template", () => {
     }
   });
 
+  it("authorizes presence writes on private realtime topics", () => {
+    const text = read("realtime-auth/20261127170000_realtime_presence_write.sql");
+    assert.ok(text.includes("FOR INSERT TO authenticated"), "no INSERT policy for presence writes");
+    assert.ok(text.includes("'channel-posts%'"), "chat post topic family missing from presence policy");
+    for (const family of [
+      "assistant-conversations%",
+      "assistant-messages%",
+      "assistant-outline-versions%",
+    ]) {
+      assert.ok(text.includes(`'${family}'`), `presence policy missing ${family}`);
+    }
+    assert.ok(text.includes("'broadcast', 'presence'"), "presence extension not allowed");
+  });
+
   it("realtime keeps its Host-header network alias", () => {
     assert.ok(compose().includes("realtime-dev.supabase-realtime"), "realtime alias missing in compose");
     assert.ok(

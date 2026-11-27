@@ -77,6 +77,18 @@ half-migrated database. Upgrading is pulling and restarting. Name files
 `<UTC timestamp>_<short-name>.sql` and never edit one that has already run;
 see `migrations/README.md`.
 
+## Live updates and presence
+
+Shared data streams over `postgres_changes` with a 10-second reconcile; the
+private topic families are authorized by the idempotent `realtime-auth/*.sql`
+files, applied once at start-up after Realtime boots. Presence needs two
+policies on `realtime.messages`: SELECT to join a private topic and INSERT to
+`track()` on it. Without the INSERT policy the client still reports
+SUBSCRIBED but silently refuses presence writes, so nobody sees anyone else.
+Typing indicators use the `channel-posts:<channel id>` family; the
+`presence.live.test.ts` stack test proves join, cross-member visibility and
+leave events. No tenant flag is needed — presence is enabled per channel.
+
 ## Shared note editing
 
 One Hocuspocus container per copy (`hocuspocus/`, reached through the
