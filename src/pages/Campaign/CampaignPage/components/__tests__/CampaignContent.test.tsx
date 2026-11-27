@@ -31,7 +31,19 @@ vi.mock("react-router-dom", () => ({
 }));
 vi.mock("../Tabs", () => ({
   CharacterTab: () => <div>Characters pane</div>,
-  ChatTab: () => <div>Chat pane</div>,
+  ChatTab: ({
+    linkedChannelId,
+    focusedPostId,
+  }: {
+    linkedChannelId?: string;
+    focusedPostId?: string;
+  }) => (
+    <div>
+      Chat pane
+      {linkedChannelId && ` channel=${linkedChannelId}`}
+      {focusedPostId && ` post=${focusedPostId}`}
+    </div>
+  ),
   MyNotesTab: () => <div>My notes pane</div>,
   NotesTab: () => <div>Notes pane</div>,
   TracksTab: () => <div>Tracks pane</div>,
@@ -138,6 +150,14 @@ describe("CampaignContent navigation (ticket #122)", () => {
 
     expect(view.textContent).toContain("My notes pane");
     expect(view.textContent).not.toContain("Notes pane");
+  });
+
+  it("passes email deep-link channel and post params into chat", () => {
+    mockTabSearch = "?tab=chat&channel=quest&post=post-7";
+    const view = render();
+
+    expect(view.textContent).toContain("channel=quest");
+    expect(view.textContent).toContain("post=post-7");
   });
 
   it("keeps phones on chat, where the bottom navigation lives", () => {

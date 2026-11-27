@@ -69,6 +69,7 @@ const state = {
     },
   },
   auth: { uid: "gm-1" },
+  accessibilitySettings: { settings: { emailNotificationsEnabled: true } },
   users: {
     userMap: {
       "gm-1": { doc: { displayName: "Gus" } },
@@ -109,6 +110,10 @@ vi.mock("api-calls/chat/getOrCreateDirectChannel", () => ({
 }));
 vi.mock("api-calls/chat/setChannelMembers", () => ({
   setChannelMembers: vi.fn(),
+}));
+vi.mock("api-calls/chat/emailPrefs", () => ({
+  getChannelEmailPreference: () => Promise.resolve(true),
+  setChannelEmailPreference: () => Promise.resolve(),
 }));
 vi.mock("api-calls/chat/renameChannel", () => ({
   renameChannel: vi.fn(),

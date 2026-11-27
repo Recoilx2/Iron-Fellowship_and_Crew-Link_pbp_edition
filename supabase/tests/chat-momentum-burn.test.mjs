@@ -33,6 +33,8 @@ describe("chat momentum burn hardening migration (#125)", () => {
     // (20261120000000) lands later still, as does the #128 assistant-tables
     // migration (20261121000004), and the #131 campaign outline (20261121000005).
     const landedLater = new Set([
+      "20261128000000_chat_email_prefs.sql",
+      "20261128000001_chat_post_email_outbox.sql",
       "20261121000008_assistant_messages_applied_version_index.sql",
       "20261119000000_chat_momentum_burn_gms_pin.sql",
       "20261120000000_chat_storage_privileges.sql",

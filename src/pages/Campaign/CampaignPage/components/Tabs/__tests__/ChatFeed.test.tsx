@@ -393,3 +393,35 @@ describe("ChatFeed edits and deletes", () => {
     expect(deletePost).toHaveBeenCalledWith({ postId: "post-1" });
   });
 });
+
+describe("ChatFeed email deep links", () => {
+  let root: Root | undefined;
+  let container: HTMLDivElement | undefined;
+
+  afterEach(() => {
+    act(() => root?.unmount());
+    container?.remove();
+    root = undefined;
+    container = undefined;
+    state.chat.postsByChannel = { ic: [post()] };
+  });
+
+  it("gives every post a stable anchor for a link from an email", () => {
+    state.chat.postsByChannel = {
+      ic: [post(), post({ id: "post-2", text: "A later post" })],
+    };
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <ThemeProvider theme={theme}>
+          <ChatFeed channel={ic} focusedPostId="post-2" />
+        </ThemeProvider>
+      );
+    });
+
+    expect(container?.querySelector("#chat-post-post-1")).not.toBeNull();
+    expect(container?.querySelector("#chat-post-post-2")).not.toBeNull();
+  });
+});

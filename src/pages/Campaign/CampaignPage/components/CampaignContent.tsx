@@ -32,6 +32,12 @@ export function CampaignContent(props: CampaignContentProps) {
     setSelectedTab(tab);
   };
 
+  // Email deep links land on a channel and one post. They are read, never
+  // rewritten by the tab hook (which only touches `tab`), so the rest of the
+  // link stays intact for a reload or a copy/paste.
+  const linkedChannelId = searchParams.get("channel") ?? undefined;
+  const focusedPostId = searchParams.get("post") ?? undefined;
+
   const hasWorld = useStore(
     (store) => !!store.campaigns.currentCampaign.currentCampaign?.worldId
   );
@@ -80,7 +86,11 @@ export function CampaignContent(props: CampaignContentProps) {
         <StyledTab label="Lore" value={CampaignTabs.Lore} />
       </StyledTabs>
       <ContainedTabPanel isVisible={visibleTab === CampaignTabs.Chat}>
-        <ChatTab openInviteDialog={openInviteDialog} />
+        <ChatTab
+          openInviteDialog={openInviteDialog}
+          linkedChannelId={linkedChannelId}
+          focusedPostId={focusedPostId}
+        />
       </ContainedTabPanel>
       <ContainedTabPanel isVisible={visibleTab === CampaignTabs.Characters}>
         <CharacterTab openInviteDialog={openInviteDialog} />

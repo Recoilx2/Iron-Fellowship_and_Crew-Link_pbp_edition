@@ -9,9 +9,15 @@ export const updateAccessibilitySettings: ApiFunction<
   void
 > = async (params) => {
   const { uid, settings } = params;
-  const patch: { verbose_roll_results?: boolean } = {};
+  const patch: {
+    verbose_roll_results?: boolean;
+    email_notifications_enabled?: boolean;
+  } = {};
   if (settings.verboseRollResults !== undefined) {
     patch.verbose_roll_results = settings.verboseRollResults;
+  }
+  if (settings.emailNotificationsEnabled !== undefined) {
+    patch.email_notifications_enabled = settings.emailNotificationsEnabled;
   }
   const { error } = await getSupabaseClient()
     .from(USER_SETTINGS_TABLE)

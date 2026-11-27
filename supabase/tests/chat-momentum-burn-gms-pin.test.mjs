@@ -33,6 +33,8 @@ describe("chat momentum burn GM-only pin (#125 follow-up)", () => {
     // storage-privileges fix, the #128 assistant tables, and the #131 campaign outline) sort later by
     // design, so they are excluded here.
     const landedLater = new Set([
+      "20261128000000_chat_email_prefs.sql",
+      "20261128000001_chat_post_email_outbox.sql",
       "20261121000008_assistant_messages_applied_version_index.sql",
       "20261120000000_chat_storage_privileges.sql",
       "20261121000000_campaign_active_character.sql",

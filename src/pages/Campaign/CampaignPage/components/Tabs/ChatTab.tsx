@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   AvatarGroup,
@@ -52,6 +52,7 @@ import type { ChannelKind } from "api-calls/chat/_chat.type";
 import type { ChannelWithId } from "api-calls/chat/listenToCampaignChannels";
 import { UserAvatar } from "components/shared/UserAvatar";
 import { ChatFeed } from "./ChatFeed";
+import { ChannelEmailToggle } from "./ChannelEmailToggle";
 import { ChatComposer } from "./ChatComposer";
 import { CharacterTab } from "./CharacterTab";
 import { TracksTab } from "./TracksTab";
@@ -109,8 +110,14 @@ function sortChannels(channels: ChannelWithId[]): ChannelWithId[] {
  * beside them, named for the other person; anyone opens one from the People
  * list, and nobody else -- not even the GMs -- ever sees it.
  */
-export function ChatTab(props: { openInviteDialog: () => void }) {
-  const { openInviteDialog } = props;
+export function ChatTab(props: {
+  openInviteDialog: () => void;
+  /** Deep link from an email or a shared URL: open this channel once. */
+  linkedChannelId?: string;
+  /** Scroll to and highlight this post once it is in the loaded window. */
+  focusedPostId?: string;
+}) {
+  const { openInviteDialog, linkedChannelId, focusedPostId } = props;
   useListenToChatChannels();
   useListenToChannelPosts();
   const theme = useTheme();
@@ -193,6 +200,21 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
   const pick = (id: string) => {
     setOpenChannelId(id);
   };
+
+  // An email link arrives before channels have loaded, so wait for the
+  // channel row and apply the link once. Later clicks stay the reader's own:
+  // a ref (not a dependency on openChannelId) keeps this from re-picking the
+  // linked channel after every live channel update.
+  const appliedChannelLink = useRef<string | null>(null);
+  useEffect(() => {
+    if (!linkedChannelId || appliedChannelLink.current === linkedChannelId) {
+      return;
+    }
+    if (channels.some((channel) => channel.id === linkedChannelId)) {
+      appliedChannelLink.current = linkedChannelId;
+      setOpenChannelId(linkedChannelId);
+    }
+  }, [linkedChannelId, channels, setOpenChannelId]);
 
   const openDirectChannel = (otherId: string) => {
     if (!campaignId || otherId === uid) {
@@ -284,6 +306,7 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
               directName={openChannel ? directName(openChannel.id) : undefined}
               userMap={userMap}
               isGM={isGM}
+              uid={uid}
               onRename={() => setRenaming(true)}
               onMembers={() => setManagingMembers(true)}
               onArchive={(archived) =>
@@ -295,7 +318,10 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
             />
             {openChannel ? (
               <>
-                <ChatFeed channel={openChannel} />
+                <ChatFeed
+                  channel={openChannel}
+                  focusedPostId={focusedPostId}
+                />
                 {openChannel.archived ? (
                   <Typography
                     color={"text.secondary"}
@@ -583,11 +609,12 @@ function ChannelHeader(props: {
   directName?: string;
   userMap: Record<string, { doc?: { displayName: string } } | undefined>;
   isGM: boolean;
+  uid?: string;
   onRename: () => void;
   onMembers: () => void;
   onArchive: (archived: boolean) => void;
 }) {
-  const { channel, members, directName, userMap, isGM, onRename, onMembers, onArchive } =
+  const { channel, members, directName, userMap, isGM, uid, onRename, onMembers, onArchive } =
     props;
   if (!channel) {
     return null;
@@ -616,6 +643,12 @@ function ChannelHeader(props: {
           {kindLabel(channel)}
         </Typography>
       </Typography>
+      {uid && (
+        <ChannelEmailToggle
+          channelId={channel.id}
+          channelName={channelLabel(channel, directName)}
+        />
+      )}
       {channel.visibility === "private" && members.length > 0 && (
         <AvatarGroup max={4}>
           {members.map((id) => (
