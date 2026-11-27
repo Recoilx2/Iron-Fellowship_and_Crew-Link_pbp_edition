@@ -49,6 +49,7 @@ describe("deleted-post cleanup and roll forgery migration (#120)", () => {
       "20261121000005_campaign_outline.sql",
       "20261121000006_assistant_outline_versions.sql",
       "20261121000007_assistant_proposal_state.sql",
+      "20261127000000_chat_post_search.sql",
     ]);
     const others = readdirSync(dir).filter(
       (f) => /^\d{14}_/.test(f) && f !== cleanupFile() && !landedLater.has(f)

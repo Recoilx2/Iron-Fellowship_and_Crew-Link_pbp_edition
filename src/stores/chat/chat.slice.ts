@@ -6,8 +6,10 @@ import { listenToCampaignChannelMembers } from "api-calls/chat/listenToCampaignC
 import {
   CHAT_POST_PAGE_SIZE,
   listenToChannelPosts,
+  type PostWithId,
 } from "api-calls/chat/listenToChannelPosts";
 import { fetchOlderChannelPosts } from "api-calls/chat/fetchOlderChannelPosts";
+import { fetchPostsAround } from "api-calls/chat/fetchPostsAround";
 import type { Unsubscribe } from "api-calls/helpers.type";
 import { getRollDescription } from "functions/rollText";
 import { logError } from "functions/errorReference";
@@ -32,6 +34,15 @@ function stopPosts(): void {
 
 function postIds(posts: { id: string }[]): Set<string> {
   return new Set(posts.map((post) => post.id));
+}
+
+function sortByTime(posts: PostWithId[]): PostWithId[] {
+  return [...posts].sort((a, b) => {
+    if (a.createdAt !== b.createdAt) {
+      return a.createdAt < b.createdAt ? -1 : 1;
+    }
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
 }
 
 type ChatSliceApi = CreateSliceType<ChatSlice>;
@@ -263,6 +274,47 @@ export const createChatSlice: CreateSliceType<ChatSlice> = (set, get) => ({
     } finally {
       pagingOlderByChannel[channelId] = false;
     }
+  },
+
+  jumpToPost: async ({ channelId, id, createdAt }) => {
+    if (!channelId || !id) {
+      return;
+    }
+    try {
+      // Context first: the feed must already hold the post before it is
+      // asked to scroll to it. The one-off queries read through the same
+      // RLS as the live feed, so a search jump never widens visibility.
+      const context = await fetchPostsAround(
+        { channelId, id, createdAt },
+        CHAT_POST_PAGE_SIZE
+      );
+      const current = get().chat.postsByChannel[channelId] ?? [];
+      const contextIds = postIds(context.posts);
+      const merged = sortByTime([
+        ...context.posts,
+        ...current.filter((post) => !contextIds.has(post.id)),
+      ]);
+      // The context window owns has-older from here on, like a page-back:
+      // the live lookahead only knows about its own latest page.
+      pagedBackByChannel[channelId] = true;
+      set((store) => {
+        store.chat.postsByChannel[channelId] = merged;
+        store.chat.hasOlderByChannel[channelId] = context.hasOlder;
+        store.chat.openChannelId = channelId;
+        store.chat.focusedPostId = id;
+      });
+    } catch (error) {
+      logError("chat.slice jumpToPost", error);
+      set((store) => {
+        store.chat.postsError = "Failed to load that post.";
+      });
+    }
+  },
+
+  clearFocusedPost: () => {
+    set((store) => {
+      store.chat.focusedPostId = undefined;
+    });
   },
 
   setDraft: (channelId, text) => {

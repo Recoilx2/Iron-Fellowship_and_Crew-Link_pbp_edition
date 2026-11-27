@@ -29,6 +29,7 @@ describe("assistant proposal state migration (#148)", () => {
     // (the branch pattern, see campaign-outline.test.mjs).
     const landedLater = new Set([
       "20261121000008_assistant_messages_applied_version_index.sql",
+      "20261127000000_chat_post_search.sql",
     ]);
     for (const other of readdirSync(dir).filter(
       (f) => /^\d{14}_/.test(f) && f !== stateFile() && !landedLater.has(f)

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { listenToChannelPosts } from "api-calls/chat/listenToChannelPosts";
 import { CHAT_POST_PAGE_SIZE } from "api-calls/chat/listenToChannelPosts";
 import { fetchOlderChannelPosts } from "api-calls/chat/fetchOlderChannelPosts";
+import { fetchPostsAround } from "api-calls/chat/fetchPostsAround";
 import { defaultChatSlice } from "stores/chat/chat.slice.default";
 import { createChatSlice } from "stores/chat/chat.slice";
 import type { ChatSlice, ChatSliceData } from "stores/chat/chat.slice.type";
@@ -12,10 +13,12 @@ import { ROLL_TYPE } from "types/DieRolls.type";
 
 vi.mock("api-calls/chat/listenToChannelPosts");
 vi.mock("api-calls/chat/fetchOlderChannelPosts");
+vi.mock("api-calls/chat/fetchPostsAround");
 vi.mock("api-calls/chat/listenToCampaignChannels");
 
 const mockedListen = vi.mocked(listenToChannelPosts);
 const mockedFetchOlder = vi.mocked(fetchOlderChannelPosts);
+const mockedFetchAround = vi.mocked(fetchPostsAround);
 
 // Seam under test: the chat slice turns the post listener's latest page
 // into the feed's oldest-first window, pages older windows in front of it
@@ -97,6 +100,8 @@ describe("chat slice posts", () => {
     });
     mockedFetchOlder.mockClear();
     mockedFetchOlder.mockResolvedValue({ posts: [], hasOlder: false });
+    mockedFetchAround.mockClear();
+    mockedFetchAround.mockResolvedValue({ posts: [], hasOlder: false });
   });
 
   it("loads the latest page oldest-first with its has-older flag", () => {
@@ -269,6 +274,61 @@ describe("chat slice posts", () => {
     // Each channel keeps its own window: switching back needs no reload.
     expect(draft().postsByChannel["channel-1"]).toHaveLength(2);
     expect(draft().postsByChannel["channel-2"]).toHaveLength(1);
+  });
+
+  it("jumps to a searched post with context, deduped, before setting focus", async () => {
+    const { slice, draft } = setUpSlice();
+    const at = (n: number) =>
+      new Date(Date.parse("2026-11-27T12:00:00.000Z") + n * 1000).toISOString();
+    const postAt = (n: number): PostWithId => ({
+      ...posts(1, n)[0],
+      id: `post-${n}`,
+      createdAt: at(n),
+    });
+    const context = [postAt(8), postAt(9), postAt(10)];
+    draft().postsByChannel["channel-1"] = [
+      { ...postAt(10), text: "stale copy" },
+      postAt(11),
+    ];
+    mockedFetchAround.mockResolvedValue({ posts: context, hasOlder: true });
+
+    await slice.jumpToPost({
+      channelId: "channel-1",
+      id: "post-9",
+      createdAt: at(9),
+    });
+
+    expect(mockedFetchAround).toHaveBeenCalledWith(
+      { channelId: "channel-1", id: "post-9", createdAt: at(9) },
+      CHAT_POST_PAGE_SIZE
+    );
+    expect(draft().openChannelId).toBe("channel-1");
+    expect(
+      draft().postsByChannel["channel-1"]?.map((post) => post.id)
+    ).toEqual(["post-8", "post-9", "post-10", "post-11"]);
+    expect(
+      draft().postsByChannel["channel-1"]?.find((post) => post.id === "post-10")
+        ?.text
+    ).toBe("post 10");
+    expect(draft().hasOlderByChannel["channel-1"]).toBe(true);
+    expect(draft().focusedPostId).toBe("post-9");
+
+    slice.clearFocusedPost();
+    expect(draft().focusedPostId).toBeUndefined();
+  });
+
+  it("reports a failed jump without changing focus", async () => {
+    const { slice, draft } = setUpSlice();
+    mockedFetchAround.mockRejectedValue(new Error("boom"));
+
+    await slice.jumpToPost({
+      channelId: "channel-1",
+      id: "post-9",
+      createdAt: "2026-11-27T12:00:09.000Z",
+    });
+
+    expect(draft().postsError).toBe("Failed to load that post.");
+    expect(draft().focusedPostId).toBeUndefined();
   });
 
   it("keeps an unsent draft per channel", () => {

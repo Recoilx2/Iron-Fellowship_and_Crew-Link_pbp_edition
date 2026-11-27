@@ -37,6 +37,7 @@ describe("assistant outline versions migration (#133)", () => {
     const landedLater = new Set([
       "20261121000008_assistant_messages_applied_version_index.sql",
       "20261121000007_assistant_proposal_state.sql",
+      "20261127000000_chat_post_search.sql",
     ]);
     const others = readdirSync(dir).filter(
       (f) =>
