@@ -25,10 +25,10 @@ import {
 } from "api-calls/testing/liveHarness";
 
 /**
- * Shadow-phase seam for spec #205/#206. No production listener subscribes
- * to these topics yet: the tests join them directly to prove that the RLS
- * policies and the SECURITY DEFINER triggers are in place before any client
- * is flipped. They skip without a stack, like every other *.live.test.ts.
+ * Topic/authorization seam for spec #205/#206. Production listeners now
+ * subscribe to these topics; the direct joins here pin the membership-
+ * checked RLS policies and SECURITY DEFINER triggers independently of the
+ * client helpers. They skip without a stack, like every other live test.
  */
 
 const config = liveStackConfig();

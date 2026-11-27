@@ -134,13 +134,16 @@ export function broadcastRowsBinding<T>(params: {
   table?: string;
   getKey: (row: T) => string | null;
   project?: (row: Record<string, unknown>) => T;
+  /** Replaces the default mapper (e.g. to drop rows the reader may not see). */
+  toChange?: (message: BroadcastMessage) => RowChange<T> | null;
 }): BroadcastBinding<T> {
   return {
     type: "broadcast",
     event: "*",
     topic: params.topic,
     optional: params.optional,
-    toChange: (message) => broadcastRowChange(message, params),
+    toChange:
+      params.toChange ?? ((message) => broadcastRowChange(message, params)),
   };
 }
 
@@ -408,6 +411,14 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
     bindingsByChannel.set(channelFor(channelName, false), []);
   }
 
+  const startReconcile = () => {
+    if (timer === undefined) {
+      timer = setInterval(() => {
+        if (!removed) void refresh({ silent: true });
+      }, RECONCILE_INTERVAL_MS);
+    }
+  };
+
   for (const [open, channelBindings] of bindingsByChannel) {
     const { channel } = open;
     for (const binding of channelBindings) {
@@ -442,26 +453,27 @@ export function listenToRows<T>(params: ListenToRowsParams<T>): Unsubscribe {
         void refresh();
         // The reconcile timer starts with the first live subscription, not at
         // construction: polling REST before the channel is live serves
-        // nothing. Guarded exactly like refresh (epoch/removed/refreshing)
-        // and cleared below.
-        if (timer === undefined) {
-          timer = setInterval(() => {
-            if (!removed) void refresh({ silent: true });
-          }, RECONCILE_INTERVAL_MS);
-        }
+        // nothing. It is cleared on unsubscribe.
+        startReconcile();
         return;
       }
       // SUBSCRIBED is the only success signal. Anything else means the channel
       // will never deliver rows, so surface it: without this the subscriber
       // stalls with no fetch and no error, and every failure looks identical.
-      // Best-effort topics (campaign-gm for players) are exempt: their RLS
-      // denial is expected, and the required topic still drives the fetch.
-      if (
-        !open.optional &&
-        (status === "CHANNEL_ERROR" ||
-          status === "TIMED_OUT" ||
-          status === "CLOSED")
-      ) {
+      // A best-effort topic (campaign-gm for a player, or a transient GM
+      // failure) stays silent, but still fetches once and keeps reconciling:
+      // row visibility comes from RLS on the REST read, so a GM whose join
+      // failed must not be left with an empty list forever.
+      const failed =
+        status === "CHANNEL_ERROR" ||
+        status === "TIMED_OUT" ||
+        status === "CLOSED";
+      if (failed && open.optional) {
+        void refresh();
+        startReconcile();
+        return;
+      }
+      if (failed) {
         const detail =
           subscribeError instanceof Error
             ? `: ${subscribeError.message}`

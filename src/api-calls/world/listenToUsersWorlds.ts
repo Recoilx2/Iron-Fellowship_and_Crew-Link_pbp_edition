@@ -42,7 +42,8 @@ export function listenToUsersWorlds(
         client,
         channelName: constructUserWorldsChannelName(uid),
         bindings: [
-          // Dual bindings while the world area is being flipped.
+          // Every campaign the reader belongs to publishes world rows on
+          // its shared and GM topics; no postgres_changes fallback remains.
           ...campaignIds.flatMap((campaignId) =>
             campaignBroadcastBindings<WorldRow>(campaignId, "world", () =>
               broadcastRowsBinding<WorldRow>({

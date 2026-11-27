@@ -767,4 +767,67 @@ describe.skipIf(!config)("chat text posts end to end", () => {
     ).rejects.toBeTruthy();
     expect(await readPostsAs(player, sideId)).toEqual([]);
   });
+
+  it("never streams a GM-only post or its delete id to a player", { timeout: 180000 }, async () => {
+    const { gm, player, icChannelId } = await setUpCampaign();
+    const gmSeen: PostWithId[][] = [];
+    const playerSeen: PostWithId[][] = [];
+    const watch = (seen: PostWithId[][], client: typeof gm.client, isGM: boolean) =>
+      listenToChannelPosts(
+        icChannelId,
+        CHAT_POST_PAGE_SIZE,
+        {
+          onPosts: (posts) => seen.push(posts),
+          onHasOlder: () => {},
+          onLoaded: () => {},
+        },
+        (error) => {
+          throw error;
+        },
+        { client, isGM }
+      );
+
+    // Both listeners stay open at once: they use their own signed-in
+    // clients, so neither has to share the singleton session.
+    unsubscribes.push(
+      watch(gmSeen, gm.client, true),
+      watch(playerSeen, player.client, false)
+    );
+    await waitFor(() =>
+      gmSeen.length > 0 && playerSeen.length > 0 ? true : null
+    );
+
+    const secretId = crypto.randomUUID();
+    const inserted = await gm.client.from(CHAT_POSTS_TABLE).insert({
+      id: secretId,
+      channel_id: icChannelId,
+      author_id: gm.userId,
+      gms_only: true,
+      text: "GM-only war room note",
+    });
+    expect(inserted.error).toBeNull();
+    await waitFor(() =>
+      gmSeen.at(-1)?.some((post) => post.id === secretId) ? gmSeen : null
+    );
+
+    // The player is on the same channel-shared topic, so the trigger's
+    // broadcast reaches the socket; only the client filter keeps the row
+    // out of the feed. Wait past the reconcile tick as well.
+    await new Promise((resolve) => setTimeout(resolve, 12000));
+    expect(
+      playerSeen.some((window) => window.some((post) => post.id === secretId))
+    ).toBe(false);
+
+    const deleted = await gm.client
+      .from(CHAT_POSTS_TABLE)
+      .delete()
+      .eq("id", secretId);
+    expect(deleted.error).toBeNull();
+    await waitFor(() =>
+      gmSeen.at(-1)?.some((post) => post.id === secretId) ? null : gmSeen
+    );
+    expect(
+      playerSeen.some((window) => window.some((post) => post.id === secretId))
+    ).toBe(false);
+  });
 });

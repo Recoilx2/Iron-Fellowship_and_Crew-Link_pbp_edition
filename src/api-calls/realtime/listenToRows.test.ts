@@ -1281,6 +1281,42 @@ describe("listenToRows", () => {
       }
     });
 
+    it("still fetches when an optional GM topic's join fails", async () => {
+      const { client, channels } = makeFakeRealtime();
+      const onRows = vi.fn();
+      const onError = vi.fn();
+      const row: Row = {
+        id: "a",
+        value: "from REST",
+        updated_at: "2026-11-12T00:00:01Z",
+      };
+      const fetchRows = vi.fn(() => Promise.resolve([row]));
+
+      listenToRows<Row>({
+        client: client as never,
+        channelName: "assistant-conversations:1",
+        bindings: [
+          broadcastRowsBinding<Row>({
+            topic: "campaign-gm:1:assistant",
+            optional: true,
+            getKey: keyOf,
+          }),
+        ],
+        fetchRows,
+        getKey: keyOf,
+        onRows,
+        onError,
+      });
+      for (const cb of channels[0].subscribeCbs) {
+        cb("CHANNEL_ERROR", new Error("join failed"));
+      }
+      await flush();
+
+      expect(onError).not.toHaveBeenCalled();
+      expect(fetchRows).toHaveBeenCalledTimes(1);
+      expect(onRows).toHaveBeenCalledWith([row]);
+    });
+
     it("removes every channel on unsubscribe", () => {
       const { client, channels, removeChannel } = makeFakeRealtime();
       const unsubscribe = listenToRows<Row>({
