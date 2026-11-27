@@ -36,6 +36,8 @@ const state = {
     postsLoading: false,
     postsError: undefined as string | undefined,
     loadOlderPosts: vi.fn(),
+    focusedPostId: undefined as string | undefined,
+    clearFocusedPost: vi.fn(),
   },
   campaigns: {
     currentCampaign: {
@@ -122,6 +124,7 @@ describe("ChatFeed NPC voices", () => {
     root = undefined;
     container = undefined;
     state.chat.postsByChannel = { ic: [post()] };
+    state.chat.focusedPostId = undefined;
     vi.clearAllMocks();
   });
 
@@ -203,6 +206,7 @@ describe("ChatFeed name lines", () => {
     root = undefined;
     container = undefined;
     state.chat.postsByChannel = { ic: [post()] };
+    state.chat.focusedPostId = undefined;
     state.campaigns.currentCampaign.characters.characterMap = {};
     vi.clearAllMocks();
   });
@@ -247,6 +251,16 @@ describe("ChatFeed name lines", () => {
     expect(view.textContent).toContain("Kira Vey");
     expect(view.textContent).toContain("Sam");
   });
+
+  it("gives posts an id, highlights a focused post and clears the focus", () => {
+    state.chat.focusedPostId = "post-1";
+    const view = render(ic);
+
+    const target = view.querySelector("#post-post-1");
+    expect(target).not.toBeNull();
+    expect(target?.getAttribute("data-highlighted")).toBe("true");
+    expect(state.chat.clearFocusedPost).toHaveBeenCalled();
+  });
 });
 
 describe("ChatFeed edits and deletes", () => {
@@ -260,6 +274,7 @@ describe("ChatFeed edits and deletes", () => {
     container = undefined;
     state.auth.uid = "player-1";
     state.chat.postsByChannel = { ic: [post()] };
+    state.chat.focusedPostId = undefined;
     vi.clearAllMocks();
   });
 

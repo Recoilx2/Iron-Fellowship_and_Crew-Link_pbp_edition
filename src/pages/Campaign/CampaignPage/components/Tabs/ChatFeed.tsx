@@ -55,6 +55,8 @@ export function ChatFeed(props: { channel: ChannelWithId }) {
   const postsLoading = useStore((store) => store.chat.postsLoading);
   const postsError = useStore((store) => store.chat.postsError);
   const loadOlderPosts = useStore((store) => store.chat.loadOlderPosts);
+  const focusedPostId = useStore((store) => store.chat.focusedPostId);
+  const clearFocusedPost = useStore((store) => store.chat.clearFocusedPost);
   const characterMap = useStore(
     (store) =>
       store.campaigns.currentCampaign.characters.characterMap ?? {}
@@ -85,6 +87,33 @@ export function ChatFeed(props: { channel: ChannelWithId }) {
   const stickToBottomRef = useRef(true);
   const loadingOlderRef = useRef(false);
   const pinnedHeightRef = useRef(0);
+  const [highlightedPostId, setHighlightedPostId] = useState<
+    string | undefined
+  >();
+
+  // A search jump loads the target's context into the store before setting
+  // focus. Once its row is in the feed, scroll it into view, mark it briefly,
+  // and clear the focus so a later re-render cannot scroll there again.
+  useLayoutEffect(() => {
+    if (!focusedPostId) {
+      return;
+    }
+    const node = document.getElementById(`post-${focusedPostId}`);
+    if (!node) {
+      return;
+    }
+    node.scrollIntoView?.({ block: "center" });
+    setHighlightedPostId(focusedPostId);
+    clearFocusedPost();
+  }, [focusedPostId, posts, clearFocusedPost]);
+
+  useEffect(() => {
+    if (!highlightedPostId) {
+      return;
+    }
+    const timer = window.setTimeout(() => setHighlightedPostId(undefined), 5000);
+    return () => window.clearTimeout(timer);
+  }, [highlightedPostId]);
 
   const pageBack = () => {
     const scroller = scrollerRef.current;
@@ -159,6 +188,7 @@ export function ChatFeed(props: { channel: ChannelWithId }) {
           npcMap={npcMap}
           gmIds={gmIds}
           userMap={userMap}
+          highlighted={post.id === highlightedPostId}
         />
       ))}
       {!postsLoading && posts.length === 0 && !postsError && (
@@ -183,8 +213,10 @@ function ChatPost(props: {
   npcMap: Record<string, NPCDocumentWithGMProperties>;
   gmIds: string[];
   userMap: Record<string, { doc?: { displayName: string } } | undefined>;
+  highlighted?: boolean;
 }) {
-  const { post, channel, uid, characterMap, npcMap, gmIds, userMap } = props;
+  const { post, channel, uid, characterMap, npcMap, gmIds, userMap, highlighted } =
+    props;
   const character =
     post.speakerCharacterId != null
       ? characterMap[post.speakerCharacterId]
@@ -266,9 +298,16 @@ function ChatPost(props: {
 
   return (
     <Stack
+      id={`post-${post.id}`}
+      data-highlighted={highlighted ? "true" : undefined}
       direction={"row"}
       spacing={1.5}
-      sx={{ px: 2, py: 1, "&:hover": { bgcolor: "action.hover" } }}
+      sx={{
+        px: 2,
+        py: 1,
+        bgcolor: highlighted ? "action.selected" : undefined,
+        "&:hover": { bgcolor: "action.hover" },
+      }}
     >
       {character ? (
         <PortraitAvatar

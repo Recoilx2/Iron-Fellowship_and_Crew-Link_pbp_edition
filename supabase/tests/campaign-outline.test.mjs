@@ -35,10 +35,11 @@ describe("campaign outline migration (#131)", () => {
       "20261121000008_assistant_messages_applied_version_index.sql",
       "20261121000006_assistant_outline_versions.sql",
       "20261121000007_assistant_proposal_state.sql",
+      "20261127000000_chat_post_search.sql",
     ]);
-    // The outline is the latest migration on the branch: nothing landed
-    // after it, so nothing is excluded here. A later migration re-adds
-    // this file to its own landedLater set, following the branch pattern.
+    // Later migrations (the search trigram index among them) sort after the
+    // outline, so they are excluded here. Each new migration re-adds this
+    // file to its own landedLater set, following the branch pattern.
     const others = readdirSync(dir).filter(
       (f) => /^\d{14}_/.test(f) && f !== outlineFile() && !landedLater.has(f)
     );

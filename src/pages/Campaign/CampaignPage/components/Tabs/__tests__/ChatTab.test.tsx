@@ -122,6 +122,10 @@ vi.mock("../MyNotesTab", () => ({
   MyNotesTab: () => <div>My notes pane</div>,
 }));
 vi.mock("../WorldTab", () => ({ WorldTab: () => <div>World pane</div> }));
+vi.mock("../ChatPostSearch", () => ({
+  ChatPostSearch: ({ open }: { open: boolean }) =>
+    open ? <div>Search dialog</div> : null,
+}));
 vi.mock("components/features/worlds/Locations", () => ({
   LocationsSection: () => <div>Locations pane</div>,
 }));
@@ -286,6 +290,19 @@ describe("ChatTab channels", () => {
       player.box.querySelectorAll("button[aria-label^='New']").length
     ).toBe(0);
     player.done();
+  });
+
+  it("opens the campaign-wide post search from the channel list", () => {
+    const view = render();
+
+    const search = view.querySelector(
+      "button[aria-label='Search posts']"
+    ) as HTMLButtonElement | null;
+    expect(search).not.toBeNull();
+    act(() => {
+      search?.click();
+    });
+    expect(view.textContent).toContain("Search dialog");
   });
 
   it("switches channels when a channel is picked", () => {

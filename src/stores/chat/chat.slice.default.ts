@@ -8,6 +8,7 @@ export const defaultChatSlice: ChatSliceData = {
   error: undefined,
   postsByChannel: {},
   hasOlderByChannel: {},
+  focusedPostId: undefined,
   postsLoading: false,
   postsError: undefined,
   drafts: {},

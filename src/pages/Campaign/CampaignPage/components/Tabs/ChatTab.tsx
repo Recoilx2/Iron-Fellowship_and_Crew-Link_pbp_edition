@@ -31,6 +31,7 @@ import {
   useTheme,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/AddCircleOutline";
+import SearchIcon from "@mui/icons-material/Search";
 import LockIcon from "@mui/icons-material/Lock";
 import ChatIcon from "@mui/icons-material/Forum";
 import PersonIcon from "@mui/icons-material/Person";
@@ -56,6 +57,7 @@ import { CharacterTab } from "./CharacterTab";
 import { TracksTab } from "./TracksTab";
 import { MyNotesTab } from "./MyNotesTab";
 import { WorldTab } from "./WorldTab";
+import { ChatPostSearch } from "./ChatPostSearch";
 import { LocationsSection } from "components/features/worlds/Locations";
 import { NPCSection } from "components/features/worlds/NPCSection";
 import { LoreSection } from "components/features/worlds/Lore";
@@ -146,6 +148,7 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
 
   const [showArchived, setShowArchived] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   // Kept here, not in the pane, so it survives the assistant docking over it.
   const [sideTab, setSideTab] = useState("Character");
   const [phoneScreen, setPhoneScreen] = useState<PhoneScreen>("Chat");
@@ -213,6 +216,7 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
     setShowArchived,
     directName,
     onPick: pick,
+    onSearch: () => setSearchOpen(true),
     onCreate: setCreateKind,
     onCreatePrivate: () => setCreatePrivate(true),
     onOpenDirectChannel: openDirectChannel,
@@ -257,6 +261,14 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
                 variant={"outlined"}
                 onClick={() => setPeopleOpen(true)}
               />
+              <Button
+                size={"small"}
+                aria-label={"Search posts"}
+                startIcon={<SearchIcon />}
+                onClick={() => setSearchOpen(true)}
+              >
+                Search
+              </Button>
               {open.map((channel) => (
                 <Chip
                   key={channel.id}
@@ -395,6 +407,13 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
         roster={roster}
         onClose={() => setManagingMembers(false)}
       />
+      <ChatPostSearch
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        campaignId={campaignId}
+        channels={channels}
+        userMap={userMap}
+      />
     </Card>
   );
 }
@@ -410,6 +429,7 @@ function ChannelList(props: {
   setShowArchived: (show: boolean) => void;
   directName: (channelId: string) => string | undefined;
   onPick: (id: string) => void;
+  onSearch: () => void;
   onCreate: (kind: ChannelKind) => void;
   onCreatePrivate: () => void;
   onOpenDirectChannel: (uid: string) => void;
@@ -424,6 +444,7 @@ function ChannelList(props: {
     setShowArchived,
     directName,
     onPick,
+    onSearch,
     onCreate,
     onCreatePrivate,
     onOpenDirectChannel,
@@ -483,6 +504,12 @@ function ChannelList(props: {
 
   return (
     <List dense>
+      <ListItemButton aria-label={"Search posts"} onClick={onSearch}>
+        <ListItemAvatar sx={{ minWidth: 40 }}>
+          <SearchIcon sx={{ fontSize: 18 }} />
+        </ListItemAvatar>
+        <ListItemText primary={"Search posts"} />
+      </ListItemButton>
       {header("In character", "IC")}
       {sortChannels(publicIC).map(item)}
       {header("Out of character", "OOC")}

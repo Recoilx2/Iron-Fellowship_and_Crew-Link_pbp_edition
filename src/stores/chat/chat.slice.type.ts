@@ -14,6 +14,8 @@ export interface ChatSliceData {
   postsByChannel: Record<string, PostWithId[]>;
   /** Whether an older page waits above each loaded window. */
   hasOlderByChannel: Record<string, boolean>;
+  /** The post the feed should scroll to and highlight, set by a search jump. */
+  focusedPostId?: string;
   postsLoading: boolean;
   postsError?: string;
   /** The composer's unsent text per channel, kept for the session. */
@@ -32,6 +34,17 @@ export interface ChatSliceActions {
   subscribeToPosts: (channelId: string | undefined) => Unsubscribe;
   /** Pages one older window in front of the live latest page, on scroll. */
   loadOlderPosts: (channelId: string) => Promise<void>;
+  /**
+   * Opens a channel around a searched post, loads its context and asks the
+   * feed to scroll to it. Fetching happens before the focus is set so the
+   * post is already in the feed when the feed reacts.
+   */
+  jumpToPost: (post: {
+    channelId: string;
+    id: string;
+    createdAt: string;
+  }) => Promise<void>;
+  clearFocusedPost: () => void;
   setDraft: (channelId: string, text: string) => void;
   /** Attaches a roll to the channel's draft, or clears it with null. */
   setPendingRoll: (channelId: string, roll: Roll | null) => void;
