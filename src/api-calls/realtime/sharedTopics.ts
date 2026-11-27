@@ -86,6 +86,34 @@ export async function campaignIdsForWorld(
   return ((data ?? []) as Array<{ id: string }>).map((row) => row.id);
 }
 
+/** Campaigns the reader may see (RLS returns only their own campaigns). */
+export async function visibleCampaignIds(
+  client: SupabaseClient
+): Promise<string[]> {
+  const { data, error } = await client.from("campaigns").select("id");
+  if (error) throw error;
+  return ((data ?? []) as Array<{ id: string }>).map((row) => row.id);
+}
+
+/** The campaign(s) using the world that owns a world_notes row. */
+export async function campaignIdsForWorldNote(
+  client: SupabaseClient,
+  noteId: string
+): Promise<string[]> {
+  const { data, error } = await client
+    .from("world_notes")
+    .select("world_id")
+    .eq("id", noteId);
+  if (error) throw error;
+  const worldIds = ((data ?? []) as Array<{ world_id: string }>).map(
+    (row) => row.world_id
+  );
+  const campaignIds = await Promise.all(
+    worldIds.map((worldId) => campaignIdsForWorld(client, worldId))
+  );
+  return [...new Set(campaignIds.flat())];
+}
+
 /** The campaign a conversation belongs to (GM-only rows are RLS-filtered). */
 export async function campaignIdsForConversation(
   client: SupabaseClient,
