@@ -1506,6 +1506,54 @@ describe("listenToRows", () => {
       ).toEqual({ kind: "refresh" });
     });
 
+    it("turns accepted rows into refreshes when refreshOnly is set", () => {
+      const binding = broadcastRowsBinding<Row>({
+        topic: "channel-shared:1",
+        refreshOnly: true,
+        getKey,
+        // A caller-side filter (GM-only rows) runs before the conversion.
+        toChange: (message) => {
+          const payload =
+            typeof message.payload === "object" && message.payload !== null
+              ? (message.payload as Record<string, unknown>)
+              : null;
+          const record = payload?.record as Record<string, unknown> | null;
+          return record?.hidden === true
+            ? null
+            : broadcastRowChange<Row>(message, { getKey });
+        },
+      });
+      expect(
+        binding.toChange({
+          event: "INSERT",
+          payload: {
+            operation: "INSERT",
+            table: "posts",
+            record: { id: "a", value: "v", updated_at: "1" },
+          },
+        })
+      ).toEqual({ kind: "refresh" });
+      expect(
+        binding.toChange({
+          event: "DELETE",
+          payload: {
+            operation: "DELETE",
+            table: "posts",
+            old_record: { id: "a", value: "v", updated_at: "1" },
+          },
+        })
+      ).toEqual({ kind: "refresh" });
+      expect(
+        binding.toChange({ event: "refresh", payload: { kind: "refresh" } })
+      ).toEqual({ kind: "refresh" });
+      expect(
+        binding.toChange({
+          event: "INSERT",
+          payload: { operation: "INSERT", record: { id: "b", hidden: true } },
+        })
+      ).toBeNull();
+    });
+
     it("projects broadcast rows to the fetchRows columns", () => {
       const change = broadcastRowChange<Row>(
         {

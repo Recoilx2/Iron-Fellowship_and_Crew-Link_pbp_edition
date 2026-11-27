@@ -822,13 +822,20 @@ describe.skipIf(!config)("chat text posts end to end", () => {
       playerSeen.some((window) => window.some((post) => post.id === secretId))
     ).toBe(false);
 
-    const deleted = await gm.client
+    // chat_posts has no hard DELETE policy: posts are soft-deleted by
+    // clearing their text and stamping deleted_at.
+    const deletedAt = new Date().toISOString();
+    const softDeleted = await gm.client
       .from(CHAT_POSTS_TABLE)
-      .delete()
+      .update({ text: "", deleted_at: deletedAt })
       .eq("id", secretId);
-    expect(deleted.error).toBeNull();
+    expect(softDeleted.error).toBeNull();
     await waitFor(() =>
-      gmSeen.at(-1)?.some((post) => post.id === secretId) ? null : gmSeen
+      gmSeen.at(-1)?.some(
+        (post) => post.id === secretId && post.deletedAt != null
+      )
+        ? gmSeen
+        : null
     );
     expect(
       playerSeen.some((window) => window.some((post) => post.id === secretId))

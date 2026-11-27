@@ -134,14 +134,30 @@ export function broadcastRowsBinding<T>(params: {
   project?: (row: Record<string, unknown>) => T;
   /** Replaces the default mapper (e.g. to drop rows the reader may not see). */
   toChange?: (message: BroadcastMessage) => RowChange<T> | null;
+  /**
+   * Never apply broadcast row data: turn every accepted change into a
+   * refresh so the RLS-filtered fetch decides what the reader may see.
+   * Useful when the topic authorizes broader readers than each row does
+   * (chat posts on channel-shared), or when a revoked member's old socket
+   * still receives broadcasts.
+   */
+  refreshOnly?: boolean;
 }): BroadcastBinding<T> {
+  const map =
+    params.toChange ?? ((message) => broadcastRowChange(message, params));
   return {
     type: "broadcast",
     event: "*",
     topic: params.topic,
     optional: params.optional,
-    toChange:
-      params.toChange ?? ((message) => broadcastRowChange(message, params)),
+    toChange: params.refreshOnly
+      ? (message) => {
+          const change = map(message);
+          return change === null || change.kind === "refresh"
+            ? change
+            : { kind: "refresh" };
+        }
+      : map,
   };
 }
 

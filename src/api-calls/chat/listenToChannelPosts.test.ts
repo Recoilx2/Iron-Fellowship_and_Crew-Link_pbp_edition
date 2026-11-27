@@ -4,7 +4,10 @@ import {
   channelPostBroadcastChange,
   listenToChannelPosts,
 } from "api-calls/chat/listenToChannelPosts";
-import { RECONCILE_INTERVAL_MS } from "api-calls/realtime/listenToRows";
+import {
+  broadcastRowsBinding,
+  RECONCILE_INTERVAL_MS,
+} from "api-calls/realtime/listenToRows";
 import type { PostRow } from "api-calls/chat/_postRef";
 import { getSupabaseClient } from "config/supabase.config";
 
@@ -227,12 +230,32 @@ describe("GM-only post broadcasts", () => {
     ).toEqual({ kind: "upsert", row: { ...row, gms_only: false } });
   });
 
-  it("applies the filter on the live binding, not just the mapper", async () => {
+  it("turns accepted broadcast rows into refreshes, dropping GM-only ones", () => {
+    const message = {
+      event: "INSERT",
+      payload: {
+        operation: "INSERT",
+        table: "chat_posts",
+        record: secretPost(),
+      },
+    };
+    const binding = (isGM: boolean) =>
+      broadcastRowsBinding<PostRow>({
+        topic: "channel-shared:channel-1",
+        refreshOnly: true,
+        getKey: (row) => row.id,
+        toChange: (received) => channelPostBroadcastChange(isGM, received),
+      });
+    expect(binding(true).toChange(message)).toEqual({ kind: "refresh" });
+    expect(binding(false).toChange(message)).toBeNull();
+  });
+
+  it("never applies a broadcast row to the feed", async () => {
     for (const isGM of [false, true]) {
       const client = setUpClient();
       const onPosts = vi.fn();
       const onError = vi.fn();
-      listenToChannelPosts(
+      const stop = listenToChannelPosts(
         "channel-1",
         30,
         { onPosts, onHasOlder: vi.fn(), onLoaded: vi.fn() },
@@ -241,19 +264,21 @@ describe("GM-only post broadcasts", () => {
       );
       client.fireSubscribed();
       await vi.advanceTimersByTimeAsync(0);
+      const fetchesBefore = client.seenLimits.length;
       onPosts.mockClear();
 
-      const row = secretPost();
       client.fireBroadcast("INSERT", {
         operation: "INSERT",
         table: "chat_posts",
-        record: row,
+        record: secretPost(),
       });
-      expect(onPosts).toHaveBeenCalledTimes(isGM ? 1 : 0);
-      if (isGM) {
-        expect(onPosts.mock.calls[0][0][0].id).toBe("secret-1");
-      }
+      // A GM's accepted broadcast queues an RLS-filtered re-fetch; a
+      // player's GM-only broadcast is dropped before that. Neither path
+      // inserts raw broadcast row data into the feed.
+      expect(client.seenLimits.length).toBe(fetchesBefore + (isGM ? 1 : 0));
+      expect(onPosts).not.toHaveBeenCalled();
       expect(onError).not.toHaveBeenCalled();
+      stop();
     }
   });
 });

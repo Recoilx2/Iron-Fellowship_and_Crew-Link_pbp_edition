@@ -106,6 +106,11 @@ export function listenToChannelPosts(
         topic: channelSharedTopic(channelId),
         table: CHAT_POSTS_TABLE,
         getKey: (row) => row.id,
+        // A revoked member's already-joined socket still receives channel
+        // broadcasts, so never apply row data from the wire: re-read through
+        // RLS instead. The filter below still drops GM-only rows before a
+        // refresh is queued (defense in depth).
+        refreshOnly: true,
         toChange: (message) => channelPostBroadcastChange(isGM, message),
       }),
     ],

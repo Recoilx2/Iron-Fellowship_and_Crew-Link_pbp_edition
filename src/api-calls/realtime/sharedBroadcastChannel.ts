@@ -11,7 +11,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * so separate listeners for the same topic share ONE channel here. A single
  * wildcard broadcast handler fans messages out to every subscriber, and
  * subscribers are ref-counted: the channel is removed when the last one
- * leaves.
+ * leaves. A cached failed join is retried when a new required subscriber
+ * arrives, so a first-mount TIMED_OUT cannot poison later listeners.
  *
  * Postgres Changes keep their own per-subscription suffixed topics (issue
  * #116): those have no database-side publisher to match.
@@ -42,10 +43,47 @@ const channelsByClient = new WeakMap<
   Map<string, SharedBroadcastChannel>
 >();
 
+const FAILED_STATUSES = new Set(["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"]);
+
+function openChannel(
+  client: SupabaseClient,
+  topic: string
+): SharedBroadcastChannel {
+  const channel = client.channel(topic, { config: { private: true } });
+  const record: SharedBroadcastChannel = {
+    topic,
+    channel,
+    subscribers: new Set(),
+    status: null,
+    error: undefined,
+  };
+  // Registered before subscribe(): never add a handler afterwards.
+  channel.on("broadcast", { event: "*" }, (payload: unknown) => {
+    const message = payload as BroadcastMessage;
+    for (const listener of [...record.subscribers]) {
+      listener.onMessage(message);
+    }
+  });
+  channel.subscribe((status, error) => {
+    record.status = status;
+    record.error = error;
+    for (const listener of [...record.subscribers]) {
+      listener.onStatus(status, error);
+    }
+  });
+  return record;
+}
+
 /**
  * Joins (or reuses) the shared channel for `topic` and registers one
- * subscriber. Returns its release function; a late subscriber receives the
- * recorded status on the next microtask so it can fetch and start its own
+ * subscriber. A failed cached join is retried when a new subscriber needs
+ * the topic: the old channel is dropped and every current subscriber moves
+ * onto a fresh join, so a first-mount TIMED_OUT cannot poison the page.
+ * Optional-only topics (campaign-gm for players) never retry, so a policy
+ * denial is not turned into a reconnect loop.
+ *
+ * Returns the release function. The recorded status is replayed to a late
+ * subscriber on the next microtask so it fetches and starts its own
  * reconcile timer without waiting for another subscribe event.
  */
 export function subscribeBroadcast(
@@ -59,31 +97,25 @@ export function subscribeBroadcast(
     channelsByClient.set(client, byTopic);
   }
   let shared = byTopic.get(topic);
-  if (!shared) {
-    const channel = client.channel(topic, { config: { private: true } });
-    shared = {
-      topic,
-      channel,
-      subscribers: new Set(),
-      status: null,
-      error: undefined,
-    };
+  if (
+    shared &&
+    shared.status !== null &&
+    FAILED_STATUSES.has(shared.status) &&
+    [...shared.subscribers, subscriber].some((item) => !item.optional)
+  ) {
+    // Migrate every subscriber to a new channel: replaying the old failure
+    // would leave all listeners permanently unsubscribed.
+    const inherited = new Set(shared.subscribers);
+    shared.subscribers.clear();
+    byTopic.delete(topic);
+    void client.removeChannel(shared.channel);
+    shared = openChannel(client, topic);
+    shared.subscribers = inherited;
     byTopic.set(topic, shared);
-    const record = shared;
-    // Registered before subscribe(): never add a handler afterwards.
-    channel.on("broadcast", { event: "*" }, (payload: unknown) => {
-      const message = payload as BroadcastMessage;
-      for (const listener of [...record.subscribers]) {
-        listener.onMessage(message);
-      }
-    });
-    channel.subscribe((status, error) => {
-      record.status = status;
-      record.error = error;
-      for (const listener of [...record.subscribers]) {
-        listener.onStatus(status, error);
-      }
-    });
+  }
+  if (!shared) {
+    shared = openChannel(client, topic);
+    byTopic.set(topic, shared);
   }
   shared.subscribers.add(subscriber);
   const joined = shared;
@@ -99,10 +131,11 @@ export function subscribeBroadcast(
   return () => {
     if (released) return;
     released = true;
+    // Look up by subscriber identity, not by the record captured at
+    // subscription time: a retry may have replaced that record.
     const current = channelsByClient.get(client);
     const record = current?.get(topic);
-    if (!record || record !== joined) return;
-    record.subscribers.delete(subscriber);
+    if (!record || !record.subscribers.delete(subscriber)) return;
     if (record.subscribers.size === 0) {
       current?.delete(topic);
       if (current?.size === 0) channelsByClient.delete(client);
