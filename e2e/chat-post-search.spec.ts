@@ -191,32 +191,32 @@ test.describe("chat post search", () => {
   }) => {
     await signInAs(page, config, player, campaignUrl(campaignId));
     let dialog = await openSearch(page);
-    expect(await findPosts(page, dialog, publicWord)).toHaveCount(1);
-    expect(await findPosts(page, dialog, privateWord)).toHaveCount(1);
-    expect(await findPosts(page, dialog, dmWord)).toHaveCount(1);
+    await expect(await findPosts(page, dialog, publicWord)).toHaveCount(1);
+    await expect(await findPosts(page, dialog, privateWord)).toHaveCount(1);
+    await expect(await findPosts(page, dialog, dmWord)).toHaveCount(1);
     await expect(
       await findPosts(page, dialog, gmWord)
     ).toHaveCount(0);
 
     await signInAs(page, config, dmPeer, campaignUrl(campaignId));
     dialog = await openSearch(page);
-    expect(await findPosts(page, dialog, dmWord)).toHaveCount(1);
+    await expect(await findPosts(page, dialog, dmWord)).toHaveCount(1);
 
     // A campaign member outside the private channel and the DM sees neither,
     // and players never see GM-only rolls.
     await signInAs(page, config, leftOut, campaignUrl(campaignId));
     dialog = await openSearch(page);
-    expect(await findPosts(page, dialog, publicWord)).toHaveCount(1);
-    expect(await findPosts(page, dialog, privateWord)).toHaveCount(0);
-    expect(await findPosts(page, dialog, dmWord)).toHaveCount(0);
-    expect(await findPosts(page, dialog, gmWord)).toHaveCount(0);
+    await expect(await findPosts(page, dialog, publicWord)).toHaveCount(1);
+    await expect(await findPosts(page, dialog, privateWord)).toHaveCount(0);
+    await expect(await findPosts(page, dialog, dmWord)).toHaveCount(0);
+    await expect(await findPosts(page, dialog, gmWord)).toHaveCount(0);
 
     // A GM sees private channels and their own GM-only posts, but a GM who
     // is not in a direct message stays blind to it.
     await signInAs(page, config, gm, campaignUrl(campaignId));
     dialog = await openSearch(page);
-    expect(await findPosts(page, dialog, privateWord)).toHaveCount(1);
-    expect(await findPosts(page, dialog, gmWord)).toHaveCount(1);
-    expect(await findPosts(page, dialog, dmWord)).toHaveCount(0);
+    await expect(await findPosts(page, dialog, privateWord)).toHaveCount(1);
+    await expect(await findPosts(page, dialog, gmWord)).toHaveCount(1);
+    await expect(await findPosts(page, dialog, dmWord)).toHaveCount(0);
   });
 });
