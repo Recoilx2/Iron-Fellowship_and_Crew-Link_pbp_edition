@@ -29,6 +29,7 @@ test.describe("chat post search", () => {
   let gm: E2EPerson;
   let player: E2EPerson;
   let leftOut: E2EPerson;
+  let dmPeer: E2EPerson;
   let people: E2EPerson[] = [];
   const stamp = Date.now().toString(36);
   const publicWord = `public${stamp}`;
@@ -63,7 +64,8 @@ test.describe("chat post search", () => {
     gm = await createPerson(config, `e2e-search-gm-${stamp}`);
     player = await createPerson(config, `e2e-search-player-${stamp}`);
     leftOut = await createPerson(config, `e2e-search-out-${stamp}`);
-    people = [gm, player, leftOut];
+    dmPeer = await createPerson(config, `e2e-search-dm-${stamp}`);
+    people = [gm, player, leftOut, dmPeer];
     campaignId = await createCampaignAs(
       gm,
       `E2E Search ${Date.now()}`,
@@ -71,6 +73,7 @@ test.describe("chat post search", () => {
     );
     await joinCampaignAs(player, campaignId);
     await joinCampaignAs(leftOut, campaignId);
+    await joinCampaignAs(dmPeer, campaignId);
 
     const channels = await gm.client
       .from("chat_channels")
@@ -97,7 +100,7 @@ test.describe("chat post search", () => {
     }
     const dm = await player.client.rpc("get_or_create_dm_channel", {
       cid: campaignId,
-      other_id: leftOut.userId,
+      other_id: dmPeer.userId,
     });
     if (dm.error || !dm.data) {
       throw new Error(`e2e: could not create DM: ${dm.error?.message}`);
@@ -144,7 +147,7 @@ test.describe("chat post search", () => {
     phrase: string
   ) {
     await dialog.getByRole("textbox", { name: "Search post text" }).fill(phrase);
-    await dialog.getByRole("button", { name: "Search" }).click();
+    await dialog.getByRole("button", { name: "Search", exact: true }).click();
     return resultButtons(dialog, phrase);
   }
 
@@ -194,6 +197,10 @@ test.describe("chat post search", () => {
     await expect(
       await findPosts(page, dialog, gmWord)
     ).toHaveCount(0);
+
+    await signInAs(page, config, dmPeer, campaignUrl(campaignId));
+    dialog = await openSearch(page);
+    expect(await findPosts(page, dialog, dmWord)).toHaveCount(1);
     await expect(dialog.getByText("No posts match that phrase.")).toBeVisible();
 
     // A campaign member outside the private channel and the DM sees neither,

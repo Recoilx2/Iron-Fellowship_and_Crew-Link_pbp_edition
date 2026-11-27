@@ -68,6 +68,7 @@ describe.skipIf(!config)("campaign post search end to end", () => {
     gm: LivePerson;
     player: LivePerson;
     other: LivePerson;
+    bystander: LivePerson;
     outsider: LivePerson;
     campaignId: string;
     icChannelId: string;
@@ -75,8 +76,9 @@ describe.skipIf(!config)("campaign post search end to end", () => {
     const gm = await createPerson(cfg, "gm");
     const player = await createPerson(cfg, "player");
     const other = await createPerson(cfg, "other");
+    const bystander = await createPerson(cfg, "bystander");
     const outsider = await createPerson(cfg, "outsider");
-    people.push(gm, player, other, outsider);
+    people.push(gm, player, other, bystander, outsider);
 
     await signInAs(gm);
     const campaignId = await createCampaign({
@@ -89,6 +91,9 @@ describe.skipIf(!config)("campaign post search end to end", () => {
     await joinCampaign({ campaignId });
     await signOut();
     await signInAs(other);
+    await joinCampaign({ campaignId });
+    await signOut();
+    await signInAs(bystander);
     await joinCampaign({ campaignId });
     await signOut();
 
@@ -104,6 +109,7 @@ describe.skipIf(!config)("campaign post search end to end", () => {
       gm,
       player,
       other,
+      bystander,
       outsider,
       campaignId,
       icChannelId: (data as { id: string }).id,
@@ -124,7 +130,7 @@ describe.skipIf(!config)("campaign post search end to end", () => {
     "returns only rows the reader may read, across public, private, DM and GM-only channels",
     { timeout: 180000 },
     async () => {
-      const { gm, player, other, outsider, campaignId, icChannelId } =
+      const { gm, player, other, bystander, outsider, campaignId, icChannelId } =
         await setUp();
       const stamp = Date.now().toString(36);
       const publicWord = `publicneedle${stamp}`;
@@ -206,8 +212,18 @@ describe.skipIf(!config)("campaign post search end to end", () => {
       const otherTexts = otherResult.posts.map((post) => post.text);
       expect(otherTexts).toContain(`The lantern: ${publicWord}`);
       expect(otherTexts).not.toContain(`A debt: ${privateWord}`);
-      expect(otherTexts).not.toContain(`Just between us: ${dmWord}`);
+      // `other` is the DM counterparty, so the DM is visible to them.
+      expect(otherTexts).toContain(`Just between us: ${dmWord}`);
       expect(otherTexts).not.toContain(`Secret roll: ${gmWord}`);
+
+      // A campaign member in neither the private channel nor the DM sees
+      // only the public post.
+      const bystanderResult = await searchAs(bystander, campaignId, "needle");
+      const bystanderTexts = bystanderResult.posts.map((post) => post.text);
+      expect(bystanderTexts).toContain(`The lantern: ${publicWord}`);
+      expect(bystanderTexts).not.toContain(`A debt: ${privateWord}`);
+      expect(bystanderTexts).not.toContain(`Just between us: ${dmWord}`);
+      expect(bystanderTexts).not.toContain(`Secret roll: ${gmWord}`);
 
       const outsiderResult = await searchAs(outsider, campaignId, "needle");
       expect(outsiderResult.posts).toEqual([]);
