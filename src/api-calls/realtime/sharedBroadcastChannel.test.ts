@@ -27,11 +27,20 @@ interface FakeChannel {
 function makeClient() {
   const open = new Map<string, FakeChannel>();
   const created: FakeChannel[] = [];
-  const removeChannel = vi.fn(async (channel: FakeChannel) => {
-    channel.closed = true;
-    open.delete(channel.topic);
-    return "ok";
-  });
+  // realtime-js keeps returning the same object by topic until teardown
+  // resolves. Resolve removals only when the test says so, so an un-awaited
+  // `void client.removeChannel(...)` still sees the OLD channel object.
+  const pendingRemovals: Array<() => void> = [];
+  const removeChannel = vi.fn(
+    (channel: FakeChannel) =>
+      new Promise<string>((resolve) => {
+        pendingRemovals.push(() => {
+          channel.closed = true;
+          if (open.get(channel.topic) === channel) open.delete(channel.topic);
+          resolve("ok");
+        });
+      })
+  );
   const client = {
     channel(topic: string): FakeChannel {
       const existing = open.get(topic);
@@ -62,7 +71,10 @@ function makeClient() {
     },
     removeChannel,
   } as unknown as SupabaseClient;
-  return { client, created, removeChannel };
+  const settleRemovals = () => {
+    for (const finish of pendingRemovals.splice(0)) finish();
+  };
+  return { client, created, removeChannel, settleRemovals };
 }
 
 function makeSubscriber(optional = false) {
@@ -90,7 +102,7 @@ describe("shared broadcast channels", () => {
   });
 
   it("heals a cached failure for both old and late subscribers", async () => {
-    const { client, created, removeChannel } = makeClient();
+    const { client, created, removeChannel, settleRemovals } = makeClient();
     const first = makeSubscriber();
     const late = makeSubscriber();
     const stopFirst = subscribeBroadcast(
@@ -107,6 +119,8 @@ describe("shared broadcast channels", () => {
     expect(created).toHaveLength(1);
 
     await vi.advanceTimersByTimeAsync(1300);
+    settleRemovals();
+    await vi.advanceTimersByTimeAsync(0);
     expect(created).toHaveLength(2);
     expect(removeChannel).toHaveBeenCalledTimes(1);
     fire(created[1], "SUBSCRIBED");
@@ -116,17 +130,38 @@ describe("shared broadcast channels", () => {
     stopFirst();
   });
 
+  it("does not replace a channel that recovered while removal was pending", async () => {
+    const { client, created, settleRemovals } = makeClient();
+    const sub = makeSubscriber();
+    const stop = subscribeBroadcast(client, "channel-shared:1", sub.subscriber);
+    fire(created[0], "TIMED_OUT");
+    await vi.advanceTimersByTimeAsync(1300);
+    // The retry is suspended awaiting removeChannel; the old generation
+    // recovers in the meantime and announces success exactly once.
+    fire(created[0], "SUBSCRIBED");
+    expect(sub.statuses.filter((entry) => entry.status === "SUBSCRIBED")).toHaveLength(1);
+    settleRemovals();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(created).toHaveLength(1);
+    expect(sub.statuses.filter((entry) => entry.status === "SUBSCRIBED")).toHaveLength(1);
+    stop();
+  });
+
   it("uses bounded backoff, one retry at a time, and cancels on SUBSCRIBED", async () => {
-    const { client, created } = makeClient();
+    const { client, created, settleRemovals } = makeClient();
     const sub = makeSubscriber();
     const stop = subscribeBroadcast(client, "channel-shared:1", sub.subscriber);
     fire(created[0], "CHANNEL_ERROR");
 
     // Multiple timer ticks while the first retry is pending must not stack.
     await vi.advanceTimersByTimeAsync(1300);
+    settleRemovals();
+    await vi.advanceTimersByTimeAsync(0);
     expect(created).toHaveLength(2);
     fire(created[1], "TIMED_OUT");
     await vi.advanceTimersByTimeAsync(2500);
+    settleRemovals();
+    await vi.advanceTimersByTimeAsync(0);
     expect(created).toHaveLength(3);
     fire(created[2], "SUBSCRIBED");
 

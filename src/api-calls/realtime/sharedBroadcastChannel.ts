@@ -124,11 +124,22 @@ async function retry(
   }
   record.retryInFlight = true;
   const oldChannel = record.channel;
+  const generationAtStart = record.generation;
   try {
     // supabase-js reuses channels by topic until teardown resolves; adding
     // handlers to the "new" object before then would be a silent no-op.
     await client.removeChannel(oldChannel);
-    if (record.disposed) return;
+    // The old generation may have recovered (or been released) while the
+    // teardown was pending. Do not replace or re-announce it in that case.
+    if (
+      record.disposed ||
+      record.generation !== generationAtStart ||
+      record.channel !== oldChannel ||
+      channelsByClient.get(client)?.get(record.topic) !== record ||
+      record.status === "SUBSCRIBED"
+    ) {
+      return;
+    }
     const fresh = client.channel(record.topic, { config: { private: true } });
     if (fresh === oldChannel) {
       // Not actually replaced: keep waiting for a working generation.
