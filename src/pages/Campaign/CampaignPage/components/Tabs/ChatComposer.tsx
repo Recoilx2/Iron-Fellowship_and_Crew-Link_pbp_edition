@@ -37,6 +37,8 @@ import type { ChatRollContext, DiceRoller } from "functions/chatRolls";
 import { ChatRollPicker, type ChatRollKind } from "./ChatRollPickers";
 import { defaultChatSpeaker } from "functions/chatSpeaker";
 import { findActiveCampaignCharacter } from "functions/isActiveCampaignCharacter";
+import { useChannelTyping } from "hooks/useChannelTyping";
+import { TypingIndicator } from "./TypingIndicator";
 interface PendingAttachment {
   key: string;
   name: string;
@@ -124,6 +126,7 @@ export function ChatComposer(props: {
     (store) => store.chat.pendingRolls[channelId]
   );
   const setPendingRoll = useStore((store) => store.chat.setPendingRoll);
+  const { typingNames, notifyTyping, stopTyping } = useChannelTyping(channelId);
 
   const [sending, setSending] = useState(false);
   const [npcSpeakerId, setNpcSpeakerId] = useState<string | null>(null);
@@ -340,6 +343,9 @@ export function ChatComposer(props: {
     if (!canSend) {
       return;
     }
+    // Sending ends the typing presence immediately, before the post write
+    // starts: readers must not keep seeing someone typing after they post.
+    stopTyping();
     const paths = attachments
       .map((attachment) => attachment.path)
       .filter((path): path is string => path !== null);
@@ -423,6 +429,7 @@ export function ChatComposer(props: {
             : ""}
         </Typography>
       </Stack>
+      <TypingIndicator typingNames={typingNames} />
       {channelKind === "IC" && !isGM && !activeCharacter && (
         <Alert severity={"info"} sx={{ mx: 0.5, mb: 1 }}>
           You have no active character in this campaign. Make a character
@@ -560,7 +567,11 @@ export function ChatComposer(props: {
           placeholder={`Post in # ${channel.name}`}
           inputProps={{ "aria-label": `Post in # ${channel.name}` }}
           value={draft}
-          onChange={(e) => setDraft(channelId, e.target.value)}
+          onChange={(e) => {
+            setDraft(channelId, e.target.value);
+            notifyTyping();
+          }}
+          onBlur={() => stopTyping()}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();

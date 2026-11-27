@@ -12,6 +12,14 @@ const createPost = vi.fn((params: unknown) => {
 });
 const success = vi.fn();
 
+vi.mock("hooks/useChannelTyping", () => ({
+  useChannelTyping: () => ({
+    typingNames: [],
+    notifyTyping: vi.fn(),
+    stopTyping: vi.fn(),
+  }),
+}));
+
 const state = {
   auth: { uid: "player-1", user: { displayName: "Sam" } },
   accessibilitySettings: { settings: { verboseRollResults: false } },
