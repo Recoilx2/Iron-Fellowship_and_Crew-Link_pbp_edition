@@ -5,6 +5,55 @@
  * requests or routing.
  */
 
+/**
+ * One RSA public JWK from the stack's JWKS: the half of the signing key
+ * every verifier holds (ticket #152). GoTrue signs access tokens with the
+ * matching private key; callers present RS256 tokens carrying its `kid`.
+ */
+export interface RsaPublicJwk {
+  kty: "RSA";
+  kid: string;
+  alg: "RS256";
+  n: string;
+  e: string;
+}
+
+/** The parsed public JWKS: the keys tokens are verified against. */
+export type JwkSet = ReadonlyArray<RsaPublicJwk>;
+
+/**
+ * Parses the JWT_JWKS environment value into the key set, or null when it
+ * is missing or malformed. Null means nothing can be verified: the runtime
+ * wiring refuses to start without it.
+ */
+export function parseJwkSet(raw: string | undefined | null): JwkSet | null {
+  if (!raw) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const keys = (parsed as { keys?: unknown } | null)?.keys;
+  if (!Array.isArray(keys) || keys.length === 0) return null;
+  const jwks: RsaPublicJwk[] = [];
+  for (const key of keys) {
+    const jwk = key as Partial<RsaPublicJwk> | null;
+    if (
+      jwk?.kty === "RSA" &&
+      typeof jwk.kid === "string" &&
+      jwk.kid !== "" &&
+      typeof jwk.n === "string" &&
+      jwk.n !== "" &&
+      typeof jwk.e === "string" &&
+      jwk.e !== ""
+    ) {
+      jwks.push({ kty: "RSA", kid: jwk.kid, alg: "RS256", n: jwk.n, e: jwk.e });
+    }
+  }
+  return jwks.length > 0 ? jwks : null;
+}
+
 /** Deployment config, built from the environment by the runtime wiring. */
 export interface GmAssistantEnv {
   /** Base URL of the OpenAI-compatible endpoint; blank means not set up. */
@@ -15,8 +64,8 @@ export interface GmAssistantEnv {
   allowedModels: string;
   /** Raw default context size; blank or invalid means 8192. */
   contextTokens: string;
-  /** HS256 secret the stack signs access tokens with. */
-  jwtSecret: string;
+  /** Public JWKS the caller's RS256 access token is verified against. */
+  jwtJwks: JwkSet;
   /** PostgREST base URL (inside the stack network, e.g. http://api-gw:8000). */
   supabaseUrl: string;
   /** Anon key, sent as the PostgREST `apikey` header beside the caller JWT. */

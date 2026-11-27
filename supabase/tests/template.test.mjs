@@ -61,7 +61,8 @@ describe("supabase compose template", () => {
     const block = next === -1 ? after : after.slice(0, next);
     assert.ok(block.includes("./hocuspocus"), "hocuspocus is not built from supabase/hocuspocus");
     assert.ok(/mem_limit\s*:\s*\S+/.test(block), "hocuspocus has no memory cap");
-    assert.ok(/JWT_SECRET/.test(block), "hocuspocus does not get the token secret");
+    assert.ok(/JWT_JWKS/.test(block), "hocuspocus does not get the public token JWKS");
+    assert.ok(!/JWT_SECRET/.test(block), "hocuspocus still gets a symmetric token secret");
     assert.ok(/POSTGRES_PASSWORD/.test(block), "hocuspocus does not get the database password");
     assert.ok(!/ports\s*:/.test(block), "hocuspocus publishes a host port instead of hiding behind the gateway");
   });
@@ -182,17 +183,141 @@ describe("supabase compose template", () => {
     const example = read(".env.example");
     for (const v of [
       "POSTGRES_PASSWORD",
-      "JWT_SECRET",
+      "JWT_KEYS_FILE",
+      "JWT_JWKS",
+      "STORAGE_AUTH_FILE",
       "ANON_KEY",
       "SERVICE_ROLE_KEY",
       "SECRET_KEY_BASE",
       "REALTIME_DB_ENC_KEY_GCM",
-      "S3_PROTOCOL_ACCESS_KEY_ID",
-      "S3_PROTOCOL_ACCESS_KEY_SECRET",
       "PG_META_CRYPTO_KEY",
     ]) {
       assert.ok(new RegExp(`^${v}=\\s*$`, "m").test(example), `${v} is not blank`);
     }
+  });
+
+  it("signs tokens asymmetrically and never wires the old shared secret", () => {
+    const text = code(compose());
+    // The shared HS256 secret is gone entirely (ticket #152).
+    assert.ok(!/\$\{JWT_SECRET\}/.test(compose()), "compose still interpolates JWT_SECRET");
+    // GoTrue alone holds the private signing key: it arrives through its own
+    // env file, and only the auth service lists it. It only verifies RS256.
+    {
+      const m = text.match(/^  auth:\s*$/m);
+      assert.ok(m, "service auth missing");
+      const after = text.slice(m.index + m[0].length);
+      const next = after.search(/^  [a-z][a-z-]*:\s*$/m);
+      const block = next === -1 ? after : after.slice(0, next);
+      assert.ok(
+        /env_file:[\s\S]*?\n\s+-\s+\$\{JWT_KEYS_FILE\}/.test(block),
+        "auth does not read the GoTrue-only key file",
+      );
+      assert.ok(/GOTRUE_JWT_VALID_METHODS\s*:\s*RS256/.test(block), "auth does not pin RS256");
+      // The public JWKS must not be interpolated into the auth service: it
+      // holds the private key, the verifiers hold the public one.
+      assert.ok(!/JWT_JWKS/.test(block), "auth must not need the public JWKS: it holds the private key");
+    }
+    // Every verifier sees the public JWKS, and no service sees the private
+    // key: it is delivered only through the GoTrue-only env file.
+    {
+      const m = text.match(/^  rest:\s*$/m);
+      assert.ok(m, "service rest missing");
+      const after = text.slice(m.index + m[0].length);
+      const next = after.search(/^  [a-z][a-z-]*:\s*$/m);
+      const block = next === -1 ? after : after.slice(0, next);
+      assert.ok(/PGRST_JWT_SECRET\s*:\s*\$\{JWT_JWKS\}/.test(block), "rest does not verify with the public JWKS");
+    }
+    {
+      const m = text.match(/^  realtime:\s*$/m);
+      assert.ok(m, "service realtime missing");
+      const after = text.slice(m.index + m[0].length);
+      const next = after.search(/^  [a-z][a-z-]*:\s*$/m);
+      const block = next === -1 ? after : after.slice(0, next);
+      assert.ok(/API_JWT_JWKS\s*:\s*\$\{JWT_JWKS\}/.test(block), "realtime does not verify with the public JWKS");
+      // No app-level admin secret: with none configured, realtime's /api
+      // endpoints (health, tenant management) refuse every caller, so no
+      // HS256 token is accepted anywhere in realtime.
+      const blockCode = block
+        .split("\n")
+        .filter((l) => !/^\s*#/.test(l))
+        .join("\n");
+      assert.ok(!/API_JWT_SECRET/.test(blockCode), "realtime still gets an HS256 admin secret");
+    }
+    {
+      const m = text.match(/^  storage:\s*$/m);
+      assert.ok(m, "service storage missing");
+      const after = text.slice(m.index + m[0].length);
+      const next = after.search(/^  [a-z][a-z-]*:\s*$/m);
+      const block = next === -1 ? after : after.slice(0, next);
+      assert.ok(/JWT_JWKS\s*:\s*\$\{JWT_JWKS\}/.test(block), "storage does not verify with the public JWKS");
+      // The static secret arrives through its own env file (the patched
+      // verifier verifies nothing with it); it must not be interpolated
+      // into the shared environment, where an empty value would override
+      // the file and fail the boot check.
+      assert.ok(/-\s+\$\{STORAGE_AUTH_FILE\}/.test(block), "storage does not read its secret-only env file");
+      assert.ok(!/AUTH_JWT_SECRET/.test(block), "storage interpolates its static secret");
+      // The mounted verifier patch must be built from the pinned image.
+      const storageImage = text.match(/^    image:\s*supabase\/storage-api:(\S+)$/m)?.[1];
+      assert.ok(storageImage, "storage image line missing");
+      assert.ok(/\.\/storage\/jwt\.js:\/app\/dist\/internal\/auth\/jwt\.js:ro/.test(block), "the patched verifier is not mounted");
+      const patched = read("storage/jwt.js");
+      assert.ok(
+        patched.includes(`supabase/storage-api ${storageImage}`),
+        `the patched verifier was not built from ${storageImage}`,
+      );
+      assert.ok(patched.includes("is not accepted"), "the patched verifier does not refuse HMAC tokens");
+      assert.ok(
+        patched.includes("HMAC token signing is not accepted"),
+        "the patched verifier still mints HMAC tokens",
+      );
+      // The S3 protocol authenticates with SigV4 (HMAC-SHA256) and mints
+      // HS256 session tokens: it must stay off.
+      assert.ok(/S3_PROTOCOL_ENABLED\s*:\s*["']false["']/.test(block), "the S3 protocol endpoint is enabled");
+      assert.ok(!/S3_PROTOCOL_ACCESS_KEY/.test(block), "storage still receives S3 protocol keys");
+    }
+    assert.ok(
+      [...text.matchAll(/-\s+\$\{JWT_KEYS_FILE\}/g)].length === 1,
+      "only the auth service may read the GoTrue-only key file",
+    );
+  });
+
+  it("forks the realtime tenant seed and release config on the pinned image", () => {
+    const text = compose();
+    assert.ok(/SEED_SELF_HOST\s*:\s*["']true["']/.test(text), "realtime tenant seeding is off");
+    const image = text.match(/^    image:\s*supabase\/realtime:(\S+)$/m)?.[1];
+    assert.ok(image, "realtime image line missing");
+    const version = image.replace(/^v/, "");
+    assert.ok(
+      text.includes(`./realtime/seeds.exs:/app/lib/realtime-${version}/priv/repo/seeds.exs:ro`),
+      `the seed fork is not mounted over the pinned image's seeds (realtime-${version})`,
+    );
+    assert.ok(
+      text.includes(`./realtime/runtime.exs:/app/releases/${version}/runtime.exs:ro`),
+      `the release-config fork is not mounted over the pinned image's runtime.exs (realtime-${version})`,
+    );
+    const seeds = read("realtime/seeds.exs");
+    assert.ok(seeds.includes("API_JWT_JWKS"), "seed fork does not read the public JWKS");
+    const seedsCode = seeds
+      .split("\n")
+      .filter((l) => !/^\s*#/.test(l))
+      .join("\n");
+    assert.ok(seedsCode.includes('"jwt_secret" => nil'), "seed fork must seed the tenant with no HS256 secret");
+    assert.ok(!/API_JWT_SECRET/.test(seedsCode), "seed fork must not copy the admin secret into the tenant");
+    const runtime = read("realtime/runtime.exs");
+    const runtimeCode = runtime
+      .split("\n")
+      .filter((l) => !/^\s*#/.test(l))
+      .join("\n");
+    assert.ok(
+      /metrics_jwt_secret\s*=\s*\[\]/.test(runtimeCode),
+      "release-config fork must leave the metrics verifier no secret",
+    );
+    assert.ok(!/METRICS_JWT_SECRET/.test(runtimeCode), "release-config fork still reads METRICS_JWT_SECRET");
+    assert.ok(exists("realtime/healthcheck.sh"), "realtime healthcheck script missing");
+    assert.ok(
+      /test:\s*\["CMD",\s*"\/bin\/sh",\s*"\/realtime\/healthcheck.sh"\]/.test(text),
+      "realtime healthcheck does not run the mounted script",
+    );
   });
 });
 

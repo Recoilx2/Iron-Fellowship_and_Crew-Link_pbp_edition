@@ -9,7 +9,6 @@
  * is saved like any other. What it misses (covered by the live test):
  * the Deno wiring, real row-level security and the real upstream.
  */
-import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
 
@@ -21,13 +20,13 @@ import {
   type GmAssistantEnv,
   type UpstreamFetch,
 } from "./handler";
+import { mintRs256, testJwks } from "./testTokens";
 
 const GM_ID = "11111111-1111-4111-8111-111111111111";
 const CAMPAIGN_ID = "22222222-2222-4222-8222-222222222222";
 const CONVERSATION_ID = "33333333-3333-4333-8333-333333333333";
 const OUTLINE_ID = "88888888-8888-4222-8222-888888888888";
 const API_KEY = "sk-test-secret-KEY-abcdef123456";
-const JWT_SECRET = "test-jwt-secret-that-is-long-enough";
 const OUTLINE_TEXT = "Act one: the bell rings over the harbor.";
 
 function baseEnv(overrides: Partial<GmAssistantEnv> = {}): GmAssistantEnv {
@@ -36,7 +35,7 @@ function baseEnv(overrides: Partial<GmAssistantEnv> = {}): GmAssistantEnv {
     apiKey: API_KEY,
     allowedModels: "",
     contextTokens: "",
-    jwtSecret: JWT_SECRET,
+    jwtJwks: testJwks(),
     supabaseUrl: "http://api-gw:8000",
     anonKey: "anon-key",
     siteUrl: "https://site.test",
@@ -45,23 +44,8 @@ function baseEnv(overrides: Partial<GmAssistantEnv> = {}): GmAssistantEnv {
   };
 }
 
-function b64url(b64: string): string {
-  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function mintToken(claims: Record<string, unknown>): string {
-  const header = b64url(
-    Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64")
-  );
-  const payload = b64url(Buffer.from(JSON.stringify(claims)).toString("base64"));
-  const sig = b64url(
-    createHmac("sha256", JWT_SECRET).update(`${header}.${payload}`).digest("base64")
-  );
-  return `${header}.${payload}.${sig}`;
-}
-
 function gmToken(): string {
-  return mintToken({
+  return mintRs256({
     role: "authenticated",
     sub: GM_ID,
     exp: Math.floor(Date.now() / 1000) + 3600,

@@ -143,13 +143,13 @@ describe.skipIf(!config)("chat images end to end", () => {
     expect((rows as unknown as PostRow[]).find((row) => row.id === postId))
       .toMatchObject({ image_paths: [path] });
 
-    // Members load the bytes and mint signed URLs for the feed.
+    // Members load the bytes and resolve feed URLs for the image.
     const { data: bytes, error: downloadError } = await player.client.storage
       .from(CHAT_IMAGES_BUCKET)
       .download(path);
     expect(downloadError).toBeNull();
     expect(bytes).not.toBeNull();
-    await expect(getChatImageUrl(path)).resolves.toMatch(/^https?:/);
+    await expect(getChatImageUrl(path)).resolves.toMatch(/^blob:/);
 
     // Removing the attachment discards its upload.
     await removeChatImage(path);
@@ -186,7 +186,7 @@ describe.skipIf(!config)("chat images end to end", () => {
       .download(path);
     expect(downloadError).not.toBeNull();
 
-    // ... and cannot mint signed URLs either.
+    // ... and cannot resolve feed URLs either.
     await signOut();
     await signInAs(outsider);
     await expect(getChatImageUrl(path)).rejects.toBeTruthy();
@@ -294,7 +294,7 @@ describe.skipIf(!config)("chat images end to end", () => {
     const channelId = (Array.isArray(data) ? data[0] : data) as string;
     const path = await postImageAs(player, campaignId, channelId);
 
-    // A member outside the channel reads neither the bytes nor a signed URL.
+    // A member outside the channel reads neither the bytes nor an image URL.
     const { error: downloadError } = await bystander.client.storage
       .from(CHAT_IMAGES_BUCKET)
       .download(path);
@@ -305,7 +305,7 @@ describe.skipIf(!config)("chat images end to end", () => {
 
     // The channel member who posted it still reads it back.
     await signInAs(player);
-    await expect(getChatImageUrl(path)).resolves.toMatch(/^https?:/);
+    await expect(getChatImageUrl(path)).resolves.toMatch(/^blob:/);
     await signOut();
   });
 
@@ -352,7 +352,7 @@ describe.skipIf(!config)("chat images end to end", () => {
     });
     await signOut();
 
-    // A player reads neither the bytes nor a signed URL ...
+    // A player reads neither the bytes nor an image URL ...
     const { error: downloadError } = await player.client.storage
       .from(CHAT_IMAGES_BUCKET)
       .download(path);
@@ -495,7 +495,7 @@ describe.skipIf(!config)("chat images end to end", () => {
     const path = await uploadChatImage(campaignId, crypto.randomUUID(), png());
     await signOut();
 
-    // Another member reads neither the bytes nor a signed URL ...
+    // Another member reads neither the bytes nor an image URL ...
     const { error: downloadError } = await other.client.storage
       .from(CHAT_IMAGES_BUCKET)
       .download(path);

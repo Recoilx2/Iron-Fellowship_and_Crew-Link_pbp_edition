@@ -28,6 +28,7 @@ supabase/.env
 supabase/.env.ironsworn
 supabase/.env.starforged
 supabase/.env.live
+supabase/.env.*.gotrue
 
 # Playwright browser-test output (kept as CI artifacts on failure, never committed)
 test-results/

@@ -3,8 +3,12 @@
  * function (spec #10). Split out of `handler.ts` (ticket #151): the JWT is
  * verified in code (the gateway's VERIFY_JWT flag is off) and GM
  * membership is checked before anything else on every route.
+ *
+ * Tokens are RS256 (ticket #152): GoTrue signs access tokens with the
+ * stack's RSA-3072 key and every verifier holds only the public JWKS. An
+ * HS256 token — signed with any secret — is refused by the algorithm check.
  */
-import type { GmAssistantEnv, UpstreamFetch } from "./env.ts";
+import type { GmAssistantEnv, JwkSet, RsaPublicJwk, UpstreamFetch } from "./env.ts";
 import { postgrest } from "./postgrest.ts";
 
 export const UUID_PATTERN =
@@ -35,6 +39,21 @@ export interface VerifiedCaller {
   sub: string;
 }
 
+/**
+ * Picks the JWK the token claims (by `kid`) from the stack's public JWKS.
+ * Every token GoTrue mints carries the signing key's `kid`, so a token
+ * without a known kid is not one of ours. Returns null when no key matches.
+ */
+function selectJwk(
+  jwks: JwkSet,
+  kid: string | undefined,
+): RsaPublicJwk | null {
+  if (kid) {
+    return jwks.find((jwk) => jwk.kid === kid) ?? null;
+  }
+  return jwks.length === 1 ? jwks[0] : null;
+}
+
 export async function verifyCaller(
   req: Request,
   env: GmAssistantEnv,
@@ -47,7 +66,7 @@ export async function verifyCaller(
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [headerB64, payloadB64, signatureB64] = parts;
-  let headerJson: { alg?: string };
+  let headerJson: { alg?: string; kid?: string };
   let payload: { role?: string; exp?: number; sub?: string };
   try {
     headerJson = JSON.parse(
@@ -59,14 +78,18 @@ export async function verifyCaller(
   } catch {
     return null;
   }
-  if (!headerJson || headerJson.alg !== "HS256") return null;
-  if (!env.jwtSecret) return null;
+  // RS256 only (ticket #152): the stack's tokens are signed with the
+  // GoTrue RSA key; an HS256 token — signed with any secret, old or new —
+  // is refused before any key material is touched.
+  if (!headerJson || headerJson.alg !== "RS256") return null;
+  const jwk = selectJwk(env.jwtJwks, headerJson.kid);
+  if (!jwk) return null;
   let key: CryptoKey;
   try {
     key = await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(env.jwtSecret),
-      { name: "HMAC", hash: "SHA-256" },
+      "jwk",
+      { kty: jwk.kty, n: jwk.n, e: jwk.e },
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
       false,
       ["verify"],
     );
@@ -76,7 +99,7 @@ export async function verifyCaller(
   let valid = false;
   try {
     valid = await crypto.subtle.verify(
-      "HMAC",
+      "RSASSA-PKCS1-v1_5",
       key,
       base64UrlDecodeToBytes(signatureB64),
       new TextEncoder().encode(`${headerB64}.${payloadB64}`),

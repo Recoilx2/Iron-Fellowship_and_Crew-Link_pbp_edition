@@ -11,8 +11,6 @@ import { shrinkImageFile } from "api-calls/storage/shrinkImage";
 
 export const PORTRAITS_BUCKET = "portraits";
 
-const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7;
-
 // Selection cap for the portrait pickers. Large images are shrunk in the
 // browser before upload (see shrinkImage.ts); this only stops files no
 // browser should be asked to decode.
@@ -48,6 +46,13 @@ export async function uploadPortraitFile(
   return shrunk.name;
 }
 
+/**
+ * Loads the portrait's bytes with the viewer's own token (RS256;
+ * ticket #152) and returns an object URL for it. Storage's signed-URL flow
+ * is gone: its tokens were HMAC-signed, and the stack's verifier refuses
+ * HMAC. The object URL holds the bytes until revoked — the caller owns
+ * that (the portrait store revokes when it replaces a URL).
+ */
 export async function getPortraitUrl(
   uid: string,
   characterId: string,
@@ -55,11 +60,11 @@ export async function getPortraitUrl(
 ): Promise<string> {
   const { data, error } = await getSupabaseClient()
     .storage.from(PORTRAITS_BUCKET)
-    .createSignedUrl(portraitFilePath(uid, characterId, filename), SIGNED_URL_TTL_SECONDS);
-  if (error || !data?.signedUrl) {
+    .download(portraitFilePath(uid, characterId, filename));
+  if (error || !data) {
     throw error ?? new Error("Failed to load character portrait.");
   }
-  return data.signedUrl;
+  return URL.createObjectURL(data);
 }
 
 export async function removePortraitFile(

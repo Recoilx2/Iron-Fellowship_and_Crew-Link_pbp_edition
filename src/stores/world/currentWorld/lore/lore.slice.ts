@@ -2,6 +2,7 @@ import { CreateSliceType } from "stores/store.type";
 import { LoreSlice } from "./lore.slice.type";
 import { defaultLoreSlice } from "./lore.slice.default";
 import { listenToLoreDocuments } from "api-calls/world/lore/listenToLoreDocuments";
+import { dropObjectUrl, replaceObjectUrl } from "api-calls/storage/objectUrls";
 import { createLore } from "api-calls/world/lore/createLore";
 import { deleteLore } from "api-calls/world/lore/deleteLore";
 import { updateLore } from "api-calls/world/lore/updateLore";
@@ -41,6 +42,9 @@ export const createLoreSlice: CreateSliceType<LoreSlice> = (set, getState) => ({
             (lore.imageFilenames?.length ?? 0) > 0
               ? existingLore?.imageUrl
               : undefined;
+          if (existingLore?.imageUrl && existingLore.imageUrl !== imageUrl) {
+            dropObjectUrl(existingLore.imageUrl);
+          }
           store.worlds.currentWorld.currentWorldLore.loreMap[loreId] = {
             ...lore,
             gmProperties,
@@ -53,12 +57,17 @@ export const createLoreSlice: CreateSliceType<LoreSlice> = (set, getState) => ({
       },
       (loreId, imageUrl) => {
         set((store) => {
-          store.worlds.currentWorld.currentWorldLore.loreMap[loreId].imageUrl =
-            imageUrl;
+          const doc =
+            store.worlds.currentWorld.currentWorldLore.loreMap[loreId];
+          doc.imageUrl = replaceObjectUrl(doc.imageUrl, imageUrl);
         });
       },
       (loreId) => {
         set((store) => {
+          dropObjectUrl(
+            store.worlds.currentWorld.currentWorldLore.loreMap[loreId]
+              ?.imageUrl
+          );
           delete store.worlds.currentWorld.currentWorldLore.loreMap[loreId];
         });
       },
