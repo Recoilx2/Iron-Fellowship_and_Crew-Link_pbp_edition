@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "expansions": [
+    {
+      "id": "mounted_e2e",
+      "path": "/config/rulesets/mounted_e2e.json",
+      "name": "Mounted Test Expansion",
+      "type": "expansion",
+      "isHomebrew": true,
+      "note": "Example operator-supplied content mounted by the stack template."
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "_id": "mounted_e2e",
+  "type": "expansion",
+  "datasworn_version": "0.3.0",
+  "ruleset": "classic",
+  "title": "Mounted Test Expansion",
+  "url": "https://example.com/mounted-e2e",
+  "license": "https://creativecommons.org/licenses/by/4.0",
+  "date": "2026-11-27",
+  "authors": [{ "name": "Stack Template" }],
+  "oracles": {},
+  "moves": {
+    "mounted": {
+      "_id": "move_category:mounted_e2e/mounted",
+      "type": "move_category",
+      "name": "Mounted Moves",
+      "_source": {
+        "title": "Mounted Test Expansion",
+        "url": "https://example.com/mounted-e2e",
+        "license": "https://creativecommons.org/licenses/by/4.0",
+        "date": "2026-11-27",
+        "authors": [{ "name": "Stack Template" }]
+      },
+      "contents": {
+        "check_the_mount": {
+          "_id": "move:mounted_e2e/mounted/check_the_mount",
+          "type": "move",
+          "roll_type": "no_roll",
+          "name": "Check the Mount",
+          "_source": {
+            "title": "Mounted Test Expansion",
+            "url": "https://example.com/mounted-e2e",
+            "license": "https://creativecommons.org/licenses/by/4.0",
+            "date": "2026-11-27",
+            "authors": [{ "name": "Stack Template" }]
+          },
+          "text": "When you check the operator-supplied ruleset, confirm that mounted content appears on the Rules page.",
+          "trigger": {
+            "text": "When you check the operator-supplied ruleset",
+            "conditions": []
+          },
+          "allow_momentum_burn": false,
+          "outcomes": null
+        }
+      },
+      "collections": {}
+    }
+  },
+  "assets": {}
+}

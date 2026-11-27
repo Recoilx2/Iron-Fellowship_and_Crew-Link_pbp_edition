@@ -504,6 +504,12 @@ services:
     # baked value the check compares.
     environment:
       CHAT_IMAGE_MAX_MB: ${CHAT_IMAGE_MAX_MB:-10}
+    volumes:
+      # Per-copy ruleset volume: manifest.json and Datasworn packages under
+      # rulesets/ are served read-only at /config/. The path is relative to
+      # this file; point RULESETS_CONFIG_DIR at a different directory for
+      # another copy.
+      - ${RULESETS_CONFIG_DIR:-./site/config}:/usr/share/nginx/config:ro
 
   # Comment out everything below this point if you are using an external Postgres database
   db:

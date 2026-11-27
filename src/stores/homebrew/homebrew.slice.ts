@@ -334,7 +334,6 @@ export const createHomebrewSlice: CreateSliceType<HomebrewSlice> = (
     });
 
     return () => {
-      getState().rules.setExpansionIds([]);
       unsubscribes.forEach((unsubscribe) => unsubscribe());
       getState().rules.rebuildRules();
     };
