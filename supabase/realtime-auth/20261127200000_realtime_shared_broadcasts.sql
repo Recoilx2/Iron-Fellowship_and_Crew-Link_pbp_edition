@@ -77,9 +77,10 @@ CREATE POLICY "realtime campaign gm topics readable by gms"
     END
   );
 
--- Mirrors private.can_read_channel: public channels belong to every campaign
--- member, private channels to their roster and the campaign's GMs, and DMs
--- to their two members alone (not even a GM who is outside the DM).
+-- Use the shipped channel access rule directly: every branch of
+-- private.can_read_channel gates on campaign membership, so a removed
+-- member's stale roster row grants nothing. It also keeps the DM exclusion
+-- (a GM outside a DM sees nothing) in one place.
 DROP POLICY IF EXISTS "realtime channel shared topics readable by channel readers" ON realtime.messages;
 CREATE POLICY "realtime channel shared topics readable by channel readers"
   ON realtime.messages FOR SELECT TO authenticated
@@ -87,18 +88,8 @@ CREATE POLICY "realtime channel shared topics readable by channel readers"
     realtime.messages.extension IN ('broadcast', 'presence')
     AND CASE
       WHEN current_setting('realtime.topic', true) ~ '^channel-shared:[0-9a-fA-F-]{36}(:|$)'
-      THEN (
-        private.is_channel_member(
-          split_part(current_setting('realtime.topic', true), ':', 2)::uuid
-        )
-        OR EXISTS (
-          SELECT 1 FROM public.chat_channels AS ch
-          WHERE ch.id = split_part(current_setting('realtime.topic', true), ':', 2)::uuid
-            AND (
-              (ch.visibility = 'public' AND private.is_campaign_member(ch.campaign_id))
-              OR (ch.visibility = 'private' AND private.is_campaign_gm(ch.campaign_id))
-            )
-        )
+      THEN private.can_read_channel(
+        split_part(current_setting('realtime.topic', true), ':', 2)::uuid
       )
       ELSE false
     END
@@ -145,18 +136,8 @@ CREATE POLICY "realtime app channels writable by signed-in listeners"
       END
       OR CASE
         WHEN current_setting('realtime.topic', true) ~ '^channel-shared:[0-9a-fA-F-]{36}(:|$)'
-        THEN (
-          private.is_channel_member(
-            split_part(current_setting('realtime.topic', true), ':', 2)::uuid
-          )
-          OR EXISTS (
-            SELECT 1 FROM public.chat_channels AS ch
-            WHERE ch.id = split_part(current_setting('realtime.topic', true), ':', 2)::uuid
-              AND (
-                (ch.visibility = 'public' AND private.is_campaign_member(ch.campaign_id))
-                OR (ch.visibility = 'private' AND private.is_campaign_gm(ch.campaign_id))
-              )
-          )
+        THEN private.can_read_channel(
+          split_part(current_setting('realtime.topic', true), ':', 2)::uuid
         )
         ELSE false
       END

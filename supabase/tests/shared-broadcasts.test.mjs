@@ -20,18 +20,25 @@ describe("private broadcast shadow phase (#211)", () => {
     }
   });
 
-  it("generalises the existing channel-member helper instead of duplicating it", () => {
+  it("delegates to the shipped channel-member helper instead of duplicating it", () => {
     const sql = read(MIGRATION);
     assert.ok(
-      /CREATE OR REPLACE FUNCTION private\.is_channel_member\(cid uuid, uid uuid\)/i.test(sql),
-      "no two-argument is_channel_member helper"
+      /CREATE OR REPLACE FUNCTION private\.is_channel_member\(cid uuid\)[\s\S]{0,200}?SELECT private\.is_channel_member_as\(cid, \(select auth\.uid\(\)\)\)/i.test(sql),
+      "the one-argument helper no longer delegates to is_channel_member_as"
     );
     assert.ok(
-      /CREATE OR REPLACE FUNCTION private\.is_channel_member\(cid uuid\)[\s\S]{0,200}?private\.is_channel_member\(cid, \(select auth\.uid\(\)\)\)/i.test(sql),
-      "the one-argument helper no longer delegates to the shared rule"
+      !/CREATE OR REPLACE FUNCTION private\.is_channel_member\(cid uuid, uid uuid\)/i.test(sql),
+      "duplicate two-argument is_channel_member definition"
     );
     const occurrences = sql.match(/CREATE OR REPLACE FUNCTION private\.is_channel_member\(cid uuid\)/gi) ?? [];
     assert.equal(occurrences.length, 1, "duplicate one-argument helper");
+    // The shared rule itself ships in #216's migration, not in this one.
+    assert.ok(
+      /CREATE OR REPLACE FUNCTION private\.is_channel_member_as\(cid uuid, uid uuid\)/i.test(
+        read("supabase/migrations/20261128000000_chat_email_prefs.sql")
+      ),
+      "the shipped is_channel_member_as helper is missing"
+    );
   });
 
   it("publishes refresh on membership delete and role update", () => {
@@ -171,8 +178,8 @@ describe("private broadcast shadow phase (#211)", () => {
       "GM topics are not GM checked"
     );
     assert.ok(
-      sql.includes("private.is_channel_member("),
-      "channel topics are not roster checked"
+      sql.includes("private.can_read_channel("),
+      "channel topics do not use the shipped campaign-gated access rule"
     );
     for (const name of [
       "realtime campaign shared topics readable by members",
@@ -186,6 +193,38 @@ describe("private broadcast shadow phase (#211)", () => {
       assert.ok(
         sql.includes(`CREATE POLICY "${name}"`),
         `${name} is not created`
+      );
+    }
+  });
+
+  it("gates channel-shared on can_read_channel in both policies", () => {
+    const sql = read(POLICIES);
+    const calls = sql.match(/private\.can_read_channel\(/g) ?? [];
+    assert.equal(
+      calls.length,
+      2,
+      "channel-shared must use can_read_channel in SELECT and in presence INSERT"
+    );
+    assert.ok(
+      !sql.includes("private.is_channel_member("),
+      "a raw roster check bypasses the campaign-membership gate"
+    );
+    assert.ok(
+      !/channel-shared:[\s\S]*?EXISTS \(/m.test(sql),
+      "the redundant EXISTS branch is still present"
+    );
+    for (const [policy, keyword] of [
+      ["realtime channel shared topics readable by channel readers", "USING"],
+      ["realtime app channels writable by signed-in listeners", "WITH CHECK"],
+    ]) {
+      const body = sql.slice(
+        sql.indexOf(`CREATE POLICY "${policy}"`),
+        sql.indexOf(policy === "realtime channel shared topics readable by channel readers" ? "DROP POLICY IF EXISTS \"realtime app channels writable" : "COMMIT;")
+      );
+      assert.ok(body.includes(keyword), `${policy} is missing ${keyword}`);
+      assert.ok(
+        body.includes("private.can_read_channel("),
+        `${policy} does not call can_read_channel`
       );
     }
   });

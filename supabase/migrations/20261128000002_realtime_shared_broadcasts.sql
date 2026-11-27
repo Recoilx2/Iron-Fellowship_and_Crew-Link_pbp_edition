@@ -26,23 +26,11 @@ BEGIN;
 
 CREATE SCHEMA IF NOT EXISTS private;
 
--- Generalise the roster check already used by chat access rules. The one
--- argument form keeps its existing signature; the two argument form lets a
--- definer helper check somebody other than the caller (not used by RLS, but
--- it keeps the ownership rule in one place).
-CREATE OR REPLACE FUNCTION private.is_channel_member(cid uuid, uid uuid)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.chat_channel_members
-    WHERE channel_id = cid AND user_id = uid
-  );
-$$;
-
+-- The explicit-person roster check ships with #216's chat_email_prefs
+-- migration as private.is_channel_member_as(cid, uid). Keep the existing
+-- one-argument helper delegating to that shared rule: redefining the
+-- two-argument form here would duplicate it and could drift from the
+-- campaign-membership gate the shipped helpers use.
 CREATE OR REPLACE FUNCTION private.is_channel_member(cid uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -50,7 +38,7 @@ STABLE
 SECURITY DEFINER
 SET search_path = ''
 AS $$
-  SELECT private.is_channel_member(cid, (select auth.uid()));
+  SELECT private.is_channel_member_as(cid, (select auth.uid()));
 $$;
 
 -- A refresh carries no row data: open listeners re-fetch through their

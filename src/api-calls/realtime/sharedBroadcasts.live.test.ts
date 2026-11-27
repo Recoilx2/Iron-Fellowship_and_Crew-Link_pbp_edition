@@ -149,6 +149,46 @@ describe.skipIf(!config)("private broadcast topics against the local stack", () 
     expect(await settle(asOutsider)).not.toBe("SUBSCRIBED");
   });
 
+  it("refuses channel-shared when the campaign membership is gone but the roster row is stale", { timeout: 90000 }, async () => {
+    await setUpRoster();
+    const channelId = randomCampaignId();
+    const admin = adminClient(cfg);
+    const created = await admin.from("chat_channels").insert({
+      id: channelId,
+      campaign_id: campaignId,
+      name: "Side quest",
+      kind: "IC",
+      visibility: "private",
+    });
+    expect(created.error).toBeNull();
+    const roster = await admin
+      .from("chat_channel_members")
+      .insert({ channel_id: channelId, user_id: player.userId });
+    expect(roster.error).toBeNull();
+
+    // Remove only the campaign roster entry. The channel roster row has no
+    // FK to campaign_members, so it survives: the topic policy must gate on
+    // private.can_read_channel's campaign check, not on is_channel_member.
+    const revoked = await admin
+      .from("campaign_members")
+      .delete()
+      .eq("campaign_id", campaignId)
+      .eq("user_id", player.userId);
+    expect(revoked.error).toBeNull();
+    const stale = await admin
+      .from("chat_channel_members")
+      .select("user_id")
+      .eq("channel_id", channelId)
+      .eq("user_id", player.userId);
+    expect(stale.data ?? []).toHaveLength(1);
+
+    const topic = `channel-shared:${channelId}`;
+    const asFormerMember = track(join(player.client, topic, "INSERT"));
+    const asGm = track(join(gm.client, topic, "INSERT"));
+    expect(await settle(asGm)).toBe("SUBSCRIBED");
+    expect(await settle(asFormerMember)).not.toBe("SUBSCRIBED");
+  });
+
   it("keeps a GM-only DELETE on the GM topic", { timeout: 90000 }, async () => {
     await setUpRoster();
     const shared = track(
