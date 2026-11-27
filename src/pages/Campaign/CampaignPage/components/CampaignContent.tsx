@@ -36,7 +36,7 @@ export function CampaignContent(props: CampaignContentProps) {
   // rewritten by the tab hook (which only touches `tab`), so the rest of the
   // link stays intact for a reload or a copy/paste.
   const linkedChannelId = searchParams.get("channel") ?? undefined;
-  const focusedPostId = searchParams.get("post") ?? undefined;
+  const linkedPostId = searchParams.get("post") ?? undefined;
 
   const hasWorld = useStore(
     (store) => !!store.campaigns.currentCampaign.currentCampaign?.worldId
@@ -89,7 +89,7 @@ export function CampaignContent(props: CampaignContentProps) {
         <ChatTab
           openInviteDialog={openInviteDialog}
           linkedChannelId={linkedChannelId}
-          focusedPostId={focusedPostId}
+          linkedPostId={linkedPostId}
         />
       </ContainedTabPanel>
       <ContainedTabPanel isVisible={visibleTab === CampaignTabs.Characters}>

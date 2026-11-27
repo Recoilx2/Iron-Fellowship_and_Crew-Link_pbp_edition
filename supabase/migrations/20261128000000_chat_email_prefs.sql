@@ -151,9 +151,11 @@ AS $$
   SELECT private.is_channel_member_as(cid, (select auth.uid()));
 $$;
 
--- The channel visibility rule, over an explicit person. Public channels
--- belong to campaign members, private ones to their roster plus the GMs,
--- and DMs to their two members alone -- a GM outside a DM sees nothing.
+-- The channel visibility rule, over an explicit person. Every branch keeps
+-- the campaign-membership gate from the original one-argument helper: a
+-- former member's stale roster row grants nothing. Public channels belong
+-- to campaign members, private ones to their roster plus the GMs, and DMs
+-- to their two members alone -- a GM outside a DM sees nothing.
 CREATE OR REPLACE FUNCTION private.can_read_channel_as(cid uuid, uid uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -164,8 +166,9 @@ AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.chat_channels AS ch
     WHERE ch.id = cid
+      AND private.is_campaign_member_as(ch.campaign_id, uid)
       AND (
-        (ch.visibility = 'public' AND private.is_campaign_member_as(ch.campaign_id, uid))
+        (ch.visibility = 'public')
         OR (ch.visibility = 'private' AND (
           private.is_channel_member_as(ch.id, uid)
           OR private.is_campaign_gm_as(ch.campaign_id, uid)

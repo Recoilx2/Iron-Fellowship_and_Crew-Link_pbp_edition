@@ -404,24 +404,31 @@ describe("ChatFeed email deep links", () => {
     root = undefined;
     container = undefined;
     state.chat.postsByChannel = { ic: [post()] };
+    state.chat.focusedPostId = undefined;
   });
 
-  it("gives every post a stable anchor for a link from an email", () => {
+  it("uses the shared focus anchor for a linked post", () => {
     state.chat.postsByChannel = {
       ic: [post(), post({ id: "post-2", text: "A later post" })],
     };
+    state.chat.focusedPostId = "post-2";
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
     act(() => {
       root?.render(
         <ThemeProvider theme={theme}>
-          <ChatFeed channel={ic} focusedPostId="post-2" />
+          <ChatFeed channel={ic} />
         </ThemeProvider>
       );
     });
 
-    expect(container?.querySelector("#chat-post-post-1")).not.toBeNull();
-    expect(container?.querySelector("#chat-post-post-2")).not.toBeNull();
+    // Search and email deep links share the same store-driven anchor; no
+    // second anchor format or highlight path is introduced here.
+    expect(container?.querySelector('[id="post-post-1"]')).not.toBeNull();
+    expect(container?.querySelector('[id="post-post-2"]')).not.toBeNull();
+    expect(
+      container?.querySelector('[id="post-post-2"]')?.getAttribute("data-highlighted")
+    ).toBe("true");
   });
 });

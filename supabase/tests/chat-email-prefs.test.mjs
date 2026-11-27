@@ -13,6 +13,7 @@ const outbox = readFileSync(
   join(dir, "20261128000001_chat_post_email_outbox.sql"),
   "utf8"
 );
+const worker = readFileSync(join(dir, "..", "mailer", "worker.js"), "utf8");
 
 describe("chat email preference and outbox migrations (#203)", () => {
   it("follows the migration naming convention", () => {
@@ -85,6 +86,12 @@ describe("chat email preference and outbox migrations (#203)", () => {
       prefs.includes("OR (ch.visibility = 'dm' AND private.is_channel_member_as(ch.id, uid))"),
       "a GM outside a DM could read it"
     );
+    // The explicit-reader helper must keep the old one-argument helper's
+    // meaning: membership gates every branch, not just public channels.
+    assert.ok(
+      /WHERE ch\.id = cid\s+AND private\.is_campaign_member_as\(ch\.campaign_id, uid\)\s+AND \(\s*\(ch\.visibility = 'public'\)/m.test(prefs),
+      "campaign membership no longer gates every visibility branch"
+    );
   });
 
   it("resolves only access-eligible candidates and exposes both preference flags", () => {
@@ -122,9 +129,19 @@ describe("chat email preference and outbox migrations (#203)", () => {
       outbox.includes("public.chat_post_email_candidates(v_post_id)"),
       "the outbox does not use the access-checked candidate list"
     );
+    // Both target columns must be supplied: one expression for two columns
+    // is a Postgres error that made every post insert fail (PR #216 CI).
+    assert.ok(
+      /INSERT INTO public\.chat_post_email_outbox \(post_id, recipient_user_id\)\s+SELECT c\.recipient_user_id, v_post_id\s+FROM public\.chat_post_email_candidates\(v_post_id\) AS c/.test(outbox),
+      "the outbox INSERT does not supply both post_id and recipient_user_id"
+    );
     assert.ok(
       outbox.includes("ON CONFLICT (post_id, recipient_user_id) DO NOTHING"),
       "a reader could be queued twice"
+    );
+    assert.ok(
+      /sending_at timestamptz NULL/.test(outbox),
+      "no durable in-flight marker to prevent a repeat send"
     );
     assert.ok(
       outbox.includes("pg_notify('chat_post_email', v_post_id::text)"),
@@ -138,6 +155,42 @@ describe("chat email preference and outbox migrations (#203)", () => {
       /attempts integer NOT NULL DEFAULT 0/.test(outbox) &&
         /next_attempt_at timestamptz NOT NULL DEFAULT now\(\)/.test(outbox),
       "no bounded retry state"
+    );
+  });
+});
+
+describe("mailer in-flight delivery (PR #216 fixes)", () => {
+  it("claims a row durably before SMTP and excludes in-flight rows from polls", () => {
+    assert.ok(
+      /SET sending_at = now\(\)/.test(worker),
+      "the row is not marked in flight at claim time"
+    );
+    assert.ok(
+      worker.includes("AND q.sending_at IS NULL"),
+      "the poll can claim a row that is already being sent"
+    );
+    assert.ok(
+      /SET sent_at = now\(\), sending_at = NULL/.test(worker),
+      "a successful send does not clear the in-flight marker"
+    );
+  });
+
+  it("resets in-flight state on failure, keeps bounded retries and redacted logs", () => {
+    assert.ok(
+      /SET sending_at = NULL, attempts = \$2, next_attempt_at/.test(worker),
+      "a failed send leaves the row stuck in flight"
+    );
+    assert.ok(
+      /sent = true;[\s\S]*?sending_at IS NOT NULL/.test(worker),
+      "a DB failure after SMTP send can clear the in-flight marker"
+    );
+    assert.ok(
+      worker.includes("attempts < $1") && worker.includes("MAX_ATTEMPTS = 5"),
+      "delivery attempts are unbounded"
+    );
+    assert.ok(
+      worker.includes("redact(") && worker.includes("errorCode"),
+      "errors are not redacted before logging"
     );
   });
 });

@@ -81,10 +81,11 @@ export function createWorker(config, { pool, listener, transporter }) {
   async function claim(postId) {
     const sql = `
       UPDATE public.chat_post_email_outbox AS o
-      SET next_attempt_at = now() + interval '2 minutes'
+      SET sending_at = now(), attempts = o.attempts + 1
       WHERE o.id IN (
         SELECT q.id FROM public.chat_post_email_outbox AS q
         WHERE q.sent_at IS NULL
+          AND q.sending_at IS NULL
           AND q.next_attempt_at <= now()
           AND q.attempts < $1
           ${postId ? "AND q.post_id = $2" : ""}
@@ -100,11 +101,13 @@ export function createWorker(config, { pool, listener, transporter }) {
 
   async function markSkipped(id, reason) {
     await pool.query(
-      "UPDATE public.chat_post_email_outbox SET sent_at = now(), last_error = $2 WHERE id = $1",
+      "UPDATE public.chat_post_email_outbox SET sent_at = now(), sending_at = NULL, last_error = $2 WHERE id = $1",
       [id, reason]
     );
   }
 
+  // `attempts` was already advanced by the claim. On a send failure the
+  // in-flight marker is cleared so a later poll can retry within the bound.
   async function markRetry(id, attempts, error) {
     if (attempts >= MAX_ATTEMPTS) {
       await markSkipped(id, `abandoned after ${attempts} attempts: ${error}`);
@@ -113,13 +116,28 @@ export function createWorker(config, { pool, listener, transporter }) {
     const backoffSeconds = Math.min(60, 2 ** (attempts - 1));
     await pool.query(
       `UPDATE public.chat_post_email_outbox
-       SET attempts = $2, next_attempt_at = now() + ($3 * interval '1 second'), last_error = $4
+       SET sending_at = NULL, attempts = $2, next_attempt_at = now() + ($3 * interval '1 second'), last_error = $4
        WHERE id = $1`,
       [id, attempts, backoffSeconds, error]
     );
   }
 
+  // A worker that died mid-send cannot know whether the mail went out. Take
+  // the at-most-once side: close those rows with an explicit error instead
+  // of letting a restart deliver them a second time.
+  async function reconcileInFlight() {
+    const { rowCount } = await pool.query(`
+      UPDATE public.chat_post_email_outbox
+      SET sent_at = now(), last_error = 'delivery uncertain: worker restarted while in flight'
+      WHERE sending_at IS NOT NULL AND sending_at < now() - interval '10 minutes'
+    `);
+    if (rowCount > 0) {
+      console.log(`[mailer] closed ${rowCount} uncertain in-flight row(s)`);
+    }
+  }
+
   async function deliver(row) {
+    let sent = false;
     try {
       // Re-check with the database's own access + preference function: a
       // reader who lost access or opted out after the post is not mailed.
@@ -146,13 +164,26 @@ export function createWorker(config, { pool, listener, transporter }) {
         text,
         html,
       });
+      // Past this point the email has left the worker. A failure to confirm
+      // it in the database must NOT clear sending_at: the poll would pick
+      // the row up again and deliver a duplicate.
+      sent = true;
       await pool.query(
-        "UPDATE public.chat_post_email_outbox SET sent_at = now(), last_error = NULL WHERE id = $1",
+        "UPDATE public.chat_post_email_outbox SET sent_at = now(), sending_at = NULL, last_error = NULL WHERE id = $1 AND sending_at IS NOT NULL",
         [row.id]
       );
       console.log(`[mailer] sent outbox=${row.id} post=${row.post_id}`);
     } catch (error) {
-      await markRetry(row.id, row.attempts + 1, errorCode(error)).catch(() => {});
+      if (sent) {
+        // Send succeeded, confirmation did not: leave the row in flight so
+        // no later poll can re-send it. Only a restart reconciliation closes
+        // it, with a redacted "delivery uncertain" note.
+        console.error(
+          `[mailer] confirmation failed outbox=${row.id} post=${row.post_id}: ${errorCode(error)}`
+        );
+        return;
+      }
+      await markRetry(row.id, row.attempts, errorCode(error)).catch(() => {});
       console.error(`[mailer] failed outbox=${row.id} post=${row.post_id}: ${errorCode(error)}`);
     }
   }
@@ -189,6 +220,9 @@ export function createWorker(config, { pool, listener, transporter }) {
     await listener.query("LISTEN chat_post_email");
     console.log(`[mailer] listening; polling every ${config.pollSeconds}s`);
 
+    await reconcileInFlight().catch((error) =>
+      console.error(`[mailer] reconcile failed: ${errorCode(error)}`)
+    );
     await poll().catch((error) =>
       console.error(`[mailer] boot poll failed: ${errorCode(error)}`)
     );

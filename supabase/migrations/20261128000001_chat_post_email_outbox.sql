@@ -21,6 +21,10 @@ CREATE TABLE IF NOT EXISTS public.chat_post_email_outbox (
   recipient_user_id uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
   attempts integer NOT NULL DEFAULT 0,
   next_attempt_at timestamptz NOT NULL DEFAULT now(),
+  -- Set with the claim, before any SMTP call. A row with sending_at set is
+  -- in flight: the poll never claims it again, so a database failure after
+  -- a successful send cannot produce a second email.
+  sending_at timestamptz NULL,
   sent_at timestamptz NULL,
   last_error text NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -55,7 +59,7 @@ BEGIN
   END IF;
 
   INSERT INTO public.chat_post_email_outbox (post_id, recipient_user_id)
-  SELECT c.recipient_user_id
+  SELECT c.recipient_user_id, v_post_id
   FROM public.chat_post_email_candidates(v_post_id) AS c
   ON CONFLICT (post_id, recipient_user_id) DO NOTHING;
 

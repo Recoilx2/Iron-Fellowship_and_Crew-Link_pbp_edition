@@ -46,6 +46,7 @@ import { createChannel } from "api-calls/chat/createChannel";
 import { createPrivateChannel } from "api-calls/chat/createPrivateChannel";
 import { getOrCreateDirectChannel } from "api-calls/chat/getOrCreateDirectChannel";
 import { setChannelMembers } from "api-calls/chat/setChannelMembers";
+import { fetchPostAnchor } from "api-calls/chat/fetchPostsAround";
 import { renameChannel } from "api-calls/chat/renameChannel";
 import { archiveChannel } from "api-calls/chat/archiveChannel";
 import type { ChannelKind } from "api-calls/chat/_chat.type";
@@ -114,10 +115,10 @@ export function ChatTab(props: {
   openInviteDialog: () => void;
   /** Deep link from an email or a shared URL: open this channel once. */
   linkedChannelId?: string;
-  /** Scroll to and highlight this post once it is in the loaded window. */
-  focusedPostId?: string;
+  /** The post an email linked to; the store loads its context and focuses it. */
+  linkedPostId?: string;
 }) {
-  const { openInviteDialog, linkedChannelId, focusedPostId } = props;
+  const { openInviteDialog, linkedChannelId, linkedPostId } = props;
   useListenToChatChannels();
   useListenToChannelPosts();
   const theme = useTheme();
@@ -140,6 +141,7 @@ export function ChatTab(props: {
   );
   const openChannelId = useStore((store) => store.chat.openChannelId);
   const setOpenChannelId = useStore((store) => store.chat.setOpenChannelId);
+  const jumpToPost = useStore((store) => store.chat.jumpToPost);
   const campaignId = useStore(
     (store) => store.campaigns.currentCampaign.currentCampaignId
   );
@@ -215,6 +217,30 @@ export function ChatTab(props: {
       setOpenChannelId(linkedChannelId);
     }
   }, [linkedChannelId, channels, setOpenChannelId]);
+
+  // An email link carries only a post id. Fetch its keyset anchor and use
+  // the search branch's jumpToPost: it loads the surrounding window even
+  // when the post is outside the live page, then sets the store's focus so
+  // ChatFeed's existing scroll/highlight handles the landing. No duplicate
+  // anchor or highlight logic lives in this ticket's code.
+  const appliedPostLink = useRef<string | null>(null);
+  useEffect(() => {
+    if (!linkedPostId || appliedPostLink.current === linkedPostId) {
+      return;
+    }
+    appliedPostLink.current = linkedPostId;
+    let active = true;
+    fetchPostAnchor(linkedPostId)
+      .then((anchor) => {
+        if (!active || !anchor) return;
+        if (linkedChannelId && anchor.channelId !== linkedChannelId) return;
+        return jumpToPost(anchor);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [linkedPostId, linkedChannelId, jumpToPost]);
 
   const openDirectChannel = (otherId: string) => {
     if (!campaignId || otherId === uid) {
@@ -318,10 +344,7 @@ export function ChatTab(props: {
             />
             {openChannel ? (
               <>
-                <ChatFeed
-                  channel={openChannel}
-                  focusedPostId={focusedPostId}
-                />
+                <ChatFeed channel={openChannel} />
                 {openChannel.archived ? (
                   <Typography
                     color={"text.secondary"}

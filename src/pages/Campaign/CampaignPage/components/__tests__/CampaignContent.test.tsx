@@ -33,15 +33,15 @@ vi.mock("../Tabs", () => ({
   CharacterTab: () => <div>Characters pane</div>,
   ChatTab: ({
     linkedChannelId,
-    focusedPostId,
+    linkedPostId,
   }: {
     linkedChannelId?: string;
-    focusedPostId?: string;
+    linkedPostId?: string;
   }) => (
     <div>
       Chat pane
       {linkedChannelId && ` channel=${linkedChannelId}`}
-      {focusedPostId && ` post=${focusedPostId}`}
+      {linkedPostId && ` post=${linkedPostId}`}
     </div>
   ),
   MyNotesTab: () => <div>My notes pane</div>,
