@@ -61,8 +61,7 @@ to `ADDITIONAL_REDIRECT_URLS` (e.g. `http://localhost:5173`) and restart.
 Every secret comes from the uncommitted per-copy env files: Postgres password,
 the JWT signing key pair (`GOTRUE_JWT_KEYS` holds the private half; GoTrue alone
 signs with it) and the API keys minted from it, Storage's static secret,
-the realtime GCM key, the
-storage S3-protocol keys, and (for the dashboard add-on) the meta crypto key.
+the realtime GCM key and (for the dashboard add-on) the meta crypto key.
 `.env.example` ships with all of them blank. Realtime encrypts its stored
 secrets with AES-256-GCM (`DB_ENC_KEY_GCM` + `DB_ENC_WRITE_GCM=true`); the
 legacy ECB key is not set, so ECB is never used. Rotate a secret by editing
