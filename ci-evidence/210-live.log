@@ -1,0 +1,615 @@
+live	Run the stack tests (zero skips allowed)	﻿2026-11-27T17:06:11.8426290Z ##[group]Run ENV_FILE=.env.live tests/live.sh
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:11.8426540Z ^[[36;1mENV_FILE=.env.live tests/live.sh^[[0m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:11.8455992Z shell: /usr/bin/bash -e {0}
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:11.8456165Z ##[endgroup]
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:11.8825266Z live: running 27 behavior test file(s) against http://localhost:8000
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:12.3137345Z ^[[33mThe plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the ^[[1mresolve.tsconfigPaths^[[22m option. You can remove the plugin and set ^[[1mresolve.tsconfigPaths: true^[[22m in your Vite config instead.^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:12.3490981Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:12.3492908Z ^[[1m^[[30m^[[46m RUN ^[[49m^[[39m^[[22m ^[[36mv4.1.6 ^[[39m^[[90m/home/runner/work/Iron-Fellowship_and_Crew-Link_pbp_edition/Iron-Fellowship_and_Crew-Link_pbp_edition^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:12.3494030Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:13.7317137Z ^[[90mstderr^[[2m | src/api-calls/homebrew/homebrew.live.test.ts^[[2m > ^[[22m^[[2mhomebrew on Supabase^[[2m > ^[[22m^[[2mcreates collections with the creator as editor, and only the creator deletes
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:13.7331739Z ^[[22m^[[39mAPI call failed (ref: F5M5A0) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:13.7332271Z   name: ^[[32m'Error'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:13.7333028Z   message: ^[[32m'homebrew collection 0f5cb95e-530e-4432-8482-afa163f6a459 was not updated'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:13.7333716Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:13.7333993Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:13.7495485Z ^[[90mstderr^[[2m | src/api-calls/homebrew/homebrew.live.test.ts^[[2m > ^[[22m^[[2mhomebrew on Supabase^[[2m > ^[[22m^[[2mcreates collections with the creator as editor, and only the creator deletes
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:13.7496701Z ^[[22m^[[39mAPI call failed (ref: 8WUACT) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:13.7497271Z   name: ^[[32m'Error'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:13.7498003Z   message: ^[[32m'homebrew collection 0f5cb95e-530e-4432-8482-afa163f6a459 was not deleted'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:13.7498687Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:13.7498934Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.1881014Z ^[[90mstderr^[[2m | src/api-calls/world/worlds.live.test.ts^[[2m > ^[[22m^[[2mworlds end to end^[[2m > ^[[22m^[[2mcreates a world its owner reads and outsiders never see
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.1882111Z ^[[22m^[[39mAPI call failed (ref: FJJU2Z) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.1882456Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.1882969Z   message: ^[[32m'new row violates row-level security policy for table "world_locations"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.1883397Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.1883952Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.4946846Z ^[[90mstderr^[[2m | src/api-calls/homebrew/homebrew.live.test.ts^[[2m > ^[[22m^[[2mhomebrew on Supabase^[[2m > ^[[22m^[[2mlets editors write every content type while outsiders cannot
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.4947779Z ^[[22m^[[39mAPI call failed (ref: K9UOBF) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.4951125Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.4952150Z   message: ^[[32m'new row violates row-level security policy for table "homebrew_stats"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.4952765Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.4953072Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.4983762Z ^[[90mstderr^[[2m | src/api-calls/homebrew/homebrew.live.test.ts^[[2m > ^[[22m^[[2mhomebrew on Supabase^[[2m > ^[[22m^[[2mlets editors write every content type while outsiders cannot
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.4984996Z ^[[22m^[[39mAPI call failed (ref: 0CSMIL) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.4985575Z   name: ^[[32m'Error'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.4986235Z   message: ^[[32m'failed to update row 2f8fd715-0b79-450f-a999-5dfad75959be in homebrew_stats'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.4986854Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.4987107Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.5007232Z ^[[90mstderr^[[2m | src/api-calls/homebrew/homebrew.live.test.ts^[[2m > ^[[22m^[[2mhomebrew on Supabase^[[2m > ^[[22m^[[2mlets editors write every content type while outsiders cannot
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.5008254Z ^[[22m^[[39mAPI call failed (ref: NI55BB) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.5008779Z   name: ^[[32m'Error'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.5009173Z   message: ^[[32m'failed to delete row 2f8fd715-0b79-450f-a999-5dfad75959be in homebrew_stats'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.5009460Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:14.5009528Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:16.7786364Z ^[[90mstderr^[[2m | src/api-calls/world/worlds.live.test.ts^[[2m > ^[[22m^[[2mworlds end to end^[[2m > ^[[22m^[[2mlets campaign GMs manage linked worlds while players see shared items
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:16.7788035Z ^[[22m^[[39mAPI call failed (ref: 6016OF) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Failed to update location.'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:16.7788411Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:16.7841890Z ^[[90mstderr^[[2m | src/api-calls/world/worlds.live.test.ts^[[2m > ^[[22m^[[2mworlds end to end^[[2m > ^[[22m^[[2mlets campaign GMs manage linked worlds while players see shared items
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:16.7842756Z ^[[22m^[[39mAPI call failed (ref: QH6NID) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:16.7843073Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:16.7843647Z   message: ^[[32m'new row violates row-level security policy for table "world_location_gm_details"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:16.7844101Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:16.7844205Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:18.1370090Z ^[[90mstderr^[[2m | src/api-calls/homebrew/homebrew.live.test.ts^[[2m > ^[[22m^[[2mhomebrew on Supabase^[[2m > ^[[22m^[[2mmanages nested impacts and oracle parents
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:18.1371841Z ^[[22m^[[39mAPI call failed (ref: P7NPNS) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:18.1379245Z   name: ^[[32m'Error'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:18.1387696Z   message: ^[[32m'failed to write row ca13eb87-10e3-4d7a-9452-0df5c9f7bb28 in homebrew_impact_categories'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:18.1388474Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:18.1388815Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:18.3485329Z ^[[90mstderr^[[2m | src/api-calls/world/worlds.live.test.ts^[[2m > ^[[22m^[[2mworlds end to end^[[2m > ^[[22m^[[2mkeeps ownership with owners: campaign GMs cannot self-promote or delete
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:18.3486647Z ^[[22m^[[39mAPI call failed (ref: J3A7NX) { code: ^[[32m'42501'^[[39m, message: ^[[32m'only world owners manage guides'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:18.3487082Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:18.9145459Z ^[[90mstderr^[[2m | src/api-calls/homebrew/homebrew.live.test.ts^[[2m > ^[[22m^[[2mhomebrew on Supabase^[[2m > ^[[22m^[[2mtreats invite keys as single-use and guards editor management
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:18.9146698Z ^[[22m^[[39mgetEditorInviteUrl { code: ^[[32m'P0001'^[[39m, message: ^[[32m'not a collection editor'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:18.9147076Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:18.9577340Z ^[[90mstderr^[[2m | src/api-calls/homebrew/homebrew.live.test.ts^[[2m > ^[[22m^[[2mhomebrew on Supabase^[[2m > ^[[22m^[[2mtreats invite keys as single-use and guards editor management
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:18.9578615Z ^[[22m^[[39mAPI call failed (ref: 8FNNVA) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:18.9579182Z   name: ^[[32m'Error'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:18.9579832Z   message: ^[[32m'failed to update row 0ca7b359-9929-4065-ba00-1124f8ab9542 in homebrew_stats'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:18.9580374Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:18.9580556Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:19.6648528Z ^[[90mstderr^[[2m | src/api-calls/homebrew/homebrew.live.test.ts^[[2m > ^[[22m^[[2mhomebrew on Supabase^[[2m > ^[[22m^[[2mlets people leave as editors and join as viewers
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:19.6649700Z ^[[22m^[[39mAPI call failed (ref: DPJZ6L) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:19.6650082Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:19.6650635Z   message: ^[[32m'new row violates row-level security policy for table "homebrew_stats"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:19.6651094Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:19.6651262Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:19.6669071Z ^[[90mstderr^[[2m | src/api-calls/homebrew/homebrew.live.test.ts^[[2m > ^[[22m^[[2mhomebrew on Supabase^[[2m > ^[[22m^[[2mlets people leave as editors and join as viewers
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:19.6670761Z ^[[22m^[[39mAPI call failed (ref: 4XSVT3) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Failed to add viewer.'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:19.6671410Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:21.7007217Z  ^[[32m✓^[[39m src/api-calls/homebrew/homebrew.live.test.ts ^[[2m(^[[22m^[[2m9 tests^[[22m^[[2m)^[[22m^[[33m 8724^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:21.7008331Z      ^[[33m^[[2m✓^[[22m^[[39m creates collections with the creator as editor, and only the creator deletes ^[[33m 908^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:21.7009170Z      ^[[33m^[[2m✓^[[22m^[[39m lets editors write every content type while outsiders cannot ^[[33m 722^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:21.7009939Z      ^[[33m^[[2m✓^[[22m^[[39m rejects outsider writes on every homebrew table ^[[33m 853^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:21.7010597Z      ^[[33m^[[2m✓^[[22m^[[39m streams every content type live to editors ^[[33m 2085^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:21.7011621Z      ^[[33m^[[2m✓^[[22m^[[39m manages nested impacts and oracle parents ^[[33m 759^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:21.7012336Z      ^[[33m^[[2m✓^[[22m^[[39m treats invite keys as single-use and guards editor management ^[[33m 779^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:21.7013032Z      ^[[33m^[[2m✓^[[22m^[[39m lets people leave as editors and join as viewers ^[[33m 713^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:21.7013759Z      ^[[33m^[[2m✓^[[22m^[[39m lists member collections live and drops removed editors at once ^[[33m 1292^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:21.7014473Z      ^[[33m^[[2m✓^[[22m^[[39m uploads homebrew images to a guarded bucket ^[[33m 612^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:23.0115100Z ^[[90mstderr^[[2m | src/api-calls/chat/posts.live.test.ts^[[2m > ^[[22m^[[2mchat text posts end to end^[[2m > ^[[22m^[[2mposts text as the author's campaign character or as self
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:23.0116485Z ^[[22m^[[39mAPI call failed (ref: 3X97OG) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:23.0116851Z   name: ^[[32m'Error'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:23.0117303Z   message: ^[[32m'Post text, images, or a roll are required.'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:23.0117652Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:23.0117780Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:24.1987890Z ^[[90mstderr^[[2m | src/api-calls/chat/posts.live.test.ts^[[2m > ^[[22m^[[2mchat text posts end to end^[[2m > ^[[22m^[[2mrefuses speakers outside the author's campaign
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:24.1988766Z ^[[22m^[[39mAPI call failed (ref: N2KHEJ) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:24.1989101Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:24.1989490Z   message: ^[[32m'new row violates row-level security policy for table "chat_posts"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:24.1989910Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:24.1990026Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:25.6555948Z ^[[90mstderr^[[2m | src/api-calls/chat/posts.live.test.ts^[[2m > ^[[22m^[[2mchat text posts end to end^[[2m > ^[[22m^[[2mrefuses in-character posts as an inactive character but keeps their history
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:25.6556926Z ^[[22m^[[39mAPI call failed (ref: EM2IFO) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:25.6557251Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:25.6557746Z   message: ^[[32m'new row violates row-level security policy for table "chat_posts"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:25.6558038Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:25.6558110Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:26.9778112Z ^[[90mstderr^[[2m | src/api-calls/chat/posts.live.test.ts^[[2m > ^[[22m^[[2mchat text posts end to end^[[2m > ^[[22m^[[2mrefuses rolls posted as an inactive character
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:26.9779048Z ^[[22m^[[39mAPI call failed (ref: HDVUAY) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:26.9779385Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:26.9779893Z   message: ^[[32m'new row violates row-level security policy for table "chat_posts"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:26.9780221Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:26.9780297Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:28.2962161Z ^[[90mstderr^[[2m | src/api-calls/chat/posts.live.test.ts^[[2m > ^[[22m^[[2mchat text posts end to end^[[2m > ^[[22m^[[2mrefuses a burn carried by a new post as an inactive character
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:28.2963119Z ^[[22m^[[39mAPI call failed (ref: T7DTVB) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:28.2963462Z   code: ^[[32m'P0001'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:28.2964019Z   message: ^[[32m'Chat roll results are immutable: momentum burns only on your active character.'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:28.2964478Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:28.2964854Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:29.7733013Z ^[[90mstderr^[[2m | src/api-calls/chat/posts.live.test.ts^[[2m > ^[[22m^[[2mchat text posts end to end^[[2m > ^[[22m^[[2mkeeps outsiders from reading or posting
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:29.7734468Z ^[[22m^[[39mAPI call failed (ref: XKA8J0) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:29.7735228Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:29.7735774Z   message: ^[[32m'new row violates row-level security policy for table "chat_posts"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:29.7736231Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:29.7736452Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:33.8867215Z  ^[[32m✓^[[39m src/api-calls/assistant/gmAssistant.live.test.ts ^[[2m(^[[22m^[[2m11 tests^[[22m^[[2m)^[[22m^[[33m 21054^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:33.8868180Z      ^[[33m^[[2m✓^[[22m^[[39m reports not set up with no endpoint ^[[33m 1072^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:33.8868921Z      ^[[33m^[[2m✓^[[22m^[[39m streams a reply and saves both messages ^[[33m 4211^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:33.8870041Z      ^[[33m^[[2m✓^[[22m^[[39m refuses a player, an outsider and an anonymous caller ^[[33m 1176^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:33.8870834Z      ^[[33m^[[2m✓^[[22m^[[39m filters the model list by the allow-list with context sizes ^[[33m 933^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:33.8871652Z      ^[[33m^[[2m✓^[[22m^[[39m stopping cancels the upstream request and keeps the partial ^[[33m 4004^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:33.8872447Z      ^[[33m^[[2m✓^[[22m^[[39m reports upstream failures generically with a reference ^[[33m 937^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:33.8873338Z        ^[[33m^[[2m✓^[[22m^[[39m sends only the chosen references with matching sizes, ignoring browser context ^[[33m 1612^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:33.8874144Z        ^[[33m^[[2m✓^[[22m^[[39m includes a GM-only part only when its toggle is on ^[[33m 1645^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:33.8875238Z        ^[[33m^[[2m✓^[[22m^[[39m revises the outline in outline-revision mode with the current text ^[[33m 1475^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:38.4364858Z ^[[90mstderr^[[2m | src/api-calls/world/worlds.live.test.ts^[[2m > ^[[22m^[[2mworlds end to end^[[2m > ^[[22m^[[2mlets players toggle their own characters' bonds, and nobody else's
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:38.4366129Z ^[[22m^[[39mAPI call failed (ref: 0DJE5Z) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:38.4366787Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:38.4367233Z   message: ^[[32m'only world GMs and the character owner set bonds'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:38.4367605Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:38.4367707Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:38.5539494Z ^[[90mstderr^[[2m | src/api-calls/world/worlds.live.test.ts^[[2m > ^[[22m^[[2mworlds end to end^[[2m > ^[[22m^[[2mlets players toggle their own characters' bonds, and nobody else's
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:38.5540373Z ^[[22m^[[39mAPI call failed (ref: 4XQB95) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:38.5540602Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:38.5540898Z   message: ^[[32m'only world GMs and the character owner set bonds'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:38.5541128Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:38.5541198Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:46.9616915Z  ^[[32m✓^[[39m src/api-calls/world/worlds.live.test.ts ^[[2m(^[[22m^[[2m9 tests^[[22m^[[2m)^[[22m^[[33m 34117^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:46.9617779Z      ^[[33m^[[2m✓^[[22m^[[39m creates a world its owner reads and outsiders never see ^[[33m 2265^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:46.9618640Z      ^[[33m^[[2m✓^[[22m^[[39m lets campaign GMs manage linked worlds while players see shared items ^[[33m 1829^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:46.9619533Z      ^[[33m^[[2m✓^[[22m^[[39m keeps ownership with owners: campaign GMs cannot self-promote or delete ^[[33m 1815^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:46.9620389Z      ^[[33m^[[2m✓^[[22m^[[39m streams sharing changes live: share appears, unshare disappears ^[[33m 11792^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:46.9622946Z      ^[[33m^[[2m✓^[[22m^[[39m never leaks GM details to players, including over live updates ^[[33m 6577^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:46.9623814Z      ^[[33m^[[2m✓^[[22m^[[39m lets players toggle their own characters' bonds, and nobody else's ^[[33m 1567^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:46.9624774Z      ^[[33m^[[2m✓^[[22m^[[39m ends a campaign GM's access when the world is unlinked ^[[33m 1422^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:46.9625504Z      ^[[33m^[[2m✓^[[22m^[[39m follows lore and NPCs live with the same shared-only rule ^[[33m 3405^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:46.9626282Z      ^[[33m^[[2m✓^[[22m^[[39m reads world note bytes through the contents rows with the same rules ^[[33m 3443^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:51.7216308Z ^[[90mstderr^[[2m | src/api-calls/chat/posts.live.test.ts^[[2m > ^[[22m^[[2mchat text posts end to end^[[2m > ^[[22m^[[2mrefuses NPC voices to players and to NPCs outside the campaign's world
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:51.7217712Z ^[[22m^[[39mAPI call failed (ref: M5ANB9) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:51.7218365Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:51.7218942Z   message: ^[[32m'new row violates row-level security policy for table "chat_posts"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:51.7219445Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:51.7219561Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:51.8678171Z ^[[90mstderr^[[2m | src/api-calls/chat/posts.live.test.ts^[[2m > ^[[22m^[[2mchat text posts end to end^[[2m > ^[[22m^[[2mrefuses NPC voices to players and to NPCs outside the campaign's world
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:51.8683964Z ^[[22m^[[39mAPI call failed (ref: 2QU5PV) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:51.8684864Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:51.8685431Z   message: ^[[32m'new row violates row-level security policy for table "chat_posts"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:51.8685877Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:51.8685991Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:52.0638716Z ^[[90mstderr^[[2m | src/api-calls/chat/posts.live.test.ts^[[2m > ^[[22m^[[2mchat text posts end to end^[[2m > ^[[22m^[[2mrefuses NPC voices to players and to NPCs outside the campaign's world
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:52.0639444Z ^[[22m^[[39mAPI call failed (ref: WLQZVN) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:52.0639784Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:52.0640278Z   message: ^[[32m'new row violates row-level security policy for table "chat_posts"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:52.0640891Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:52.0640974Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:52.6898206Z ^[[90mstderr^[[2m | src/api-calls/chat/momentumBurn.live.test.ts^[[2m > ^[[22m^[[2mchat momentum burn end to end^[[2m > ^[[22m^[[2mrefuses burns by anyone else, by GMs, and on deleted posts at the database
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:52.6918265Z ^[[22m^[[39mAPI call failed (ref: AHVJKY) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:52.6918733Z   name: ^[[32m'Error'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:52.6919159Z   message: ^[[32m'Only the author may burn momentum on a roll.'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:52.6919487Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:52.6919566Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:52.8503485Z ^[[90mstderr^[[2m | src/api-calls/chat/momentumBurn.live.test.ts^[[2m > ^[[22m^[[2mchat momentum burn end to end^[[2m > ^[[22m^[[2mrefuses burns by anyone else, by GMs, and on deleted posts at the database
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:52.8504927Z ^[[22m^[[39mAPI call failed (ref: DXZMEQ) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:52.8505456Z   name: ^[[32m'Error'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:52.8505976Z   message: ^[[32m'Only the author may burn momentum on a roll.'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:52.8506549Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:52.8506825Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.0120642Z ^[[90mstderr^[[2m | src/api-calls/chat/momentumBurn.live.test.ts^[[2m > ^[[22m^[[2mchat momentum burn end to end^[[2m > ^[[22m^[[2mrefuses burns by anyone else, by GMs, and on deleted posts at the database
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.0121604Z ^[[22m^[[39mAPI call failed (ref: VTPNDJ) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Deleted posts stay deleted.'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.0121985Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.7002110Z ^[[90mstderr^[[2m | src/api-calls/chat/posts.live.test.ts^[[2m > ^[[22m^[[2mchat text posts end to end^[[2m > ^[[22m^[[2mrefuses posts into archived channels
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.7002881Z ^[[22m^[[39mAPI call failed (ref: FJ7W7Z) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.7003203Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.7003682Z   message: ^[[32m'new row violates row-level security policy for table "chat_posts"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.7004093Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.7004206Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.8729343Z  ^[[32m✓^[[39m src/api-calls/chat/posts.live.test.ts ^[[2m(^[[22m^[[2m13 tests^[[22m^[[2m)^[[22m^[[33m 31990^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.8730191Z      ^[[33m^[[2m✓^[[22m^[[39m posts text as the author's campaign character or as self ^[[33m 1272^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.8730688Z      ^[[33m^[[2m✓^[[22m^[[39m refuses speakers outside the author's campaign ^[[33m 1349^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.8731190Z      ^[[33m^[[2m✓^[[22m^[[39m refuses in-character posts as an inactive character but keeps their history ^[[33m 1327^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.8733064Z      ^[[33m^[[2m✓^[[22m^[[39m refuses rolls posted as an inactive character ^[[33m 1312^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.8741253Z      ^[[33m^[[2m✓^[[22m^[[39m refuses a burn carried by a new post as an inactive character ^[[33m 1318^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.8742396Z      ^[[33m^[[2m✓^[[22m^[[39m keeps outsiders from reading or posting ^[[33m 1482^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.8743305Z      ^[[33m^[[2m✓^[[22m^[[39m streams new posts live to members but never to outsiders ^[[33m 2117^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.8744254Z      ^[[33m^[[2m✓^[[22m^[[39m withholds live posts from outsiders past the reconcile tick ^[[33m 13661^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.8745553Z      ^[[33m^[[2m✓^[[22m^[[39m pages older posts in on scroll ^[[33m 1430^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.8746336Z      ^[[33m^[[2m✓^[[22m^[[39m pages older posts back to the channel's first post ^[[33m 1608^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.8747210Z      ^[[33m^[[2m✓^[[22m^[[39m lets a campaign GM post as an NPC of the campaign's world ^[[33m 1684^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.8748190Z      ^[[33m^[[2m✓^[[22m^[[39m refuses NPC voices to players and to NPCs outside the campaign's world ^[[33m 1795^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:53.8749021Z      ^[[33m^[[2m✓^[[22m^[[39m refuses posts into archived channels ^[[33m 1633^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:55.3810259Z ^[[90mstderr^[[2m | src/api-calls/chat/momentumBurn.live.test.ts^[[2m > ^[[22m^[[2mchat momentum burn end to end^[[2m > ^[[22m^[[2mrefuses a burn on an inactive character's roll and allows it again when active
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:55.3811984Z ^[[22m^[[39mAPI call failed (ref: H6TDPX) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:55.3812634Z   name: ^[[32m'Error'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:55.3813193Z   message: ^[[32m"Momentum burns only on your active character's roll."^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:55.3813573Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:55.3813692Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:56.7866544Z  ^[[32m✓^[[39m src/api-calls/chat/momentumBurn.live.test.ts ^[[2m(^[[22m^[[2m7 tests^[[22m^[[2m)^[[22m^[[33m 9604^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:56.7868697Z      ^[[33m^[[2m✓^[[22m^[[39m lets the author burn once with the recalculated outcome and resets momentum ^[[33m 1396^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:56.7869721Z      ^[[33m^[[2m✓^[[22m^[[39m refuses tampered burns at the database and leaves the row unchanged ^[[33m 1558^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:56.7870849Z      ^[[33m^[[2m✓^[[22m^[[39m refuses a lone GM-only flip and leaves the row unchanged ^[[33m 1282^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:56.7871933Z      ^[[33m^[[2m✓^[[22m^[[39m refuses burns by anyone else, by GMs, and on deleted posts at the database ^[[33m 1756^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:56.7873105Z      ^[[33m^[[2m✓^[[22m^[[39m posts a composer send carrying a burn atomically and refuses bad ones ^[[33m 1169^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:56.7874179Z      ^[[33m^[[2m✓^[[22m^[[39m refuses a burn on an inactive character's roll and allows it again when active ^[[33m 1219^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:06:56.7875265Z      ^[[33m^[[2m✓^[[22m^[[39m keeps a GM-only roll GM-only after a burn ^[[33m 1223^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:02.1250335Z ^[[90mstderr^[[2m | src/api-calls/assistant/assistant.live.test.ts^[[2m > ^[[22m^[[2mgm assistant data layer end to end^[[2m > ^[[22m^[[2mlets only the owning GM set a reply's proposal state
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:02.1252130Z ^[[22m^[[39mAPI call failed (ref: 4D535Y) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Message not found.'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:02.1252532Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:02.2635705Z ^[[90mstderr^[[2m | src/api-calls/assistant/assistant.live.test.ts^[[2m > ^[[22m^[[2mgm assistant data layer end to end^[[2m > ^[[22m^[[2mlets only the owning GM set a reply's proposal state
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:02.2637762Z ^[[22m^[[39mAPI call failed (ref: 9HAQB0) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Message not found.'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:02.2638553Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:02.4020423Z ^[[90mstderr^[[2m | src/api-calls/assistant/assistant.live.test.ts^[[2m > ^[[22m^[[2mgm assistant data layer end to end^[[2m > ^[[22m^[[2mlets only the owning GM set a reply's proposal state
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:02.4021904Z ^[[22m^[[39mAPI call failed (ref: C3HYJK) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Message not found.'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:02.4022551Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:02.8266117Z  ^[[32m✓^[[39m src/api-calls/assistant/assistant.live.test.ts ^[[2m(^[[22m^[[2m4 tests^[[22m^[[2m)^[[22m^[[33m 8769^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:02.8268018Z      ^[[33m^[[2m✓^[[22m^[[39m lets the owning GM manage conversations, messages and settings ^[[33m 1897^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:02.8268988Z      ^[[33m^[[2m✓^[[22m^[[39m gives a co-GM only their own rows, and a player and an outsider nothing ^[[33m 2303^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:02.8269897Z      ^[[33m^[[2m✓^[[22m^[[39m cuts off a GM who is demoted or removed ^[[33m 2299^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:02.8271006Z      ^[[33m^[[2m✓^[[22m^[[39m lets only the owning GM set a reply's proposal state ^[[33m 2269^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:08.5875544Z ^[[90mstderr^[[2m | src/api-calls/notes/campaignNotes.live.test.ts^[[2m > ^[[22m^[[2mcampaign notes end to end^[[2m > ^[[22m^[[2mblocks outsiders from every campaign note table
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:08.5876813Z ^[[22m^[[39mAPI call failed (ref: 64ZF3L) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:08.5877210Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:08.5877753Z   message: ^[[32m'new row violates row-level security policy for table "campaign_notes"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:08.5878246Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:08.5878362Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:08.5905233Z ^[[90mstderr^[[2m | src/api-calls/notes/campaignNotes.live.test.ts^[[2m > ^[[22m^[[2mcampaign notes end to end^[[2m > ^[[22m^[[2mblocks outsiders from every campaign note table
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:08.5906794Z ^[[22m^[[39mAPI call failed (ref: I0MY8S) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Note not found'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:08.5914964Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:18.2433375Z  ^[[32m✓^[[39m src/api-calls/chat/chatImages.live.test.ts ^[[2m(^[[22m^[[2m14 tests^[[22m^[[2m)^[[22m^[[33m 21274^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:18.2434314Z      ^[[33m^[[2m✓^[[22m^[[39m attaches an image to a post members can read back ^[[33m 1286^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:18.2434943Z      ^[[33m^[[2m✓^[[22m^[[39m keeps outsiders from reading a campaign's chat images ^[[33m 1236^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:18.2435396Z      ^[[33m^[[2m✓^[[22m^[[39m fails closed on malformed paths and oversized picks ^[[33m 1121^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:18.2435864Z      ^[[33m^[[2m✓^[[22m^[[39m hides private-channel images from members outside the channel ^[[33m 2193^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:18.2436352Z      ^[[33m^[[2m✓^[[22m^[[39m hides direct-message images from everyone outside the pair ^[[33m 1842^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:18.2436799Z      ^[[33m^[[2m✓^[[22m^[[39m keeps GM-only roll images from players ^[[33m 1709^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:18.2437202Z      ^[[33m^[[2m✓^[[22m^[[39m lets nobody overwrite another person's image ^[[33m 1837^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:18.2437665Z      ^[[33m^[[2m✓^[[22m^[[39m refuses uploads into another member's post folder ^[[33m 1704^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:18.2438075Z      ^[[33m^[[2m✓^[[22m^[[39m locks a sent post's images against edits ^[[33m 1673^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:18.2438478Z      ^[[33m^[[2m✓^[[22m^[[39m refuses storage overwrites of a sent post's image ^[[33m 1770^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:18.2438885Z      ^[[33m^[[2m✓^[[22m^[[39m refuses non-image uploads on the server ^[[33m 1540^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:18.2439302Z      ^[[33m^[[2m✓^[[22m^[[39m keeps an unsent upload readable only by its uploader ^[[33m 1754^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:18.2439743Z      ^[[33m^[[2m✓^[[22m^[[39m lets a post's author or GM remove its files, but nobody else ^[[33m 1597^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:25.2577866Z  ^[[32m✓^[[39m src/api-calls/notes/campaignNotes.live.test.ts ^[[2m(^[[22m^[[2m8 tests^[[22m^[[2m)^[[22m^[[33m 22227^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:25.2578496Z      ^[[33m^[[2m✓^[[22m^[[39m saves campaign notes and streams their contents live ^[[33m 4459^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:25.2578998Z      ^[[33m^[[2m✓^[[22m^[[39m blocks outsiders from every campaign note table ^[[33m 1246^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:25.2579468Z      ^[[33m^[[2m✓^[[22m^[[39m never leaks unshared campaign notes, including over live updates ^[[33m 11169^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:25.2579945Z      ^[[33m^[[2m✓^[[22m^[[39m lets the GM see unshared notes and lets members write ^[[33m 1274^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:25.2580418Z      ^[[33m^[[2m✓^[[22m^[[39m refuses contents writes to notes the writer cannot read (#106) ^[[33m 974^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:25.2580889Z      ^[[33m^[[2m✓^[[22m^[[39m locks shared, move and delete to the note author or a GM (#106) ^[[33m 1209^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:25.2581374Z      ^[[33m^[[2m✓^[[22m^[[39m blocks a removed author from updating or deleting their note (#106) ^[[33m 943^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:25.2581897Z      ^[[33m^[[2m✓^[[22m^[[39m deleting an author's account keeps the note and clears the author (#106) ^[[33m 953^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:29.3565952Z ^[[90mstderr^[[2m | src/api-calls/character/characterChildren.live.test.ts^[[2m > ^[[22m^[[2mcharacter children end to end^[[2m > ^[[22m^[[2mblocks outsiders from every character table
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:29.3567263Z ^[[22m^[[39mAPI call failed (ref: I71Z6U) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:29.3567778Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:29.3568504Z   message: ^[[32m'new row violates row-level security policy for table "character_assets"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:29.3569119Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:29.3569342Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:29.3599291Z ^[[90mstderr^[[2m | src/api-calls/character/characterChildren.live.test.ts^[[2m > ^[[22m^[[2mcharacter children end to end^[[2m > ^[[22m^[[2mblocks outsiders from every character table
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:29.3600239Z ^[[22m^[[39mAPI call failed (ref: QQ5WON) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:29.3601142Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:29.3601689Z   message: ^[[32m'new row violates row-level security policy for table "character_notes"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:29.3602160Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:29.3602267Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.1087272Z ^[[90mstderr^[[2m | src/api-calls/assistant/outlineVersions.live.test.ts^[[2m > ^[[22m^[[2massistant outline versions end to end (#133)^[[2m > ^[[22m^[[2mkeeps versions from players and outsiders everywhere
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.1088160Z ^[[22m^[[39mAPI call failed (ref: OTYA3S) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.1088495Z   name: ^[[32m'Error'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.1088957Z   message: ^[[32m'The note server refused the outline: permission-denied'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.1089216Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.1089301Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.1119380Z ^[[90mstderr^[[2m | src/api-calls/assistant/outlineVersions.live.test.ts^[[2m > ^[[22m^[[2massistant outline versions end to end (#133)^[[2m > ^[[22m^[[2mkeeps versions from players and outsiders everywhere
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.1120370Z ^[[22m^[[39mAPI call failed (ref: VCTN1M) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.1120757Z   name: ^[[32m'OutlineVersionGoneError'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.1121160Z   message: ^[[32m'That outline version is gone.'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.1121363Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.1121445Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.2525817Z ^[[90mstderr^[[2m | src/api-calls/assistant/outlineVersions.live.test.ts^[[2m > ^[[22m^[[2massistant outline versions end to end (#133)^[[2m > ^[[22m^[[2mkeeps versions from players and outsiders everywhere
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.2526471Z ^[[22m^[[39mAPI call failed (ref: P6L0ZF) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.2526695Z   name: ^[[32m'Error'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.2526988Z   message: ^[[32m'The note server refused the outline: permission-denied'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.2527236Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.2527307Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.2554920Z ^[[90mstderr^[[2m | src/api-calls/assistant/outlineVersions.live.test.ts^[[2m > ^[[22m^[[2massistant outline versions end to end (#133)^[[2m > ^[[22m^[[2mkeeps versions from players and outsiders everywhere
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.2556769Z ^[[22m^[[39mAPI call failed (ref: HVIFP2) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.2557434Z   name: ^[[32m'OutlineVersionGoneError'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.2558055Z   message: ^[[32m'That outline version is gone.'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.2558413Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:30.2558530Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:33.4449168Z ^[[90mstderr^[[2m | src/api-calls/character/characterChildren.live.test.ts^[[2m > ^[[22m^[[2mcharacter children end to end^[[2m > ^[[22m^[[2mnever leaks unshared notes, including over live updates
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:33.4450013Z ^[[22m^[[39mAPI call failed (ref: XC6ZS9) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Note not found'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:33.4450240Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:33.5650856Z  ^[[32m✓^[[39m src/api-calls/character/characterChildren.live.test.ts ^[[2m(^[[22m^[[2m7 tests^[[22m^[[2m)^[[22m^[[33m 15073^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:33.5651818Z      ^[[33m^[[2m✓^[[22m^[[39m saves and streams assets live ^[[33m 1733^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:33.5652438Z      ^[[33m^[[2m✓^[[22m^[[39m saves and streams progress tracks live ^[[33m 793^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:33.5653146Z      ^[[33m^[[2m✓^[[22m^[[39m saves notes and streams their contents live ^[[33m 4662^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:33.5654009Z      ^[[33m^[[2m✓^[[22m^[[39m saves and streams character settings live ^[[33m 1746^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:33.5654740Z      ^[[33m^[[2m✓^[[22m^[[39m keeps a solo roll log live ^[[33m 1331^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:33.5655356Z      ^[[33m^[[2m✓^[[22m^[[39m blocks outsiders from every character table ^[[33m 721^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:33.5656092Z      ^[[33m^[[2m✓^[[22m^[[39m never leaks unshared notes, including over live updates ^[[33m 4086^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:45.3032367Z ^[[90mstderr^[[2m | src/api-calls/assistant/outlineVersions.live.test.ts^[[2m > ^[[22m^[[2massistant outline versions end to end (#133)^[[2m > ^[[22m^[[2mundoes the named version when two applies happened
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:45.3033385Z ^[[22m^[[39mAPI call failed (ref: B53OB4) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:45.3033768Z   name: ^[[32m'OutlineVersionGoneError'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:45.3034795Z   message: ^[[32m'That outline version is gone.'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:45.3035093Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:45.3035207Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:48.4820379Z  ^[[32m✓^[[39m src/api-calls/assistant/outlineVersions.live.test.ts ^[[2m(^[[22m^[[2m8 tests^[[22m^[[2m)^[[22m^[[33m 23009^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:48.4821485Z      ^[[33m^[[2m✓^[[22m^[[39m applies a revision, keeps the version and undoes it ^[[33m 1531^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:48.4826363Z      ^[[33m^[[2m✓^[[22m^[[39m shares versions between co-GMs ^[[33m 1724^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:48.4827963Z      ^[[33m^[[2m✓^[[22m^[[39m keeps versions from players and outsiders everywhere ^[[33m 1810^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:48.4828798Z      ^[[33m^[[2m✓^[[22m^[[39m an apply reaches an open editor and is not reverted ^[[33m 7680^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:48.4829542Z      ^[[33m^[[2m✓^[[22m^[[39m an undo reaches an open editor too ^[[33m 5649^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:48.4830302Z      ^[[33m^[[2m✓^[[22m^[[39m undoes the named version when two applies happened ^[[33m 1585^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:48.4831175Z      ^[[33m^[[2m✓^[[22m^[[39m clears a reply's applied version when its version is undone ^[[33m 1397^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:48.4832070Z      ^[[33m^[[2m✓^[[22m^[[39m clears the owning GM's reply when a co-GM undoes the version ^[[33m 1631^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:50.0195712Z ^[[90mstderr^[[2m | src/api-calls/chat/postEdits.live.test.ts^[[2m > ^[[22m^[[2mchat post edits and soft deletes^[[2m > ^[[22m^[[2mlets the author edit text and streams the edit live
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:50.0197432Z ^[[22m^[[39mAPI call failed (ref: MHMYW6) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Post text is required.'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:50.0198053Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:50.0223336Z ^[[90mstderr^[[2m | src/api-calls/chat/postEdits.live.test.ts^[[2m > ^[[22m^[[2mchat post edits and soft deletes^[[2m > ^[[22m^[[2mlets the author edit text and streams the edit live
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:50.0224875Z ^[[22m^[[39mAPI call failed (ref: IZX9LC) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Post not found.'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:50.0228548Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:52.4997432Z ^[[90mstderr^[[2m | src/api-calls/chat/postEdits.live.test.ts^[[2m > ^[[22m^[[2mchat post edits and soft deletes^[[2m > ^[[22m^[[2mrefuses edits from anyone but the author
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:52.4998922Z ^[[22m^[[39mAPI call failed (ref: TZO9Q0) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Post not found.'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:52.4999697Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:56.1773245Z ^[[90mstderr^[[2m | src/api-calls/chat/postEdits.live.test.ts^[[2m > ^[[22m^[[2mchat post edits and soft deletes^[[2m > ^[[22m^[[2mlets the author or a GM delete, and nobody else
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:56.1774073Z ^[[22m^[[39mAPI call failed (ref: G66U84) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Post not found.'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:56.1774303Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:56.2889552Z  ^[[32m✓^[[39m src/api-calls/notes/hocuspocus.live.test.ts ^[[2m(^[[22m^[[2m8 tests^[[22m^[[2m)^[[22m^[[33m 22555^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:56.2895696Z      ^[[33m^[[2m✓^[[22m^[[39m persists a solo edit to the note row within seconds ^[[33m 2577^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:56.2896595Z      ^[[33m^[[2m✓^[[22m^[[39m merges two people's concurrent edits ^[[33m 1127^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:56.2897425Z      ^[[33m^[[2m✓^[[22m^[[39m refuses connections without access ^[[33m 870^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:56.2898707Z      ^[[33m^[[2m✓^[[22m^[[39m cuts off a connected editor when their note is unshared ^[[33m 4232^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:56.2899498Z      ^[[33m^[[2m✓^[[22m^[[39m cuts off a player removed from the campaign while connected (#106) ^[[33m 4001^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:56.2900129Z      ^[[33m^[[2m✓^[[22m^[[39m cuts off a demoted GM from unshared GM notes (#106) ^[[33m 1328^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:56.2900721Z      ^[[33m^[[2m✓^[[22m^[[39m cuts off campaign members from a character note when the character leaves (#106) ^[[33m 4274^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:56.2901157Z      ^[[33m^[[2m✓^[[22m^[[39m survives a container restart ^[[33m 4145^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:56.3091894Z ^[[90mstderr^[[2m | src/api-calls/chat/postEdits.live.test.ts^[[2m > ^[[22m^[[2mchat post edits and soft deletes^[[2m > ^[[22m^[[2mlets the author or a GM delete, and nobody else
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:56.3093441Z ^[[22m^[[39mAPI call failed (ref: KM4NUJ) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:56.3094227Z   code: ^[[32m'PGRST116'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:56.3095012Z   message: ^[[32m'Cannot coerce the result to a single JSON object'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:56.3095525Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:56.3095832Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:58.5830302Z  ^[[32m✓^[[39m src/api-calls/chat/postEdits.live.test.ts ^[[2m(^[[22m^[[2m5 tests^[[22m^[[2m)^[[22m^[[33m 9909^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:58.5831073Z      ^[[33m^[[2m✓^[[22m^[[39m lets the author edit text and streams the edit live ^[[33m 2250^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:58.5831731Z      ^[[33m^[[2m✓^[[22m^[[39m refuses edits from anyone but the author ^[[33m 1809^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:58.5832421Z      ^[[33m^[[2m✓^[[22m^[[39m soft-deletes with a marker and streams the delete live ^[[33m 2146^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:58.5833144Z      ^[[33m^[[2m✓^[[22m^[[39m lets the author or a GM delete, and nobody else ^[[33m 2103^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:07:58.5833872Z      ^[[33m^[[2m✓^[[22m^[[39m clears a deleted post's images and roll and removes its files ^[[33m 1599^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:02.7294256Z ^[[90mstderr^[[2m | src/api-calls/game-log/rollLogView.live.test.ts^[[2m > ^[[22m^[[2mcampaign roll log as a view of roll posts^[[2m > ^[[22m^[[2mposts a sheet roll to the starting IC channel and lists it in the roll log
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:02.7295155Z ^[[22m^[[39mAPI call failed (ref: 5NNBTZ) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:02.7295511Z   code: ^[[32m'PGRST116'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:02.7295864Z   message: ^[[32m'Cannot coerce the result to a single JSON object'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:02.7296092Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:02.7296171Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:03.7572234Z ^[[90mstderr^[[2m | src/api-calls/game-log/rollLogView.live.test.ts^[[2m > ^[[22m^[[2mcampaign roll log as a view of roll posts^[[2m > ^[[22m^[[2mhides GM-only rolls from players over reads and live updates
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:03.7573180Z ^[[22m^[[39mAPI call failed (ref: 3WNNSQ) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:03.7573885Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:03.7574455Z   message: ^[[32m'new row violates row-level security policy for table "chat_posts"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:03.7575109Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:03.7575243Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:03.7576171Z ^[[90mstderr^[[2m | src/api-calls/game-log/rollLogView.live.test.ts^[[2m > ^[[22m^[[2mcampaign roll log as a view of roll posts^[[2m > ^[[22m^[[2mhides GM-only rolls from players over reads and live updates
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:03.7577052Z ^[[22m^[[39mAPI call failed (ref: 3WNNSQ) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:03.7577377Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:03.7577871Z   message: ^[[32m'new row violates row-level security policy for table "chat_posts"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:03.7578274Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:03.7578385Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:07.4764336Z  ^[[32m✓^[[39m src/api-calls/chat/privateChannels.live.test.ts ^[[2m(^[[22m^[[2m7 tests^[[22m^[[2m)^[[22m^[[33m 93442^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:07.4765613Z      ^[[33m^[[2m✓^[[22m^[[39m shows private posts to members and GMs only, live ^[[33m 14546^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:07.4766704Z      ^[[33m^[[2m✓^[[22m^[[39m cuts a removed member off immediately, including open subscriptions ^[[33m 24143^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:07.4767868Z      ^[[33m^[[2m✓^[[22m^[[39m keeps a DM between its two people, blind even to GMs ^[[33m 13923^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:07.4768736Z      ^[[33m^[[2m✓^[[22m^[[39m a removed campaign member reads no posts from a private channel or DM they were in ^[[33m 23991^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:07.4769585Z      ^[[33m^[[2m✓^[[22m^[[39m leaving the campaign clears the member's channel roster rows ^[[33m 1729^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:07.4770287Z      ^[[33m^[[2m✓^[[22m^[[39m sends an outsider no membership-change events ^[[33m 13716^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:07.4770826Z      ^[[33m^[[2m✓^[[22m^[[39m lets only GMs manage private channels but any member DM ^[[33m 1394^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:08.4265471Z ^[[90mstderr^[[2m | src/api-calls/campaign/campaigns.live.test.ts^[[2m > ^[[22m^[[2mcampaigns end to end^[[2m > ^[[22m^[[2mcreates a co-op campaign with the founder as GM, hidden from outsiders
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:08.4266739Z ^[[22m^[[39mAPI call failed (ref: SE45V8) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Could not find campaign'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:08.4266987Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:08.4288324Z ^[[90mstderr^[[2m | src/api-calls/campaign/campaigns.live.test.ts^[[2m > ^[[22m^[[2mcampaigns end to end^[[2m > ^[[22m^[[2mcreates a co-op campaign with the founder as GM, hidden from outsiders
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:08.4289191Z ^[[22m^[[39mAPI call failed (ref: 49UIXK) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:08.4289537Z   code: ^[[32m'PGRST116'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:08.4289972Z   message: ^[[32m'Cannot coerce the result to a single JSON object'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:08.4290340Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:08.4290712Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:08.4313976Z ^[[90mstderr^[[2m | src/api-calls/campaign/campaigns.live.test.ts^[[2m > ^[[22m^[[2mcampaigns end to end^[[2m > ^[[22m^[[2mcreates a co-op campaign with the founder as GM, hidden from outsiders
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:08.4315728Z ^[[22m^[[39mAPI call failed (ref: P5ITOX) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Campaign not found'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:08.4316292Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:09.2968985Z ^[[90mstderr^[[2m | src/api-calls/campaign/campaigns.live.test.ts^[[2m > ^[[22m^[[2mcampaigns end to end^[[2m > ^[[22m^[[2mstarts solo and guided founders as players, who still manage their campaign
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:09.2970258Z ^[[22m^[[39mAPI call failed (ref: IICEMJ) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Could not find campaign'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:09.2970618Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:10.3726141Z ^[[90mstderr^[[2m | src/api-calls/campaign/campaigns.live.test.ts^[[2m > ^[[22m^[[2mcampaigns end to end^[[2m > ^[[22m^[[2mruns the invite-link join flow: preview, join, rejoin
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:10.3727691Z ^[[22m^[[39mAPI call failed (ref: BNIGMS) { code: ^[[32m'P0001'^[[39m, message: ^[[32m'campaign not found'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:10.3728330Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:10.3755998Z ^[[90mstderr^[[2m | src/api-calls/campaign/campaigns.live.test.ts^[[2m > ^[[22m^[[2mcampaigns end to end^[[2m > ^[[22m^[[2mruns the invite-link join flow: preview, join, rejoin
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:10.3757238Z ^[[22m^[[39mAPI call failed (ref: 6J3BUJ) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Could not find campaign'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:10.3757851Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:11.4621827Z ^[[90mstderr^[[2m | src/api-calls/campaign/campaigns.live.test.ts^[[2m > ^[[22m^[[2mcampaigns end to end^[[2m > ^[[22m^[[2mlets a player join with a character, and unlink it again
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:11.4623098Z ^[[22m^[[39mAPI call failed (ref: WKTGIW) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Campaign not found'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:11.4623707Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:11.5074075Z ^[[90mstderr^[[2m | src/api-calls/character/characters.live.test.ts^[[2m > ^[[22m^[[2mcharacters end to end^[[2m > ^[[22m^[[2mlets campaign members read live but never write
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:11.5080986Z ^[[22m^[[39mAPI call failed (ref: JV4H3Y) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Character not found'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:11.5081382Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:11.5108313Z ^[[90mstderr^[[2m | src/api-calls/character/characters.live.test.ts^[[2m > ^[[22m^[[2mcharacters end to end^[[2m > ^[[22m^[[2mlets campaign members read live but never write
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:11.5112875Z ^[[22m^[[39mdeleteCharacter null
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:11.5113093Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:11.5113794Z ^[[90mstderr^[[2m | src/api-calls/character/characters.live.test.ts^[[2m > ^[[22m^[[2mcharacters end to end^[[2m > ^[[22m^[[2mlets campaign members read live but never write
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:11.5115007Z ^[[22m^[[39mAPI call failed (ref: 92MQOT) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Character not found'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:11.5115300Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:11.6493951Z ^[[90mstderr^[[2m | src/api-calls/character/characters.live.test.ts^[[2m > ^[[22m^[[2mcharacters end to end^[[2m > ^[[22m^[[2mlets campaign members read live but never write
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:11.6496727Z ^[[22m^[[39mAPI call failed (ref: XTP05Z) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:11.6497304Z   code: ^[[32m'PGRST116'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:11.6497876Z   message: ^[[32m'Cannot coerce the result to a single JSON object'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:11.6498915Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:11.6499203Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:12.5946163Z ^[[90mstderr^[[2m | src/api-calls/campaign/campaigns.live.test.ts^[[2m > ^[[22m^[[2mcampaigns end to end^[[2m > ^[[22m^[[2mlets GMs manage co-GMs and members, and cuts removed members off
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:12.5946847Z ^[[22m^[[39mAPI call failed (ref: WNBBC1) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:12.5947066Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:12.5947400Z   message: ^[[32m'new row violates row-level security policy for table "campaign_members"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:12.5947674Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:12.5947743Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:13.3697922Z ^[[90mstderr^[[2m | src/api-calls/campaign/campaigns.live.test.ts^[[2m > ^[[22m^[[2mcampaigns end to end^[[2m > ^[[22m^[[2mlets GMs manage co-GMs and members, and cuts removed members off
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:13.3698732Z ^[[22m^[[39mAPI call failed (ref: P9654R) { code: ^[[32m'42501'^[[39m, message: ^[[32m'only GMs remove other members'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:13.3699123Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:14.2325954Z ^[[90mstderr^[[2m | src/api-calls/campaign/campaigns.live.test.ts^[[2m > ^[[22m^[[2mcampaigns end to end^[[2m > ^[[22m^[[2mlets members leave by themselves and unlinks their characters
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:14.2327195Z ^[[22m^[[39mAPI call failed (ref: OSZJER) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Could not find campaign'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:14.2327565Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:15.0497096Z ^[[90mstderr^[[2m | src/api-calls/campaign/campaigns.live.test.ts^[[2m > ^[[22m^[[2mcampaigns end to end^[[2m > ^[[22m^[[2mdeletes the campaign with every shared row, and unlinks characters
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:15.0498064Z ^[[22m^[[39mAPI call failed (ref: MUXRGZ) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Campaign not found'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:15.0498487Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:15.3026339Z  ^[[32m✓^[[39m src/api-calls/campaign/campaigns.live.test.ts ^[[2m(^[[22m^[[2m7 tests^[[22m^[[2m)^[[22m^[[33m 7672^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:15.3027009Z      ^[[33m^[[2m✓^[[22m^[[39m creates a co-op campaign with the founder as GM, hidden from outsiders ^[[33m 943^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:15.3027578Z      ^[[33m^[[2m✓^[[22m^[[39m starts solo and guided founders as players, who still manage their campaign ^[[33m 862^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:15.3028093Z      ^[[33m^[[2m✓^[[22m^[[39m runs the invite-link join flow: preview, join, rejoin ^[[33m 1089^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:15.3028537Z      ^[[33m^[[2m✓^[[22m^[[39m lets a player join with a character, and unlink it again ^[[33m 1329^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:15.3028994Z      ^[[33m^[[2m✓^[[22m^[[39m lets GMs manage co-GMs and members, and cuts removed members off ^[[33m 1632^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:15.3029458Z      ^[[33m^[[2m✓^[[22m^[[39m lets members leave by themselves and unlinks their characters ^[[33m 872^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:15.3029928Z      ^[[33m^[[2m✓^[[22m^[[39m deletes the campaign with every shared row, and unlinks characters ^[[33m 943^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:16.8261592Z  ^[[32m✓^[[39m src/api-calls/character/characters.live.test.ts ^[[2m(^[[22m^[[2m4 tests^[[22m^[[2m)^[[22m^[[33m 18091^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:16.8262680Z      ^[[33m^[[2m✓^[[22m^[[39m creates, updates live and deletes a solo character ^[[33m 11783^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:16.8263377Z      ^[[33m^[[2m✓^[[22m^[[39m lets campaign members read live but never write ^[[33m 1349^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:16.8264448Z      ^[[33m^[[2m✓^[[22m^[[39m keeps an outsider's subscription empty ^[[33m 3899^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:16.8265292Z      ^[[33m^[[2m✓^[[22m^[[39m lets a player hold several characters but never two active at once ^[[33m 1058^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:18.4831110Z  ^[[32m✓^[[39m src/api-calls/game-log/rollLogView.live.test.ts ^[[2m(^[[22m^[[2m5 tests^[[22m^[[2m)^[[22m^[[33m 21994^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:18.4832097Z      ^[[33m^[[2m✓^[[22m^[[39m posts a sheet roll to the starting IC channel and lists it in the roll log ^[[33m 6360^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:18.4832896Z      ^[[33m^[[2m✓^[[22m^[[39m hides GM-only rolls from players over reads and live updates ^[[33m 6342^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:18.4834182Z      ^[[33m^[[2m✓^[[22m^[[39m cuts a removed member off the roll log at once ^[[33m 6314^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:18.4836743Z      ^[[33m^[[2m✓^[[22m^[[39m streams the campaign's roll posts through their own listener ^[[33m 1470^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:18.4837452Z      ^[[33m^[[2m✓^[[22m^[[39m drops a deleted roll post from the roll log ^[[33m 1505^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:21.5611556Z  ^[[32m✓^[[39m src/api-calls/campaign/campaignTables.live.test.ts ^[[2m(^[[22m^[[2m4 tests^[[22m^[[2m)^[[22m^[[33m 6057^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:21.5612175Z      ^[[33m^[[2m✓^[[22m^[[39m shares tracks live with members, and nobody else ^[[33m 1738^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:21.5612592Z      ^[[33m^[[2m✓^[[22m^[[39m shares assets live with members, and nobody else ^[[33m 1802^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:21.5613003Z      ^[[33m^[[2m✓^[[22m^[[39m shares settings with members, and nobody else ^[[33m 1585^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:21.5613417Z      ^[[33m^[[2m✓^[[22m^[[39m cuts a removed member off the shared tables at once ^[[33m 931^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:23.4945071Z ^[[90mstderr^[[2m | src/api-calls/notes/campaignOutline.live.test.ts^[[2m > ^[[22m^[[2mcampaign outline end to end (#131)^[[2m > ^[[22m^[[2mkeeps the outline from players and outsiders everywhere
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:23.4945762Z ^[[22m^[[39mAPI call failed (ref: 5MDO6C) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:23.4946040Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:23.4946531Z   message: ^[[32m'new row violates row-level security policy for table "campaign_notes"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:23.4946803Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:23.4946872Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:23.7506098Z ^[[90mstderr^[[2m | src/api-calls/notes/campaignOutline.live.test.ts^[[2m > ^[[22m^[[2mcampaign outline end to end (#131)^[[2m > ^[[22m^[[2mkeeps the outline from players and outsiders everywhere
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:23.7506722Z ^[[22m^[[39mAPI call failed (ref: O997PH) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:23.7506942Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:23.7507263Z   message: ^[[32m'new row violates row-level security policy for table "campaign_notes"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:23.7507574Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:23.7507647Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:28.1048078Z ^[[90mstderr^[[2m | src/api-calls/notes/campaignOutline.live.test.ts^[[2m > ^[[22m^[[2mcampaign outline end to end (#131)^[[2m > ^[[22m^[[2mrefuses sharing flips and a second outline
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:28.1048861Z ^[[22m^[[39mAPI call failed (ref: MY7VP7) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Note not found'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:28.1049077Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:28.2352198Z ^[[90mstderr^[[2m | src/api-calls/notes/campaignOutline.live.test.ts^[[2m > ^[[22m^[[2mcampaign outline end to end (#131)^[[2m > ^[[22m^[[2mrefuses sharing flips and a second outline
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:28.2353145Z ^[[22m^[[39mAPI call failed (ref: 1AYW4F) { code: ^[[32m'42501'^[[39m, message: ^[[32m'the campaign outline is never shared'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:28.2354225Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:28.3635292Z  ^[[32m✓^[[39m src/api-calls/notes/campaignOutline.live.test.ts ^[[2m(^[[22m^[[2m4 tests^[[22m^[[2m)^[[22m^[[33m 11274^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:28.3635900Z      ^[[33m^[[2m✓^[[22m^[[39m a GM creates, reads and edits one shared outline ^[[33m 1269^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:28.3636342Z      ^[[33m^[[2m✓^[[22m^[[39m shares the outline live between co-GMs ^[[33m 4131^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:28.3637019Z      ^[[33m^[[2m✓^[[22m^[[39m keeps the outline from players and outsiders everywhere ^[[33m 4713^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:28.3637431Z      ^[[33m^[[2m✓^[[22m^[[39m refuses sharing flips and a second outline ^[[33m 1159^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:33.4151206Z ^[[90mstderr^[[2m | src/api-calls/chat/rollPosts.live.test.ts^[[2m > ^[[22m^[[2mchat roll posts end to end^[[2m > ^[[22m^[[2mrefuses GM-only posts from non-GMs and freezes posted dice
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:33.4152182Z ^[[22m^[[39mAPI call failed (ref: HS4PDS) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:33.4152611Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:33.4153294Z   message: ^[[32m'new row violates row-level security policy for table "chat_posts"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:33.4153795Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:33.4153975Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:34.3790809Z  ^[[32m✓^[[39m src/api-calls/chat/rollPosts.live.test.ts ^[[2m(^[[22m^[[2m4 tests^[[22m^[[2m)^[[22m^[[33m 15726^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:34.3791880Z      ^[[33m^[[2m✓^[[22m^[[39m posts a roll with its existing shape beside the author's text ^[[33m 1117^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:34.3792866Z      ^[[33m^[[2m✓^[[22m^[[39m withholds GM-only roll posts from players over reads and live updates ^[[33m 13002^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:34.3793756Z      ^[[33m^[[2m✓^[[22m^[[39m refuses GM-only posts from non-GMs and freezes posted dice ^[[33m 851^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:34.3794707Z      ^[[33m^[[2m✓^[[22m^[[39m rejects a roll forged for another character ^[[33m 755^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:35.0491352Z  ^[[32m✓^[[39m src/api-calls/realtime/listenToRows.live.test.ts ^[[2m(^[[22m^[[2m4 tests^[[22m^[[2m)^[[22m^[[33m 6571^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:35.0492236Z      ^[[33m^[[2m✓^[[22m^[[39m opens the channel as private ^[[33m 380^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:35.0492916Z      ^[[33m^[[2m✓^[[22m^[[39m delivers the current rows and later changes in order ^[[33m 745^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:35.0493609Z      ^[[33m^[[2m✓^[[22m^[[39m catches up after a forced reconnect ^[[33m 1928^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:35.0494176Z      ^[[33m^[[2m✓^[[22m^[[39m never delivers another person's rows ^[[33m 3517^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:36.6001280Z ^[[90mstderr^[[2m | src/api-calls/chat/channels.live.test.ts^[[2m > ^[[22m^[[2mchat channels end to end^[[2m > ^[[22m^[[2mlets only GMs create, rename and archive channels
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:36.6005778Z ^[[22m^[[39mAPI call failed (ref: 1A27HE) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:36.6006334Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:36.6007180Z   message: ^[[32m'new row violates row-level security policy for table "chat_channels"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:36.6007648Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:36.6007763Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:36.6057223Z ^[[90mstderr^[[2m | src/api-calls/chat/channels.live.test.ts^[[2m > ^[[22m^[[2mchat channels end to end^[[2m > ^[[22m^[[2mlets only GMs create, rename and archive channels
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:36.6059330Z ^[[22m^[[39mAPI call failed (ref: QW99BF) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Channel not found.'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:36.6060037Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:36.6117188Z ^[[90mstderr^[[2m | src/api-calls/chat/channels.live.test.ts^[[2m > ^[[22m^[[2mchat channels end to end^[[2m > ^[[22m^[[2mlets only GMs create, rename and archive channels
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:36.6121252Z ^[[22m^[[39mAPI call failed (ref: YTQRFB) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Channel not found.'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:36.6121886Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:36.7208529Z  ^[[32m✓^[[39m src/api-calls/world/worldNotes.live.test.ts ^[[2m(^[[22m^[[2m5 tests^[[22m^[[2m)^[[22m^[[33m 14985^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:36.7209446Z      ^[[33m^[[2m✓^[[22m^[[39m persists a GM's edit to the world note row within seconds ^[[33m 3517^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:36.7210308Z      ^[[33m^[[2m✓^[[22m^[[39m persists world description edits beside the world row ^[[33m 3421^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:36.7210963Z      ^[[33m^[[2m✓^[[22m^[[39m refuses note connections without access ^[[33m 1798^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:36.7211662Z      ^[[33m^[[2m✓^[[22m^[[39m cuts off a connected reader when their item is unshared ^[[33m 4471^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:36.7212139Z      ^[[33m^[[2m✓^[[22m^[[39m cuts off a campaign GM from world notes when the world is unlinked (#106) ^[[33m 1775^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:37.7058369Z ^[[90mstderr^[[2m | src/api-calls/chat/channels.live.test.ts^[[2m > ^[[22m^[[2mchat channels end to end^[[2m > ^[[22m^[[2mkeeps the starting channels unarchivable but renamable
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:37.7061168Z ^[[22m^[[39mAPI call failed (ref: 4JELLD) { code: ^[[32m'P0001'^[[39m, message: ^[[32m'starting channels cannot be archived'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:37.7061786Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2144293Z ^[[90mstderr^[[2m | src/api-calls/character/portraits.live.test.ts^[[2m > ^[[22m^[[2mcharacter portraits end to end^[[2m > ^[[22m^[[2mopens portraits to campaign members and nobody else
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2147353Z ^[[22m^[[39mAPI call failed (ref: 21J281) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2148012Z   name: ^[[32m'StorageApiError'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2148907Z   code: ^[[32m'AccessDenied'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2149508Z   status: ^[[33m400^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2150011Z   message: ^[[32m'new row violates row-level security policy'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2150617Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2150766Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2200406Z ^[[90mstderr^[[2m | src/api-calls/character/portraits.live.test.ts^[[2m > ^[[22m^[[2mcharacter portraits end to end^[[2m > ^[[22m^[[2mopens portraits to campaign members and nobody else
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2203154Z ^[[22m^[[39mgetCharacterPortrait {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2203946Z   name: ^[[32m'StorageApiError'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2204339Z   code: ^[[32m'NoSuchKey'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2206500Z   status: ^[[33m400^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2206832Z   message: ^[[32m'Object not found'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2207096Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2207216Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2207960Z ^[[90mstderr^[[2m | src/api-calls/character/portraits.live.test.ts^[[2m > ^[[22m^[[2mcharacter portraits end to end^[[2m > ^[[22m^[[2mopens portraits to campaign members and nobody else
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2208696Z ^[[22m^[[39mAPI call failed (ref: 1TN898) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2209015Z   name: ^[[32m'StorageApiError'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2209343Z   code: ^[[32m'NoSuchKey'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2209626Z   status: ^[[33m400^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2209926Z   message: ^[[32m'Object not found'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2210185Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.2210290Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.3696942Z  ^[[32m✓^[[39m src/api-calls/character/portraits.live.test.ts ^[[2m(^[[22m^[[2m2 tests^[[22m^[[2m)^[[22m^[[33m 1464^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.3697897Z      ^[[33m^[[2m✓^[[22m^[[39m uploads, serves and removes a portrait ^[[33m 500^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.3698508Z      ^[[33m^[[2m✓^[[22m^[[39m opens portraits to campaign members and nobody else ^[[33m 963^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.9948282Z ^[[90mstderr^[[2m | src/api-calls/chat/channels.live.test.ts^[[2m > ^[[22m^[[2mchat channels end to end^[[2m > ^[[22m^[[2mshows every channel to members and nothing to outsiders
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.9949287Z ^[[22m^[[39mAPI call failed (ref: 38PTNC) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.9949613Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.9950076Z   message: ^[[32m'new row violates row-level security policy for table "chat_channels"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.9950356Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:38.9950426Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:39.0003522Z ^[[90mstderr^[[2m | src/api-calls/chat/channels.live.test.ts^[[2m > ^[[22m^[[2mchat channels end to end^[[2m > ^[[22m^[[2mshows every channel to members and nothing to outsiders
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:39.0004802Z ^[[22m^[[39mAPI call failed (ref: JQLM6B) { name: ^[[32m'Error'^[[39m, message: ^[[32m'Channel not found.'^[[39m }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:39.0005190Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:40.6265913Z  ^[[32m✓^[[39m src/api-calls/testing/hs256Rejection.live.test.ts ^[[2m(^[[22m^[[2m6 tests^[[22m^[[2m)^[[22m^[[33m 5413^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:40.6266907Z      ^[[33m^[[2m✓^[[22m^[[39m Realtime refuses a forged HS256 join token and accepts a real one ^[[33m 5277^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:41.3782397Z  ^[[32m✓^[[39m src/api-calls/chat/channels.live.test.ts ^[[2m(^[[22m^[[2m5 tests^[[22m^[[2m)^[[22m^[[33m 6859^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:41.3792528Z      ^[[33m^[[2m✓^[[22m^[[39m creates the starting IC and OOC channels with the campaign ^[[33m 1074^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:41.3793846Z      ^[[33m^[[2m✓^[[22m^[[39m lets only GMs create, rename and archive channels ^[[33m 1240^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:41.3794842Z      ^[[33m^[[2m✓^[[22m^[[39m keeps the starting channels unarchivable but renamable ^[[33m 1033^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:41.3795700Z      ^[[33m^[[2m✓^[[22m^[[39m shows every channel to members and nothing to outsiders ^[[33m 1277^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:41.3796551Z      ^[[33m^[[2m✓^[[22m^[[39m streams new, renamed and archived channels live ^[[33m 2235^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:42.4758506Z  ^[[32m✓^[[39m src/api-calls/campaign/campaignMembers.live.test.ts ^[[2m(^[[22m^[[2m2 tests^[[22m^[[2m)^[[22m^[[33m 1733^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:42.4759463Z      ^[[33m^[[2m✓^[[22m^[[39m lets the GM and the player see the roster, and nobody else ^[[33m 883^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:42.4760626Z      ^[[33m^[[2m✓^[[22m^[[39m lets only the GM change the roster ^[[33m 848^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:44.7126072Z ^[[90mstderr^[[2m | src/api-calls/user/settings/userSettings.live.test.ts^[[2m > ^[[22m^[[2muser settings end to end^[[2m > ^[[22m^[[2mkeeps one person's settings from everyone else
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:44.7126706Z ^[[22m^[[39mupdateAccessibilitySettings {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:44.7126938Z   code: ^[[32m'42501'^[[39m,
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:44.7127258Z   message: ^[[32m'new row violates row-level security policy for table "user_settings"'^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:44.7127548Z }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:44.7127653Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:44.8146516Z  ^[[32m✓^[[39m src/api-calls/user/settings/userSettings.live.test.ts ^[[2m(^[[22m^[[2m3 tests^[[22m^[[2m)^[[22m^[[33m 6266^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:44.8147440Z      ^[[33m^[[2m✓^[[22m^[[39m saves and streams accessibility settings for the owner ^[[33m 689^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:44.8148082Z      ^[[33m^[[2m✓^[[22m^[[39m pins and unpins oracle sections live ^[[33m 1622^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:08:44.8148759Z      ^[[33m^[[2m✓^[[22m^[[39m keeps one person's settings from everyone else ^[[33m 3954^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.1928222Z  ^[[31m❯^[[39m src/api-calls/realtime/presence.live.test.ts ^[[2m(^[[22m^[[2m1 test^[[22m^[[2m | ^[[22m^[[31m1 failed^[[39m^[[2m)^[[22m^[[33m 30638^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.1929306Z ^[[31m     ^[[31m×^[[31m lets two signed-in members see each other on a private topic^[[39m^[[33m 30636^[[2mms^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.1951158Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.1951761Z ^[[31m⎯⎯⎯⎯⎯⎯⎯^[[39m^[[1m^[[41m Failed Tests 1 ^[[49m^[[22m^[[31m⎯⎯⎯⎯⎯⎯⎯^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.1952044Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.1953490Z ^[[41m^[[1m FAIL ^[[22m^[[49m src/api-calls/realtime/presence.live.test.ts^[[2m > ^[[22mself-hosted Realtime presence^[[2m > ^[[22mlets two signed-in members see each other on a private topic
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.1956397Z ^[[31m^[[1mError^[[22m: timed out waiting for the expected live state^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.1957229Z ^[[36m ^[[2m❯^[[22m waitFor src/api-calls/testing/liveHarness.ts:^[[2m167:13^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.1985811Z     ^[[90m165|^[[39m     ^[[35mif^[[39m (last ^[[33m!==^[[39m ^[[35mnull^[[39m) ^[[35mreturn^[[39m last^[[33m;^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.1995048Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.1999059Z ^[[2m Test Files ^[[22m ^[[1m^[[31m1 failed^[[39m^[[22m^[[2m | ^[[22m^[[1m^[[32m26 passed^[[39m^[[22m^[[90m (27)^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.1999914Z ^[[2m      Tests ^[[22m ^[[1m^[[31m1 failed^[[39m^[[22m^[[2m | ^[[22m^[[1m^[[32m165 passed^[[39m^[[22m^[[90m (166)^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.2000488Z ^[[2m   Start at ^[[22m 17:06:12
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.2001709Z ^[[2m   Duration ^[[22m 179.80s^[[2m (transform 1.22s, setup 0ms, import 3.11s, tests 476.49s, environment 2ms)^[[22m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.2002229Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.2004183Z     ^[[90m166|^[[39m     ^[[35mif^[[39m (^[[33mDate^[[39m^[[33m.^[[39m^[[34mnow^[[39m() ^[[33m>=^[[39m deadline) {
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.2005116Z     ^[[90m167|^[[39m       ^[[35mthrow^[[39m ^[[35mnew^[[39m ^[[33mError^[[39m(^[[32m"timed out waiting for the expected live state"^[[39m)^[[33m;^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.2005679Z     ^[[90m   |^[[39m             ^[[31m^^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.2005961Z     ^[[90m168|^[[39m     }
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.2006616Z     ^[[90m169|^[[39m     ^[[35mawait^[[39m ^[[35mnew^[[39m ^[[33mPromise^[[39m((resolve) ^[[33m=>^[[39m ^[[34msetTimeout^[[39m(resolve^[[33m,^[[39m ^[[34m100^[[39m))^[[33m;^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.2007695Z ^[[90m ^[[2m❯^[[22m src/api-calls/realtime/presence.live.test.ts:^[[2m103:9^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.2007906Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.2008063Z ^[[31m^[[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯^[[22m^[[39m
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.2008187Z 
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.2015741Z JSON report written to /tmp/live-report-4kRFRP.json
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.2645371Z live: 166 behavior test(s): 165 passed, 1 failed, 0 skipped
+live	Run the stack tests (zero skips allowed)	2026-11-27T17:09:12.2757235Z ##[error]Process completed with exit code 1.
