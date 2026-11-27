@@ -201,7 +201,6 @@ test.describe("chat post search", () => {
     await signInAs(page, config, dmPeer, campaignUrl(campaignId));
     dialog = await openSearch(page);
     expect(await findPosts(page, dialog, dmWord)).toHaveCount(1);
-    await expect(dialog.getByText("No posts match that phrase.")).toBeVisible();
 
     // A campaign member outside the private channel and the DM sees neither,
     // and players never see GM-only rolls.
