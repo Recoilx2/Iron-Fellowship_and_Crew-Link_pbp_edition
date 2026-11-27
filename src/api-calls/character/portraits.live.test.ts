@@ -94,7 +94,7 @@ describe.skipIf(!config)("character portraits end to end", () => {
       characterId,
       filename: "portrait.png",
     });
-    expect(url).toMatch(/^https?:/);
+    expect(url).toMatch(/^blob:/);
     const response = await fetch(url);
     expect(response.ok).toBe(true);
     await response.arrayBuffer();

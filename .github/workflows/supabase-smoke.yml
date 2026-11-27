@@ -78,6 +78,11 @@ jobs:
           echo "::add-mask::$(grep -E '^ANON_KEY=' .env.live | cut -d= -f2-)"
           echo "::add-mask::$(grep -E '^SERVICE_ROLE_KEY=' .env.live | cut -d= -f2-)"
           echo "::add-mask::$(grep -E '^POSTGRES_PASSWORD=' .env.live | cut -d= -f2-)"
+          # The private signing JWK and Storage's static secret live in
+          # service-only env files beside the main one (ticket #152).
+          echo "::add-mask::$(grep -E '^GOTRUE_JWT_KEYS=' .env.live.gotrue | cut -d= -f2-)"
+          echo "::add-mask::$(grep -E '^GOTRUE_JWT_SECRET=' .env.live.gotrue | cut -d= -f2-)"
+          echo "::add-mask::$(grep -E '^AUTH_JWT_SECRET=' .env.live.storage | cut -d= -f2-)"
 
       - name: Validate the template renders
         working-directory: supabase
@@ -124,10 +129,39 @@ jobs:
           }
 
           realtime_healthy() {
-            compose exec -T realtime \
-              curl -sSfL --head -o /dev/null \
-              -H "Authorization: Bearer $ANON" \
-              http://localhost:4000/api/tenants/realtime-dev/health
+            # Liveness via the unauthenticated /healthcheck route
+            # (realtime/healthcheck.sh): the /api health endpoint
+            # authenticates with an HS256 admin secret this stack
+            # deliberately does not configure, so it accepts no probe
+            # (ticket #152).
+            compose exec -T realtime /bin/sh /realtime/healthcheck.sh
+          }
+
+          realtime_tenant_ready() {
+            # The seed logs this only after the tenant row, its migrations
+            # and the janitor pass are done: a drifted seed fork fails here
+            # (ticket #152).
+            compose logs realtime 2>/dev/null | grep -q "Tenant set-up successfully"
+          }
+
+          realtime_tenant_has_no_hs256_secret() {
+            # The seed fork must leave the tenant's jwt_secret NULL; a
+            # drifted mount would re-seed upstream's well-known constant.
+            local db
+            db="$(get_var .env.live POSTGRES_DB)"
+            db="${db:-postgres}"
+            [ "$(compose exec -T db psql -U postgres -d "$db" -t -A -c \
+              "SELECT COALESCE(jwt_secret IS NULL, false) FROM _realtime.tenants WHERE external_id = 'realtime-dev'")" = "t" ]
+          }
+
+          realtime_metrics_refuse_hs256() {
+            # The release-config fork leaves the metrics verifier no secret,
+            # so /metrics refuses every caller (ticket #152).
+            local token
+            token="$(printf '{"alg":"HS256","typ":"JWT"}' | openssl base64 -A | tr '+/' '-_' | tr -d '=').$(printf '{"role":"anon","iat":%s,"exp":%s}' "$(date +%s)" "$(( $(date +%s) + 60 ))" | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+            token="${token}.$(printf '%s' "$token" | openssl dgst -sha256 -hmac 'super-secret-jwt-token-with-at-least-32-characters-long' -binary | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+            [ "$(compose exec -T realtime curl -s -o /dev/null -w '%{http_code}' \
+              -H "Authorization: Bearer $token" http://localhost:4000/metrics)" = "403" ]
           }
 
           functions_placeholder_ok() {
@@ -144,6 +178,9 @@ jobs:
           wait_for "rest" -H "apikey: $SERVICE_KEY" "$GW/rest/v1/"
           wait_for "storage" "$GW/storage/v1/status"
           poll_for "realtime" realtime_healthy
+          poll_for "realtime tenant" realtime_tenant_ready
+          poll_for "realtime tenant secret" realtime_tenant_has_no_hs256_secret
+          poll_for "realtime metrics refuse HS256" realtime_metrics_refuse_hs256
           poll_for "functions" functions_placeholder_ok
           poll_for "migrations" migrate_done
 
@@ -195,6 +232,11 @@ jobs:
           echo "::add-mask::$(grep -E '^ANON_KEY=' .env.live | cut -d= -f2-)"
           echo "::add-mask::$(grep -E '^SERVICE_ROLE_KEY=' .env.live | cut -d= -f2-)"
           echo "::add-mask::$(grep -E '^POSTGRES_PASSWORD=' .env.live | cut -d= -f2-)"
+          # The private signing JWK and Storage's static secret live in
+          # service-only env files beside the main one (ticket #152).
+          echo "::add-mask::$(grep -E '^GOTRUE_JWT_KEYS=' .env.live.gotrue | cut -d= -f2-)"
+          echo "::add-mask::$(grep -E '^GOTRUE_JWT_SECRET=' .env.live.gotrue | cut -d= -f2-)"
+          echo "::add-mask::$(grep -E '^AUTH_JWT_SECRET=' .env.live.storage | cut -d= -f2-)"
 
       - name: Validate the template renders
         working-directory: supabase
@@ -246,10 +288,39 @@ jobs:
           }
 
           realtime_healthy() {
-            compose exec -T realtime \
-              curl -sSfL --head -o /dev/null \
-              -H "Authorization: Bearer $ANON" \
-              http://localhost:4000/api/tenants/realtime-dev/health
+            # Liveness via the unauthenticated /healthcheck route
+            # (realtime/healthcheck.sh): the /api health endpoint
+            # authenticates with an HS256 admin secret this stack
+            # deliberately does not configure, so it accepts no probe
+            # (ticket #152).
+            compose exec -T realtime /bin/sh /realtime/healthcheck.sh
+          }
+
+          realtime_tenant_ready() {
+            # The seed logs this only after the tenant row, its migrations
+            # and the janitor pass are done: a drifted seed fork fails here
+            # (ticket #152).
+            compose logs realtime 2>/dev/null | grep -q "Tenant set-up successfully"
+          }
+
+          realtime_tenant_has_no_hs256_secret() {
+            # The seed fork must leave the tenant's jwt_secret NULL; a
+            # drifted mount would re-seed upstream's well-known constant.
+            local db
+            db="$(get_var .env.live POSTGRES_DB)"
+            db="${db:-postgres}"
+            [ "$(compose exec -T db psql -U postgres -d "$db" -t -A -c \
+              "SELECT COALESCE(jwt_secret IS NULL, false) FROM _realtime.tenants WHERE external_id = 'realtime-dev'")" = "t" ]
+          }
+
+          realtime_metrics_refuse_hs256() {
+            # The release-config fork leaves the metrics verifier no secret,
+            # so /metrics refuses every caller (ticket #152).
+            local token
+            token="$(printf '{"alg":"HS256","typ":"JWT"}' | openssl base64 -A | tr '+/' '-_' | tr -d '=').$(printf '{"role":"anon","iat":%s,"exp":%s}' "$(date +%s)" "$(( $(date +%s) + 60 ))" | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+            token="${token}.$(printf '%s' "$token" | openssl dgst -sha256 -hmac 'super-secret-jwt-token-with-at-least-32-characters-long' -binary | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+            [ "$(compose exec -T realtime curl -s -o /dev/null -w '%{http_code}' \
+              -H "Authorization: Bearer $token" http://localhost:4000/metrics)" = "403" ]
           }
 
           functions_placeholder_ok() {
@@ -266,6 +337,9 @@ jobs:
           wait_for "rest" -H "apikey: $SERVICE_KEY" "$GW/rest/v1/"
           wait_for "storage" "$GW/storage/v1/status"
           poll_for "realtime" realtime_healthy
+          poll_for "realtime tenant" realtime_tenant_ready
+          poll_for "realtime tenant secret" realtime_tenant_has_no_hs256_secret
+          poll_for "realtime metrics refuse HS256" realtime_metrics_refuse_hs256
           poll_for "functions" functions_placeholder_ok
           poll_for "migrations" migrate_done
           wait_for "site" "http://localhost:$SITE_PORT/"

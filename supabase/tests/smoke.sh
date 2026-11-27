@@ -89,11 +89,50 @@ poll_for() {
 }
 
 realtime_healthy() {
-  # realtime_healthy <project> <env-file> <anon-key>
-  compose "$1" "$2" exec -T realtime \
-    curl -sSfL --head -o /dev/null \
-    -H "Authorization: Bearer $3" \
-    http://localhost:4000/api/tenants/realtime-dev/health
+  # realtime_healthy <project> <env-file>
+  # Liveness via the unauthenticated /healthcheck route (realtime/
+  # healthcheck.sh): the /api health endpoint authenticates with an HS256
+  # admin secret this stack deliberately does not configure, so it accepts
+  # no probe (ticket #152).
+  compose "$1" "$2" exec -T realtime /bin/sh /realtime/healthcheck.sh
+}
+
+realtime_tenant_ready() {
+  # realtime_tenant_ready <project> <env-file>
+  # The seed logs "Tenant set-up successfully" only after the tenant row,
+  # its migrations and the janitor pass are done — a deeper check than
+  # liveness, so a drifted seed fork fails here instead of silently
+  # reopening forgeable tenant tokens (ticket #152).
+  compose "$1" "$2" logs realtime 2>/dev/null | grep -q "Tenant set-up successfully"
+}
+
+realtime_tenant_has_no_hs256_secret() {
+  # realtime_tenant_has_no_hs256_secret <project> <env-file>
+  # The seed fork must leave the tenant's jwt_secret NULL. A drifted mount
+  # would re-seed upstream's well-known constant and reopen forgeable
+  # tenant tokens; this check fails CI on that instead (ticket #152).
+  local db
+  db="$(get_var "$2" POSTGRES_DB)"
+  db="${db:-postgres}"
+  [ "$(compose "$1" "$2" exec -T db psql -U postgres -d "$db" -t -A -c \
+    "SELECT COALESCE(jwt_secret IS NULL, false) FROM _realtime.tenants WHERE external_id = 'realtime-dev'")" = "t" ]
+}
+
+realtime_metrics_refuse_hs256() {
+  # realtime_metrics_refuse_hs256 <project> <env-file>
+  # The /metrics endpoints must refuse every caller: the release-config
+  # fork leaves the metrics verifier no secret, so even a token signed
+  # with upstream's well-known seed constant gets 403 (ticket #152).
+  # Note what this check proves on its own: it cannot tell "no secret"
+  # from "a different secret", because the stack never held this constant.
+  # It is the fork's boot behaviour that makes a drifted mount fail loudly
+  # — upstream's System.fetch_env! raises without METRICS_JWT_SECRET — so
+  # this probe plus a green boot pins the fork in place.
+  local token
+  token="$(printf '{"alg":"HS256","typ":"JWT"}' | openssl base64 -A | tr '+/' '-_' | tr -d '=').$(printf '{"role":"anon","iat":%s,"exp":%s}' "$(date +%s)" "$(( $(date +%s) + 60 ))" | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+  token="${token}.$(printf '%s' "$token" | openssl dgst -sha256 -hmac 'super-secret-jwt-token-with-at-least-32-characters-long' -binary | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+  [ "$(compose "$1" "$2" exec -T realtime curl -s -o /dev/null -w '%{http_code}' \
+    -H "Authorization: Bearer $token" http://localhost:4000/metrics)" = "403" ]
 }
 
 functions_placeholder_ok() {
@@ -117,7 +156,10 @@ check_copy() {
   wait_for "$project rest" -H "apikey: $service_key" "$gw/rest/v1/"
   wait_for "$project storage" "$gw/storage/v1/status"
   wait_for "$project hocuspocus" "$gw/hocuspocus/"
-  poll_for "$project realtime" realtime_healthy "$project" "$env_file" "$key"
+  poll_for "$project realtime" realtime_healthy "$project" "$env_file"
+  poll_for "$project realtime tenant" realtime_tenant_ready "$project" "$env_file"
+  poll_for "$project realtime tenant secret" realtime_tenant_has_no_hs256_secret "$project" "$env_file"
+  poll_for "$project realtime metrics refuse HS256" realtime_metrics_refuse_hs256 "$project" "$env_file"
   poll_for "$project functions" functions_placeholder_ok "$gw" "$key"
   poll_for "$project migrations" migrate_done "$project" "$env_file"
 }

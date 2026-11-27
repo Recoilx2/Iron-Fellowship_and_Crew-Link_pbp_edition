@@ -9,7 +9,6 @@
  * chars-to-tokens sizing. What it misses (covered by the live test):
  * the Deno wiring, real row-level security and the real upstream.
  */
-import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import * as Y from "yjs";
 
@@ -20,6 +19,7 @@ import {
   type GmAssistantEnv,
   type UpstreamFetch,
 } from "./handler";
+import { mintRs256, testJwks } from "./testTokens";
 
 const GM_ID = "11111111-1111-4111-8111-111111111111";
 const CAMPAIGN_ID = "22222222-2222-4222-8222-222222222222";
@@ -40,7 +40,6 @@ const MISSING_LORE_ID = "cccccccc-cccc-4222-8222-cccccccccccc";
 const NPC_ID = "13131313-1313-4313-8313-131313131313";
 const LOCATION_ID = "14141414-1414-4414-8414-141414141414";
 const API_KEY = "sk-test-secret-KEY-abcdef123456";
-const JWT_SECRET = "test-jwt-secret-that-is-long-enough";
 
 function baseEnv(overrides: Partial<GmAssistantEnv> = {}): GmAssistantEnv {
   return {
@@ -48,7 +47,7 @@ function baseEnv(overrides: Partial<GmAssistantEnv> = {}): GmAssistantEnv {
     apiKey: API_KEY,
     allowedModels: "",
     contextTokens: "",
-    jwtSecret: JWT_SECRET,
+    jwtJwks: testJwks(),
     supabaseUrl: "http://api-gw:8000",
     anonKey: "anon-key",
     siteUrl: "https://site.test",
@@ -57,23 +56,8 @@ function baseEnv(overrides: Partial<GmAssistantEnv> = {}): GmAssistantEnv {
   };
 }
 
-function b64url(b64: string): string {
-  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function mintToken(claims: Record<string, unknown>): string {
-  const header = b64url(
-    Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64"),
-  );
-  const payload = b64url(Buffer.from(JSON.stringify(claims)).toString("base64"));
-  const sig = b64url(
-    createHmac("sha256", JWT_SECRET).update(`${header}.${payload}`).digest("base64"),
-  );
-  return `${header}.${payload}.${sig}`;
-}
-
 function gmToken(): string {
-  return mintToken({
+  return mintRs256({
     role: "authenticated",
     sub: GM_ID,
     exp: Math.floor(Date.now() / 1000) + 3600,

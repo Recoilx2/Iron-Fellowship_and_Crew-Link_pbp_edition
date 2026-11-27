@@ -59,10 +59,12 @@ import {
   deletePerson,
   liveStackConfig,
   personToken,
+  randomCampaignId,
   waitFor,
   type LivePerson,
   type LiveStackConfig,
 } from "api-calls/testing/liveHarness";
+import { createHmac } from "node:crypto";
 
 const config = liveStackConfig();
 const FAKE_PORT = Number(process.env.LIVE_FAKE_LLM_PORT ?? 4010);
@@ -270,6 +272,29 @@ describe.skipIf(!config)("gm assistant server function", () => {
 
     // The player learns nothing through the data layer either.
     expect(await readMessagesAs(player, conversationId)).toEqual([]);
+  });
+
+  it("refuses an HS256 token signed with the old shared secret", { timeout: 60000 }, async () => {
+    // Before ticket #152 the stack signed every token with one shared
+    // HS256 secret. The function now verifies RS256 against the public
+    // JWKS only, so even a well-formed token in the old shape — signed
+    // with any secret, former or not — is refused before anything else.
+    const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+    const payload = Buffer.from(
+      JSON.stringify({
+        role: "authenticated",
+        sub: "99999999-9999-4222-8222-999999999999",
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      }),
+    ).toString("base64url");
+    const signature = createHmac("sha256", "the-former-shared-jwt-secret")
+      .update(`${header}.${payload}`)
+      .digest("base64url");
+    const models = await call(`/gm-assistant/models?campaignId=${randomCampaignId()}`, {
+      token: `${header}.${payload}.${signature}`,
+    });
+    expect(models.status).toBe(401);
+    expect(JSON.parse(models.text)).toMatchObject({ code: "UNAUTHORIZED" });
   });
 
   it("filters the model list by the allow-list with context sizes", { timeout: 120000 }, async () => {

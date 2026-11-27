@@ -11,8 +11,6 @@ import { shrinkImageFile } from "api-calls/storage/shrinkImage";
 
 export const WORLD_IMAGES_BUCKET = "world-images";
 
-const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7;
-
 // Selection cap for the world image pickers. Large images are shrunk in the
 // browser before upload (see shrinkImage.ts); this only stops files no
 // browser should be asked to decode.
@@ -48,6 +46,13 @@ export async function uploadWorldImageFile(
   return shrunk.name;
 }
 
+/**
+ * Loads the image's bytes with the viewer's own token (RS256;
+ * ticket #152) and returns an object URL for it. Storage's signed-URL flow
+ * is gone: its tokens were HMAC-signed, and the stack's verifier refuses
+ * HMAC. The object URL holds the bytes until revoked — the caller owns
+ * that (the world stores revoke when they replace a URL).
+ */
 export async function getWorldImageUrl(
   worldId: string,
   itemId: string,
@@ -55,14 +60,11 @@ export async function getWorldImageUrl(
 ): Promise<string> {
   const { data, error } = await getSupabaseClient()
     .storage.from(WORLD_IMAGES_BUCKET)
-    .createSignedUrl(
-      worldImageFilePath(worldId, itemId, filename),
-      SIGNED_URL_TTL_SECONDS
-    );
-  if (error || !data?.signedUrl) {
+    .download(worldImageFilePath(worldId, itemId, filename));
+  if (error || !data) {
     throw error ?? new Error("Failed to load world image.");
   }
-  return data.signedUrl;
+  return URL.createObjectURL(data);
 }
 
 export async function removeWorldImageFile(

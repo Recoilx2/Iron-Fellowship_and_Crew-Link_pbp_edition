@@ -22,11 +22,12 @@ import { shrinkImageFile } from "api-calls/storage/shrinkImage";
 export const CHAT_IMAGES_BUCKET = "chat-images";
 
 /**
- * Signed links stay short-lived (minutes): a revoked member's links stop
- * working quickly. The feed re-signs an image when it shows it again
- * (see ChatPostImages), so short links never interrupt reading.
+ * Images reload on this cadence (minutes): the bytes are fetched with the
+ * viewer's own token, so a member whose access is revoked stops seeing the
+ * image by the next reload. The feed re-fetches an image when it shows it
+ * again (see ChatPostImages), so reading is never interrupted.
  */
-export const CHAT_IMAGE_SIGNED_URL_TTL_SECONDS = 10 * 60;
+export const CHAT_IMAGE_RELOAD_SECONDS = 10 * 60;
 
 export function chatImageFilePath(
   campaignId: string,
@@ -73,12 +74,19 @@ export async function removeChatImage(path: string): Promise<void> {
   }
 }
 
+/**
+ * Loads the image's bytes with the viewer's own token (RS256; ticket #152)
+ * and returns an object URL for it. Storage's signed-URL flow is gone: its
+ * tokens were HMAC-signed, and the stack's verifier refuses HMAC. The
+ * object URL holds the bytes until revoked — the caller owns that (see
+ * ChatPostImages, which revokes on reload and unmount).
+ */
 export async function getChatImageUrl(path: string): Promise<string> {
   const { data, error } = await getSupabaseClient()
     .storage.from(CHAT_IMAGES_BUCKET)
-    .createSignedUrl(path, CHAT_IMAGE_SIGNED_URL_TTL_SECONDS);
-  if (error || !data?.signedUrl) {
+    .download(path);
+  if (error || !data) {
     throw error ?? new Error("Failed to load chat image.");
   }
-  return data.signedUrl;
+  return URL.createObjectURL(data);
 }
