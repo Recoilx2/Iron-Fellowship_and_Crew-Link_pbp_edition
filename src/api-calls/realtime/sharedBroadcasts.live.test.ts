@@ -161,20 +161,29 @@ describe.skipIf(!config)("private broadcast topics against the local stack", () 
       visibility: "private",
     });
     expect(created.error).toBeNull();
-    const roster = await admin
-      .from("chat_channel_members")
-      .insert({ channel_id: channelId, user_id: player.userId });
-    expect(roster.error).toBeNull();
 
-    // Remove only the campaign roster entry. The channel roster row has no
-    // FK to campaign_members, so it survives: the topic policy must gate on
-    // private.can_read_channel's campaign check, not on is_channel_member.
+    // Losing campaign membership clears channel roster rows through
+    // chat_channel_members_clear_on_campaign_leave, so create the stale row
+    // AFTER the revoke, with the service role (the table has no INSERT
+    // policy and no FK to campaign_members). That isolates the real gate:
+    // is_channel_member is true, but can_read_channel must still be false.
     const revoked = await admin
       .from("campaign_members")
       .delete()
       .eq("campaign_id", campaignId)
       .eq("user_id", player.userId);
     expect(revoked.error).toBeNull();
+    const gone = await admin
+      .from("campaign_members")
+      .select("user_id")
+      .eq("campaign_id", campaignId)
+      .eq("user_id", player.userId);
+    expect(gone.data ?? []).toHaveLength(0);
+
+    const roster = await admin
+      .from("chat_channel_members")
+      .insert({ channel_id: channelId, user_id: player.userId });
+    expect(roster.error).toBeNull();
     const stale = await admin
       .from("chat_channel_members")
       .select("user_id")
