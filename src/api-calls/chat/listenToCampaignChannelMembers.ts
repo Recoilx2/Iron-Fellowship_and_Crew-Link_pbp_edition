@@ -11,10 +11,8 @@ import {
   channelSharedTopic,
 } from "api-calls/realtime/sharedTopics";
 import {
-  CHAT_CHANNELS_TABLE,
   CHAT_CHANNEL_MEMBERS_TABLE,
   constructCampaignChannelMembersChannelName,
-  constructCampaignChannelsFilter,
   type ChannelMemberRow,
 } from "./_getRef";
 
@@ -76,12 +74,6 @@ export function listenToCampaignChannelMembers(
           broadcastRefreshBinding({
             topic: campaignSharedTopic(campaignId, "chat"),
           }),
-          {
-            type: "postgres_changes",
-            table: CHAT_CHANNELS_TABLE,
-            filter: constructCampaignChannelsFilter(campaignId),
-            toChange: () => ({ kind: "refresh" }),
-          },
         ],
         fetchRows: async () => {
           // The join carries the campaign filter the roster table itself

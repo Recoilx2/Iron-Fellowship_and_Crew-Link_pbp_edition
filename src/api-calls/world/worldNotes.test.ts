@@ -183,7 +183,7 @@ function makeTopicReusingClient(noteRows: Array<{
               // (id=...) both resolve to this item's world in the stub.
               if (column === "id") {
                 return {
-                  data: noteRows.map((row) => ({ world_id: "world-1" })),
+                  data: noteRows.map(() => ({ world_id: "world-1" })),
                   error: null,
                 };
               }

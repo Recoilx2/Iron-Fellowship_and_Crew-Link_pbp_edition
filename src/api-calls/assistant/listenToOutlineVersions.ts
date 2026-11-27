@@ -7,9 +7,7 @@ import {
 import { campaignGmTopic } from "api-calls/realtime/sharedTopics";
 import {
   ASSISTANT_OUTLINE_VERSIONS_TABLE,
-  assistantOutlineVersionPayloadToChange,
   constructAssistantOutlineVersionsChannelName,
-  constructAssistantOutlineVersionsFilter,
   outlineVersionRowToDocument,
   type AssistantOutlineVersion,
   type AssistantOutlineVersionRow,
@@ -49,12 +47,6 @@ export function listenToOutlineVersions(
         table: ASSISTANT_OUTLINE_VERSIONS_TABLE,
         getKey: (row) => row.id,
       }),
-      {
-        type: "postgres_changes",
-        table: ASSISTANT_OUTLINE_VERSIONS_TABLE,
-        filter: constructAssistantOutlineVersionsFilter(campaignId),
-        toChange: assistantOutlineVersionPayloadToChange,
-      },
     ],
     fetchRows: async () => {
       const { data, error } = await client

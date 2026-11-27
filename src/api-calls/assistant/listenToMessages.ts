@@ -11,9 +11,7 @@ import {
 import type { AssistantMessageWithId } from "./_assistant.type";
 import {
   ASSISTANT_MESSAGES_TABLE,
-  assistantMessagePayloadToChange,
   constructAssistantMessagesChannelName,
-  constructAssistantMessagesFilter,
   messageRowToDocument,
   type AssistantMessageRow,
 } from "./_getRef";
@@ -56,12 +54,6 @@ export function listenToMessages(
               getKey: (row) => row.id,
             })
         ),
-        {
-          type: "postgres_changes",
-          table: ASSISTANT_MESSAGES_TABLE,
-          filter: constructAssistantMessagesFilter(conversationId),
-          toChange: assistantMessagePayloadToChange,
-        },
       ],
       fetchRows: async () => {
         const { data, error } = await client

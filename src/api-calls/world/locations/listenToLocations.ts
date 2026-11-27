@@ -13,8 +13,6 @@ import { getWorldImageUrl } from "api-calls/world/worldImageStorage";
 import {
   WORLD_LOCATIONS_TABLE,
   constructWorldLocationsChannelName,
-  constructWorldLocationsFilter,
-  locationPayloadToChange,
   locationRowToDocument,
   type LocationRow,
 } from "./_getRef";
@@ -47,12 +45,6 @@ export function listenToLocations(
             })
           )
         ),
-        {
-          type: "postgres_changes",
-          table: WORLD_LOCATIONS_TABLE,
-          filter: constructWorldLocationsFilter(worldId),
-          toChange: locationPayloadToChange,
-        },
       ],
       fetchRows: async () => {
         const { data, error } = await client

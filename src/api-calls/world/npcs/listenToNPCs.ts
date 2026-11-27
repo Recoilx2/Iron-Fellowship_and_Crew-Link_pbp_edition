@@ -13,8 +13,6 @@ import { getWorldImageUrl } from "api-calls/world/worldImageStorage";
 import {
   WORLD_NPCS_TABLE,
   constructWorldNPCsChannelName,
-  constructWorldNPCsFilter,
-  npcPayloadToChange,
   npcRowToDocument,
   type NPCRow,
 } from "./_getRef";
@@ -47,12 +45,6 @@ export function listenToNPCs(
             })
           )
         ),
-        {
-          type: "postgres_changes",
-          table: WORLD_NPCS_TABLE,
-          filter: constructWorldNPCsFilter(worldId),
-          toChange: npcPayloadToChange,
-        },
       ],
       fetchRows: async () => {
         const { data, error } = await client

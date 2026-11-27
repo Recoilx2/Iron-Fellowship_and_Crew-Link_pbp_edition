@@ -12,8 +12,6 @@ import { GMNPC } from "types/NPCs.type";
 import {
   WORLD_NPC_GM_DETAILS_TABLE,
   constructNPCChannelName,
-  constructNPCIdFilter,
-  npcGMDetailsPayloadToChange,
   npcGMDetailsRowToDocument,
   type NPCGMDetailsRow,
 } from "./_getRef";
@@ -44,12 +42,6 @@ export function listenToNPCGMProperties(
             getKey: (row) => row.npc_id,
           })
         ),
-        {
-          type: "postgres_changes",
-          table: WORLD_NPC_GM_DETAILS_TABLE,
-          filter: constructNPCIdFilter(npcId),
-          toChange: npcGMDetailsPayloadToChange,
-        },
       ],
       fetchRows: async () => {
         const { data, error } = await client

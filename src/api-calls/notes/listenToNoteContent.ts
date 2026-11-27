@@ -9,11 +9,9 @@ import {
   CHARACTER_NOTE_CONTENTS_TABLE,
   CAMPAIGN_NOTE_CONTENTS_TABLE,
   characterNoteContentPayloadToChange,
-  campaignNoteContentPayloadToChange,
   constructCharacterNoteContentChannelName,
   constructCharacterNoteContentFilter,
   constructCampaignNoteContentChannelName,
-  constructCampaignNoteContentFilter,
   type CharacterNoteContentRow,
   type CampaignNoteContentRow,
 } from "./_getRef";
@@ -87,12 +85,6 @@ export function listenToNoteContent(
         "notes",
         () => broadcastRefreshBinding({ topic: "" })
       ),
-      {
-        type: "postgres_changes",
-        table: CAMPAIGN_NOTE_CONTENTS_TABLE,
-        filter: constructCampaignNoteContentFilter(noteId),
-        toChange: campaignNoteContentPayloadToChange,
-      },
     ],
     fetchRows: async () => {
       const { data, error } = await client

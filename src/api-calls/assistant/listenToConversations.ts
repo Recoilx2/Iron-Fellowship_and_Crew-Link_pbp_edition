@@ -8,9 +8,7 @@ import { campaignGmTopic } from "api-calls/realtime/sharedTopics";
 import type { AssistantConversationWithId } from "./_assistant.type";
 import {
   ASSISTANT_CONVERSATIONS_TABLE,
-  assistantConversationPayloadToChange,
   constructAssistantConversationsChannelName,
-  constructAssistantConversationsFilter,
   conversationRowToDocument,
   type AssistantConversationRow,
 } from "./_getRef";
@@ -50,12 +48,6 @@ export function listenToConversations(
         table: ASSISTANT_CONVERSATIONS_TABLE,
         getKey: (row) => row.id,
       }),
-      {
-        type: "postgres_changes",
-        table: ASSISTANT_CONVERSATIONS_TABLE,
-        filter: constructAssistantConversationsFilter(campaignId),
-        toChange: assistantConversationPayloadToChange,
-      },
     ],
     fetchRows: async () => {
       const { data, error } = await client

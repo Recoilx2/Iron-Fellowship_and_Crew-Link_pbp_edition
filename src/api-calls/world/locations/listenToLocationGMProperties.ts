@@ -12,8 +12,6 @@ import { GMLocation } from "types/Locations.type";
 import {
   WORLD_LOCATION_GM_DETAILS_TABLE,
   constructLocationChannelName,
-  constructLocationIdFilter,
-  locationGMDetailsPayloadToChange,
   locationGMDetailsRowToDocument,
   type LocationGMDetailsRow,
 } from "./_getRef";
@@ -47,12 +45,6 @@ export function listenToLocationGMProperties(
             getKey: (row) => row.location_id,
           })
         ),
-        {
-          type: "postgres_changes",
-          table: WORLD_LOCATION_GM_DETAILS_TABLE,
-          filter: constructLocationIdFilter(locationId),
-          toChange: locationGMDetailsPayloadToChange,
-        },
       ],
       fetchRows: async () => {
         const { data, error } = await client

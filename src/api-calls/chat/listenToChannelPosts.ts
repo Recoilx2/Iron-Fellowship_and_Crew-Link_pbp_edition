@@ -9,8 +9,6 @@ import type { PostDocument } from "api-calls/chat/_chat.type";
 import {
   CHAT_POSTS_TABLE,
   constructChannelPostsChannelName,
-  constructChannelPostsFilter,
-  postPayloadToChange,
   postRowToDocument,
   type PostRow,
 } from "./_postRef";
@@ -67,12 +65,6 @@ export function listenToChannelPosts(
         table: CHAT_POSTS_TABLE,
         getKey: (row) => row.id,
       }),
-      {
-        type: "postgres_changes",
-        table: CHAT_POSTS_TABLE,
-        filter: constructChannelPostsFilter(channelId),
-        toChange: postPayloadToChange,
-      },
     ],
     fetchRows: async () => {
       // One row past the window tells the reader an older page exists,

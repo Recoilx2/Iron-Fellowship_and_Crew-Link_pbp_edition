@@ -13,8 +13,6 @@ import { getWorldImageUrl } from "api-calls/world/worldImageStorage";
 import {
   WORLD_LORE_TABLE,
   constructWorldLoreChannelName,
-  constructWorldLoreFilter,
-  lorePayloadToChange,
   loreRowToDocument,
   type LoreRow,
 } from "./_getRef";
@@ -47,12 +45,6 @@ export function listenToLoreDocuments(
             })
           )
         ),
-        {
-          type: "postgres_changes",
-          table: WORLD_LORE_TABLE,
-          filter: constructWorldLoreFilter(worldId),
-          toChange: lorePayloadToChange,
-        },
       ],
       fetchRows: async () => {
         const { data, error } = await client

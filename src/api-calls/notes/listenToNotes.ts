@@ -9,11 +9,9 @@ import {
   CHARACTER_NOTES_TABLE,
   CAMPAIGN_NOTES_TABLE,
   characterNotePayloadToChange,
-  campaignNotePayloadToChange,
   constructCharacterNotesChannelName,
   constructCharacterNotesFilter,
   constructCampaignNotesChannelName,
-  constructCampaignNotesFilter,
   type CharacterNoteRow,
   type CampaignNoteRow,
 } from "./_getRef";
@@ -43,8 +41,6 @@ export function listenToNotes(
         client,
         channelName: constructCampaignNotesChannelName(campaignId),
         bindings: [
-          // Dual bindings during the migration: the broadcast topics are the
-          // target, postgres_changes keeps this area green until the flip.
           ...campaignBroadcastBindings<CampaignNoteRow>(
             campaignId,
             "notes",
@@ -54,12 +50,6 @@ export function listenToNotes(
                 getKey: (row) => row.id,
               })
           ),
-          {
-            type: "postgres_changes",
-            table: CAMPAIGN_NOTES_TABLE,
-            filter: constructCampaignNotesFilter(campaignId),
-            toChange: campaignNotePayloadToChange,
-          },
         ],
         fetchRows: async () => {
           const { data, error } = await client

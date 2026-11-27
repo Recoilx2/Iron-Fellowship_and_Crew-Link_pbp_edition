@@ -13,10 +13,8 @@ import {
 import type { ChannelDocument } from "api-calls/chat/_chat.type";
 import {
   CHAT_CHANNELS_TABLE,
-  channelPayloadToChange,
   channelRowToDocument,
   constructCampaignChannelsChannelName,
-  constructCampaignChannelsFilter,
   type ChannelRow,
 } from "./_getRef";
 
@@ -68,12 +66,6 @@ export function listenToCampaignChannels(
           broadcastRefreshBinding({
             topic: campaignSharedTopic(campaignId, "chat"),
           }),
-          {
-            type: "postgres_changes",
-            table: CHAT_CHANNELS_TABLE,
-            filter: constructCampaignChannelsFilter(campaignId),
-            toChange: channelPayloadToChange,
-          },
         ],
         fetchRows: async () => {
           const { data, error } = await client

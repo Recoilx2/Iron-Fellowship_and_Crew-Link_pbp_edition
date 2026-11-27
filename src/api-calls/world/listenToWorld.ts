@@ -12,8 +12,6 @@ import { World } from "api-calls/world/_world.type";
 import {
   WORLDS_TABLE,
   constructWorldChannelName,
-  constructWorldIdFilter,
-  worldPayloadToChange,
   worldRowToDocument,
   type WorldRow,
 } from "./_getRef";
@@ -43,12 +41,6 @@ export function listenToWorld(
             })
           )
         ),
-        {
-          type: "postgres_changes",
-          table: WORLDS_TABLE,
-          filter: constructWorldIdFilter(worldId),
-          toChange: worldPayloadToChange,
-        },
       ],
       fetchRows: async () => {
         const { data, error } = await client

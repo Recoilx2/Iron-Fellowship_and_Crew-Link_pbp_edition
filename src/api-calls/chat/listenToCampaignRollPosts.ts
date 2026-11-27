@@ -196,13 +196,6 @@ export function listenToCampaignRollPosts(params: {
           broadcastRefreshBinding({
             topic: campaignSharedTopic(campaignId, "chat"),
           }),
-          {
-            type: "postgres_changes",
-            table: CHAT_POSTS_TABLE,
-            toChange: (payload: Parameters<
-              typeof rollPostPayloadToChange
-            >[1]) => rollPostPayloadToChange(knownChannelIds, payload),
-          },
         ],
         fetchRows: async () => {
           const { channelIds: fetched, posts } = await fetchCampaignRollPosts(

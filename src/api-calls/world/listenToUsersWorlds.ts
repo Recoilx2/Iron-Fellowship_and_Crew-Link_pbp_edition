@@ -12,7 +12,6 @@ import { World } from "api-calls/world/_world.type";
 import {
   WORLDS_TABLE,
   constructUserWorldsChannelName,
-  worldPayloadToChange,
   worldRowToDocument,
   type WorldRow,
 } from "./_getRef";
@@ -52,11 +51,6 @@ export function listenToUsersWorlds(
               })
             )
           ),
-          {
-            type: "postgres_changes",
-            table: WORLDS_TABLE,
-            toChange: worldPayloadToChange,
-          },
         ],
         fetchRows: async () => {
           const { data, error } = await client.from(WORLDS_TABLE).select("*");

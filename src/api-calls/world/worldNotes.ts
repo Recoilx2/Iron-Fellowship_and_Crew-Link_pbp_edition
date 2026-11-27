@@ -271,12 +271,6 @@ export function listenToWorldNoteContent(
             () => broadcastRefreshBinding({ topic: "" })
           )
         ),
-        {
-          type: "postgres_changes",
-          table: WORLD_NOTE_CONTENTS_TABLE,
-          filter: constructWorldNoteContentFilter(noteId),
-          toChange: worldNoteContentPayloadToChange,
-        },
       ],
       fetchRows: async () => {
         const { data, error } = await client
@@ -340,12 +334,6 @@ export function listenToWorldItemNotes(
             })
           )
         ),
-        {
-          type: "postgres_changes",
-          table: WORLD_NOTES_TABLE,
-          filter: constructWorldNoteRowFilter(kind, itemId),
-          toChange: worldNotePayloadToChange,
-        },
       ],
       fetchRows: async () => {
         const { data, error } = await client
