@@ -1,6 +1,10 @@
 import { getSupabaseClient } from "config/supabase.config";
 import type { Unsubscribe } from "api-calls/helpers.type";
-import { listenToRows } from "api-calls/realtime/listenToRows";
+import {
+  broadcastRowsBinding,
+  listenToRows,
+} from "api-calls/realtime/listenToRows";
+import { campaignGmTopic } from "api-calls/realtime/sharedTopics";
 import {
   ASSISTANT_OUTLINE_VERSIONS_TABLE,
   assistantOutlineVersionPayloadToChange,
@@ -39,6 +43,12 @@ export function listenToOutlineVersions(
     client,
     channelName: constructAssistantOutlineVersionsChannelName(campaignId),
     bindings: [
+      broadcastRowsBinding<AssistantOutlineVersionRow>({
+        topic: campaignGmTopic(campaignId, "assistant"),
+        optional: true,
+        table: ASSISTANT_OUTLINE_VERSIONS_TABLE,
+        getKey: (row) => row.id,
+      }),
       {
         type: "postgres_changes",
         table: ASSISTANT_OUTLINE_VERSIONS_TABLE,

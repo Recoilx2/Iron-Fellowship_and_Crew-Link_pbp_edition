@@ -1,6 +1,10 @@
 import { getSupabaseClient } from "config/supabase.config";
 import type { Unsubscribe } from "api-calls/helpers.type";
-import { listenToRows } from "api-calls/realtime/listenToRows";
+import {
+  broadcastRowsBinding,
+  listenToRows,
+} from "api-calls/realtime/listenToRows";
+import { campaignGmTopic } from "api-calls/realtime/sharedTopics";
 import type { AssistantConversationWithId } from "./_assistant.type";
 import {
   ASSISTANT_CONVERSATIONS_TABLE,
@@ -38,6 +42,14 @@ export function listenToConversations(
     client,
     channelName: constructAssistantConversationsChannelName(campaignId),
     bindings: [
+      // Conversations are GM-only: only campaign-gm:assistant publishes
+      // them, and a denied player join is never surfaced.
+      broadcastRowsBinding<AssistantConversationRow>({
+        topic: campaignGmTopic(campaignId, "assistant"),
+        optional: true,
+        table: ASSISTANT_CONVERSATIONS_TABLE,
+        getKey: (row) => row.id,
+      }),
       {
         type: "postgres_changes",
         table: ASSISTANT_CONVERSATIONS_TABLE,
