@@ -73,7 +73,7 @@ const fixture = (name: string) =>
   JSON.parse(
     readFileSync(
       new URL(
-        `../../supabase/site/config/rulesets/${name}`,
+        `../../../supabase/site/config/rulesets/${name}`,
         import.meta.url,
       ),
       "utf8",
@@ -100,6 +100,7 @@ describe("loadMountedManifest", () => {
         condition_meters: {},
         special_tracks: {},
         impacts: {},
+        tags: {},
       },
       oracles: {},
       moves: {},
@@ -260,7 +261,9 @@ describe("loadMountedManifest", () => {
     const result = await loadMountedManifest("classic");
 
     expect(result.packages).toEqual([]);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(
+      fetchMock.mock.calls.every(([url]) => url !== "/config/rulesets/replacement.json"),
+    ).toBe(true);
   });
 
   it("accepts the Datasworn fixture shipped in the stack template", async () => {

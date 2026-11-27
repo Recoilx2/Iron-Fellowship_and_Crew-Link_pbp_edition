@@ -77,7 +77,7 @@ describe("site container", () => {
       "/config/ is not aliased to the mounted volume"
     );
 
-    const text = code(read("docker-compose.yml"));
+    const text = read("docker-compose.yml");
     const m = text.match(/^  site:\s*$/m);
     assert.ok(m, "site service missing");
     const after = text.slice(m.index + m[0].length);

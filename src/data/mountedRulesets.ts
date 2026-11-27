@@ -262,7 +262,10 @@ export async function loadMountedManifest(
       const data: unknown = await response.json();
       const error = packageValidationError(data, ref, activeRulesetId);
       if (error) throw new Error(error);
-      packages.push({ ref, data });
+      packages.push({
+        ref,
+        data: data as Datasworn.Ruleset | Datasworn.Expansion,
+      });
       seenIds.add(ref.id);
       seenPaths.add(url.pathname);
     } catch (e) {

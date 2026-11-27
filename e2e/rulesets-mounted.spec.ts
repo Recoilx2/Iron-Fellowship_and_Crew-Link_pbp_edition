@@ -70,9 +70,8 @@ test.describe("mounted rulesets", () => {
     await page
       .getByRole("textbox", { name: "Filter Moves" })
       .fill("Check the Mount");
-    await expect(
-      page.getByRole("button", { name: "Mounted Moves" }),
-    ).toBeVisible();
+    // While the filter is active the category header is a plain list item.
+    await expect(page.getByText("Mounted Moves", { exact: true })).toBeVisible();
     const move = page.getByRole("button", { name: "Check the Mount" });
     await expect(move).toBeVisible();
     await move.click();

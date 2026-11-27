@@ -92,6 +92,8 @@ describe("createRulesSlice lazy loading", () => {
     delete rulesetsMock.defaultExpansions.delve;
     delete rulesetsMock.thirdPartyExpansions.delve;
     delete rulesetsMock.thirdPartyExpansions.mounted_e2e;
+    rulesetsMock.loadIncludedRuleset.mockClear();
+    rulesetsMock.loadIncludedExpansion.mockClear();
     rulesetsMock.registerMountedPackages.mockReset();
     rulesetsMock.registerMountedPackages.mockResolvedValue(undefined);
     rulesetsMock.loadIncludedRuleset.mockResolvedValue(baseRuleset);
