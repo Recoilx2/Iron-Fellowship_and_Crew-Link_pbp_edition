@@ -1409,6 +1409,51 @@ describe("listenToRows", () => {
       expect(onRows).toHaveBeenCalledWith([row]);
     });
 
+    it("heals a cached failed topic so a late subscriber fetches", async () => {
+      vi.useFakeTimers();
+      try {
+        const { client, channels } = makeFakeRealtime();
+        const make = (fetchRows: () => Promise<Row[]>) =>
+          listenToRows<Row>({
+            client: client as never,
+            channelName: "campaign:1",
+            bindings: [
+              broadcastRowsBinding<Row>({
+                topic: "campaign-shared:1:chat",
+                getKey: keyOf,
+              }),
+            ],
+            fetchRows,
+            getKey: keyOf,
+            onRows: () => {},
+          });
+        const firstFetch = vi.fn(() => Promise.resolve([]));
+        const stopFirst = make(firstFetch);
+        for (const cb of channels[0].subscribeCbs) cb("TIMED_OUT");
+        await vi.advanceTimersByTimeAsync(0);
+        expect(firstFetch).toHaveBeenCalledTimes(1);
+
+        const secondFetch = vi.fn(() => Promise.resolve([]));
+        const stopSecond = make(secondFetch);
+        // The late listener joins the existing bounded retry rather than
+        // opening its own channel, and waits for the result before fetching.
+        expect(channels).toHaveLength(1);
+        await vi.advanceTimersByTimeAsync(0);
+        // The replayed failure makes it fetch once; the healed SUBSCRIBED
+        // below must make it fetch again.
+        expect(secondFetch).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1300);
+        expect(channels).toHaveLength(2);
+        for (const cb of channels[1].subscribeCbs) cb("SUBSCRIBED");
+        await vi.advanceTimersByTimeAsync(0);
+        expect(secondFetch).toHaveBeenCalledTimes(2);
+        stopFirst();
+        stopSecond();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("removes every channel on unsubscribe", () => {
       const { client, channels, removeChannel } = makeFakeRealtime();
       const unsubscribe = listenToRows<Row>({

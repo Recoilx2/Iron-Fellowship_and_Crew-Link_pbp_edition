@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -9,32 +9,60 @@ import {
 
 type StatusCallback = (status: string, error?: unknown) => void;
 
+interface FakeChannel {
+  topic: string;
+  messages: Array<(payload: unknown) => void>;
+  statuses: StatusCallback[];
+  failed: boolean;
+  closed: boolean;
+  on(type: string, filter: unknown, cb: (payload: unknown) => void): FakeChannel;
+  subscribe(cb: StatusCallback): FakeChannel;
+}
+
+/**
+ * Faithful enough for the realtime-js contracts that matter here: channel()
+ * reuses by topic until removeChannel resolves, a failed join never emits
+ * another status, and handlers can only be added before subscribe().
+ */
 function makeClient() {
-  const channels: Array<{
-    topic: string;
-    messages: Array<(payload: unknown) => void>;
-    statuses: StatusCallback[];
-  }> = [];
-  const removeChannel = vi.fn(() => Promise.resolve("ok"));
+  const open = new Map<string, FakeChannel>();
+  const created: FakeChannel[] = [];
+  const removeChannel = vi.fn(async (channel: FakeChannel) => {
+    channel.closed = true;
+    open.delete(channel.topic);
+    return "ok";
+  });
   const client = {
-    channel(topic: string) {
-      const record = { topic, messages: [] as Array<(p: unknown) => void>, statuses: [] as StatusCallback[] };
-      const channel = {
-        on(_type: string, _filter: unknown, cb: (payload: unknown) => void) {
-          record.messages.push(cb);
-          return channel;
+    channel(topic: string): FakeChannel {
+      const existing = open.get(topic);
+      if (existing) return existing;
+      const channel: FakeChannel = {
+        topic,
+        messages: [],
+        statuses: [],
+        failed: false,
+        closed: false,
+        on(_type, _filter, cb) {
+          if (this.statuses.length > 0) {
+            throw new Error("cannot add a broadcast handler after subscribe()");
+          }
+          this.messages.push(cb);
+          return this;
         },
-        subscribe(cb: StatusCallback) {
-          record.statuses.push(cb);
-          return channel;
+        subscribe(cb) {
+          // A channel that already failed never emits another status, and
+          // a closed one cannot be re-subscribed.
+          if (!this.failed && !this.closed) this.statuses.push(cb);
+          return this;
         },
       };
-      channels.push(record);
+      open.set(topic, channel);
+      created.push(channel);
       return channel;
     },
     removeChannel,
   } as unknown as SupabaseClient;
-  return { client, channels, removeChannel };
+  return { client, created, removeChannel };
 }
 
 function makeSubscriber(optional = false) {
@@ -47,68 +75,114 @@ function makeSubscriber(optional = false) {
   return { subscriber, statuses };
 }
 
-function fire(channels: ReturnType<typeof makeClient>["channels"], index: number, status: string, error?: unknown) {
-  for (const cb of channels[index].statuses) cb(status, error);
+function fire(channel: FakeChannel, status: string, error?: unknown) {
+  if (status !== "SUBSCRIBED") channel.failed = true;
+  for (const cb of [...channel.statuses]) cb(status, error);
 }
 
 describe("shared broadcast channels", () => {
-  it("retries a failed cached join and moves every subscriber to the fresh channel", () => {
-    const { client, channels, removeChannel } = makeClient();
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("heals a cached failure for both old and late subscribers", async () => {
+    const { client, created, removeChannel } = makeClient();
     const first = makeSubscriber();
-    const second = makeSubscriber();
-    const stopFirst = subscribeBroadcast(client, "channel-shared:1", first.subscriber);
-    fire(channels, 0, "TIMED_OUT");
-    expect(first.statuses.map((s) => s.status)).toEqual(["TIMED_OUT"]);
+    const late = makeSubscriber();
+    const stopFirst = subscribeBroadcast(
+      client,
+      "campaign-shared:1:chat",
+      first.subscriber
+    );
+    fire(created[0], "TIMED_OUT");
+    expect(first.statuses.map((entry) => entry.status)).toEqual(["TIMED_OUT"]);
 
-    // A new required subscriber must not inherit the cached failure.
-    const stopSecond = subscribeBroadcast(client, "channel-shared:1", second.subscriber);
-    expect(channels).toHaveLength(2);
+    // A late subscriber must NOT get a fresh channel synchronously: both
+    // listeners join the one bounded retry already scheduled for the record.
+    subscribeBroadcast(client, "campaign-shared:1:chat", late.subscriber);
+    expect(created).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(1300);
+    expect(created).toHaveLength(2);
     expect(removeChannel).toHaveBeenCalledTimes(1);
+    fire(created[1], "SUBSCRIBED");
 
-    fire(channels, 1, "SUBSCRIBED");
     expect(first.statuses.at(-1)?.status).toBe("SUBSCRIBED");
-    expect(second.statuses.at(-1)?.status).toBe("SUBSCRIBED");
-
-    // Both are on the fresh channel: a message reaches both once.
-    for (const cb of channels[1].messages) {
-      cb({ event: "INSERT", payload: { record: { id: "a" } } });
-    }
-    expect(first.subscriber.onMessage).toHaveBeenCalledTimes(1);
-    expect(second.subscriber.onMessage).toHaveBeenCalledTimes(1);
+    expect(late.statuses.at(-1)?.status).toBe("SUBSCRIBED");
     stopFirst();
-    stopSecond();
   });
 
-  it("does not retry an optional-only topic denied by policy", async () => {
-    const { client, channels, removeChannel } = makeClient();
+  it("uses bounded backoff, one retry at a time, and cancels on SUBSCRIBED", async () => {
+    const { client, created } = makeClient();
+    const sub = makeSubscriber();
+    const stop = subscribeBroadcast(client, "channel-shared:1", sub.subscriber);
+    fire(created[0], "CHANNEL_ERROR");
+
+    // Multiple timer ticks while the first retry is pending must not stack.
+    await vi.advanceTimersByTimeAsync(1300);
+    expect(created).toHaveLength(2);
+    fire(created[1], "TIMED_OUT");
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(created).toHaveLength(3);
+    fire(created[2], "SUBSCRIBED");
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(created).toHaveLength(3);
+    expect(sub.statuses.filter((entry) => entry.status === "SUBSCRIBED")).toHaveLength(1);
+    stop();
+  });
+
+  it("never retries an optional-only topic denied by policy", async () => {
+    const { client, created, removeChannel } = makeClient();
     const first = makeSubscriber(true);
-    const second = makeSubscriber(true);
-    const stopFirst = subscribeBroadcast(client, "campaign-gm:1:notes", first.subscriber);
-    fire(channels, 0, "CHANNEL_ERROR", new Error("denied"));
-    const stopSecond = subscribeBroadcast(client, "campaign-gm:1:notes", second.subscriber);
-
-    expect(channels).toHaveLength(1);
-    expect(removeChannel).not.toHaveBeenCalled();
+    const late = makeSubscriber(true);
+    const stopFirst = subscribeBroadcast(
+      client,
+      "campaign-gm:1:notes",
+      first.subscriber
+    );
+    fire(created[0], "CHANNEL_ERROR", new Error("denied"));
+    const stopLate = subscribeBroadcast(
+      client,
+      "campaign-gm:1:notes",
+      late.subscriber
+    );
     await Promise.resolve();
-    expect(second.statuses.at(-1)?.status).toBe("CHANNEL_ERROR");
+    expect(late.statuses.at(-1)?.status).toBe("CHANNEL_ERROR");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(created).toHaveLength(1);
+    expect(removeChannel).not.toHaveBeenCalled();
     stopFirst();
-    stopSecond();
+    stopLate();
   });
 
-  it("reuses a healthy channel and removes it only after the last subscriber leaves", async () => {
-    const { client, channels, removeChannel } = makeClient();
-    const first = makeSubscriber();
-    const second = makeSubscriber();
-    const stopFirst = subscribeBroadcast(client, "campaign-shared:1:notes", first.subscriber);
-    fire(channels, 0, "SUBSCRIBED");
-    const stopSecond = subscribeBroadcast(client, "campaign-shared:1:notes", second.subscriber);
-    expect(channels).toHaveLength(1);
-    await Promise.resolve();
-    expect(second.statuses.at(-1)?.status).toBe("SUBSCRIBED");
-
-    stopFirst();
-    expect(removeChannel).not.toHaveBeenCalled();
-    stopSecond();
+  it("cancels a pending retry when the last subscriber releases", async () => {
+    const { client, created, removeChannel } = makeClient();
+    const sub = makeSubscriber();
+    const stop = subscribeBroadcast(client, "channel-shared:1", sub.subscriber);
+    fire(created[0], "TIMED_OUT");
+    stop();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(created).toHaveLength(1);
     expect(removeChannel).toHaveBeenCalledTimes(1);
+  });
+
+  it("replays SUBSCRIBED once to a late subscriber on a healthy channel", async () => {
+    const { client, created } = makeClient();
+    const first = makeSubscriber();
+    const late = makeSubscriber();
+    const stopFirst = subscribeBroadcast(client, "channel-shared:1", first.subscriber);
+    fire(created[0], "SUBSCRIBED");
+    const stopLate = subscribeBroadcast(client, "channel-shared:1", late.subscriber);
+    await Promise.resolve();
+    expect(late.statuses.map((entry) => entry.status)).toEqual(["SUBSCRIBED"]);
+    expect(first.statuses).toHaveLength(1);
+    expect(created).toHaveLength(1);
+    stopFirst();
+    stopLate();
   });
 });
