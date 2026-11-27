@@ -369,7 +369,9 @@ describe("listenToRows", () => {
     expect(onError).toHaveBeenCalledTimes(1);
     const reported = onError.mock.calls[0][0] as Error;
     expect(String(reported?.message ?? reported)).toContain("CHANNEL_ERROR");
-    expect(onRows).not.toHaveBeenCalled();
+    // The error is reported, but the REST snapshot still loads so a denied
+    // reader gets its empty list instead of an indefinite spinner.
+    expect(onRows).toHaveBeenCalledWith([]);
   });
 
   it("surfaces timed-out and closed channels to onError", async () => {
@@ -394,7 +396,7 @@ describe("listenToRows", () => {
       expect(onError).toHaveBeenCalledTimes(1);
       const reported = onError.mock.calls[0][0] as Error;
       expect(String(reported?.message ?? reported)).toContain(status);
-      expect(onRows).not.toHaveBeenCalled();
+      expect(onRows).toHaveBeenCalledWith([]);
     }
   });
 
@@ -1135,7 +1137,7 @@ describe("listenToRows", () => {
   });
 
   describe("shared broadcast topics (spec #205)", () => {
-    it("joins a topic override with its own subscription suffix", async () => {
+    it("joins the exact canonical topic with no subscription suffix", async () => {
       const { client, channels } = makeFakeRealtime();
       listenToRows<Row>({
         client: client as never,
@@ -1152,10 +1154,95 @@ describe("listenToRows", () => {
       });
 
       expect(channels).toHaveLength(1);
-      expect(channels[0].name.startsWith("campaign-shared:abc:notes:sub-")).toBe(
-        true
-      );
+      // The SQL publisher sends to the exact canonical topic; a :sub- suffix
+      // would make every row event and refresh signal unroutable.
+      expect(channels[0].name).toBe("campaign-shared:abc:notes");
+      expect(channels[0].name).not.toContain(":sub-");
       expect(channels[0].options).toMatchObject({ config: { private: true } });
+    });
+
+    it("reuses one channel for two listeners on the same canonical topic", async () => {
+      const { client, channels, removeChannel } = makeFakeRealtime();
+      const firstSeen: Row[][] = [];
+      const secondSeen: Row[][] = [];
+      const make = (onRows: (rows: Row[]) => void) =>
+        listenToRows<Row>({
+          client: client as never,
+          channelName: "campaign:1",
+          bindings: [
+            broadcastRowsBinding<Row>({
+              topic: "campaign-shared:1:notes",
+              table: "campaign_notes",
+              getKey: keyOf,
+            }),
+          ],
+          fetchRows: () => Promise.resolve([]),
+          getKey: keyOf,
+          onRows,
+        });
+      const stopFirst = make((rows) => firstSeen.push(rows));
+      const stopSecond = make((rows) => secondSeen.push(rows));
+
+      expect(channels).toHaveLength(1);
+      expect(channels[0].bindings.filter((b) => b.type === "broadcast")).toHaveLength(1);
+      for (const cb of channels[0].subscribeCbs) cb("SUBSCRIBED");
+      await flush();
+
+      emitBroadcast(channels[0], "INSERT", {
+        operation: "INSERT",
+        table: "campaign_notes",
+        record: { id: "a", value: "shared", updated_at: "2026-11-12T00:00:01Z" },
+      });
+      expect(firstSeen.at(-1)?.[0].id).toBe("a");
+      expect(secondSeen.at(-1)?.[0].id).toBe("a");
+
+      // Ref-counted: leaving one listener must not drop the channel for the
+      // other, and the survivor still receives messages.
+      stopFirst();
+      await flush();
+      expect(removeChannel).not.toHaveBeenCalled();
+      emitBroadcast(channels[0], "INSERT", {
+        operation: "INSERT",
+        table: "campaign_notes",
+        record: { id: "b", value: "shared", updated_at: "2026-11-12T00:00:02Z" },
+      });
+      expect(secondSeen.at(-1)?.map((row) => row.id)).toEqual(["a", "b"]);
+      stopSecond();
+      await flush();
+    });
+
+    it("tells a late subscriber it is SUBSCRIBED so it fetches on its own", async () => {
+      const { client, channels } = makeFakeRealtime();
+      const make = (fetchRows: () => Promise<Row[]>) =>
+        listenToRows<Row>({
+          client: client as never,
+          channelName: "campaign:1",
+          bindings: [
+            broadcastRowsBinding<Row>({
+              topic: "campaign-shared:1:notes",
+              getKey: keyOf,
+            }),
+          ],
+          fetchRows,
+          getKey: keyOf,
+          onRows: () => {},
+        });
+      const firstFetch = vi.fn(() => Promise.resolve([]));
+      const stopFirst = make(firstFetch);
+      for (const cb of channels[0].subscribeCbs) cb("SUBSCRIBED");
+      await flush();
+      expect(firstFetch).toHaveBeenCalledTimes(1);
+
+      const secondFetch = vi.fn(() => Promise.resolve([]));
+      const stopSecond = make(secondFetch);
+      expect(secondFetch).not.toHaveBeenCalled();
+      // The shared channel is already joined; the new subscriber gets the
+      // recorded status on the next microtask rather than waiting forever.
+      await flush();
+      expect(secondFetch).toHaveBeenCalledTimes(1);
+      expect(channels).toHaveLength(1);
+      stopFirst();
+      stopSecond();
     });
 
     it("keeps postgres_changes bindings on the primary topic", async () => {
@@ -1180,6 +1267,11 @@ describe("listenToRows", () => {
         c.bindings.some((b) => b.type === "postgres_changes")
       );
       expect(pg?.name.startsWith("character-notes:c1:sub-")).toBe(true);
+      const broadcast = channels.find(
+        (c) => c.name === "campaign-shared:abc:notes"
+      );
+      expect(broadcast).toBeTruthy();
+      expect(broadcast?.name).not.toContain(":sub-");
     });
 
     it("merges rows from two topics and re-fetches on either SUBSCRIBED", async () => {

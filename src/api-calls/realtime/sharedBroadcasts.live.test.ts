@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
+  broadcastRefreshBinding,
   broadcastRowsBinding,
   listenToRows,
 } from "api-calls/realtime/listenToRows";
@@ -242,28 +243,60 @@ describe.skipIf(!config)("private broadcast topics against the local stack", () 
     );
   });
 
-  it("signals refresh on every topic when access is revoked", { timeout: 90000 }, async () => {
+  it("refreshes a production listener when access is revoked", { timeout: 90000 }, async () => {
     await setUpRoster();
-    const topic = `campaign-shared:${campaignId}:notes`;
-    const listener = track(join(player.client, topic, "refresh"));
-    expect(await settle(listener)).toBe("SUBSCRIBED");
-
     const admin = adminClient(cfg);
-    const revoked = await admin
-      .from("campaign_members")
-      .delete()
-      .eq("campaign_id", campaignId)
-      .eq("user_id", player.userId);
-    expect(revoked.error).toBeNull();
+    const noteId = randomCampaignId();
+    const inserted = await admin.from("campaign_notes").insert({
+      id: noteId,
+      campaign_id: campaignId,
+      title: "Visible",
+      shared: true,
+    });
+    expect(inserted.error).toBeNull();
 
-    const refresh = await waitFor(
-      () => listener.messages.find((message) => message.event === "refresh") ?? null
-    );
-    expect(refresh).toBeTruthy();
-    expect(
-      (refresh.payload as Record<string, unknown>).kind ??
-        (refresh.payload as { payload?: Record<string, unknown> }).payload?.kind
-    ).toBe("refresh");
+    const seen: string[][] = [];
+    let fetches = 0;
+    // Drive listenToRows itself: a direct channel join would not catch a
+    // mismatch between the canonical topic the SQL publishes to and the
+    // topic the production helper subscribes to.
+    const stop = listenToRows<{ id: string }>({
+      client: player.client,
+      channelName: "campaign-notes:refresh",
+      bindings: [
+        broadcastRefreshBinding({
+          topic: campaignSharedTopic(campaignId, "notes"),
+        }),
+      ],
+      fetchRows: async () => {
+        fetches += 1;
+        const { data, error } = await player.client
+          .from("campaign_notes")
+          .select("id")
+          .eq("campaign_id", campaignId);
+        if (error) throw error;
+        return (data ?? []) as Array<{ id: string }>;
+      },
+      getKey: (row) => row.id,
+      onRows: (rows) => seen.push(rows.map((row) => row.id)),
+    });
+    try {
+      await waitFor(() => (seen.at(-1)?.includes(noteId) ? seen : null));
+      const fetchesBefore = fetches;
+      const revoked = await admin
+        .from("campaign_members")
+        .delete()
+        .eq("campaign_id", campaignId)
+        .eq("user_id", player.userId);
+      expect(revoked.error).toBeNull();
+
+      // The refresh is delivered on the canonical topic and the listener
+      // re-reads through RLS well before the 10 s reconcile tick.
+      await waitFor(() => (seen.at(-1)?.length === 0 ? seen : null), 6000);
+      expect(fetches).toBeGreaterThan(fetchesBefore);
+    } finally {
+      stop();
+    }
   });
 
   it("never streams a GM-only row id to a player listener", { timeout: 90000 }, async () => {

@@ -409,6 +409,7 @@ describe.skipIf(!config)("gm assistant data layer end to end", () => {
     expect(seen.at(-1)?.some((c) => c.id === conversationId)).toBe(false);
 
     const heard: AssistantMessageWithId[][] = [];
+    const denied: unknown[] = [];
     let messagesLoaded = false;
     unsubscribes.push(
       listenToMessages(
@@ -420,7 +421,9 @@ describe.skipIf(!config)("gm assistant data layer end to end", () => {
           },
         },
         (error) => {
-          throw error;
+          // A non-GM's GM-topic join is denied by policy; collect rather
+          // than throw from inside the callback.
+          denied.push(error);
         }
       )
     );
@@ -443,7 +446,7 @@ describe.skipIf(!config)("gm assistant data layer end to end", () => {
           },
         },
         (error) => {
-          throw error;
+          denied.push(error);
         }
       )
     );

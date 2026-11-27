@@ -136,14 +136,9 @@ describe("chat channel roster listener", () => {
     await client.waitForChannels();
     client.fireSubscribed();
 
-    expect(
-      client.topics.some((topic) => topic.startsWith("channel-shared:channel-1:sub-"))
-    ).toBe(true);
-    expect(
-      client.topics.some((topic) =>
-        topic.startsWith("campaign-shared:campaign-1:chat:sub-")
-      )
-    ).toBe(true);
+    expect(client.topics).toContain("channel-shared:channel-1");
+    expect(client.topics).toContain("campaign-shared:campaign-1:chat");
+    expect(client.topics.some((topic) => topic.includes(":sub-"))).toBe(false);
     expect(client.bindings.map((binding) => binding.type)).not.toContain(
       "postgres_changes"
     );

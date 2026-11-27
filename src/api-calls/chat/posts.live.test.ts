@@ -467,9 +467,12 @@ describe.skipIf(!config)("chat text posts end to end", () => {
       await setUpCampaign();
     const kira = await createCharacterAs(player, campaignId, "Kira Vey");
 
-    // The outsider subscribes and loads nothing.
+    // The outsider subscribes and loads nothing. The channel-shared join
+    // is denied by policy; collect that expected error instead of throwing
+    // inside the callback (which surfaces as an unhandled rejection).
     await signInAs(outsider);
     const seen: PostWithId[][] = [];
+    const denied: unknown[] = [];
     let loaded = false;
     unsubscribes.push(
       listenToChannelPosts(
@@ -483,7 +486,7 @@ describe.skipIf(!config)("chat text posts end to end", () => {
           },
         },
         (error) => {
-          throw error;
+          denied.push(error);
         }
       )
     );
@@ -509,6 +512,7 @@ describe.skipIf(!config)("chat text posts end to end", () => {
     );
     await new Promise((resolve) => setTimeout(resolve, 12000));
     expect(seen.every((window) => window.length === 0)).toBe(true);
+    expect(denied.length).toBeGreaterThan(0);
   });
 
   it("pages older posts in on scroll", { timeout: 120000 }, async () => {
