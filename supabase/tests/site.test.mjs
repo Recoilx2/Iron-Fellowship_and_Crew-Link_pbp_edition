@@ -37,6 +37,51 @@ describe("site container", () => {
     }
   });
 
+  it("builds an arbitrary ruleset id with generic branding", () => {
+    const dockerfile = read("site/Dockerfile");
+    assert.ok(
+      dockerfile.includes("game-${GAME_SYSTEM}.env"),
+      "built-in game env is not selected by id"
+    );
+    assert.ok(
+      dockerfile.includes("game-default.env"),
+      "no fallback for an unknown ruleset id"
+    );
+    assert.ok(
+      dockerfile.includes("ENV VITE_GAME_SYSTEM=${GAME_SYSTEM}"),
+      "the configured ruleset id is not passed to the client"
+    );
+    const fallback = read("site/game-default.env");
+    assert.ok(/^VITE_TITLE=\S+/m.test(fallback), "no generic title");
+    assert.ok(
+      /^VITE_FAVICON_PATH=\/theme\//m.test(fallback),
+      "no generic favicon"
+    );
+  });
+
+  it("ships a replacement ruleset fixture with branding and mechanics", () => {
+    const manifest = JSON.parse(read("site/config-replacement/manifest.json"));
+    assert.equal(manifest.version, 1);
+    const ref = manifest.ruleset;
+    assert.equal(ref.type, "ruleset");
+    assert.equal(ref.replacesBase, true);
+    assert.equal(ref.path, "/config/rulesets/frontier.json");
+
+    const pkg = JSON.parse(read(`site/config-replacement/${ref.path.split("/").pop()}`));
+    assert.equal(pkg._id, ref.id);
+    assert.equal(pkg.datasworn_version, "0.3.0");
+    assert.equal(pkg["x-branding"].theme, "hinterlands");
+    assert.equal(pkg["x-branding"].appName, "Frontier Fellowship");
+    assert.deepEqual(pkg["x-mechanics"].progressTracks, ["Oath", "Trail", "Peril"]);
+    assert.equal(pkg["x-mechanics"].actionTotalCap, 12);
+    assert.ok(exists(`site/config-replacement/${pkg["x-branding"].faviconPath.split("/").pop()}`), "fixture favicon missing");
+    assert.equal(
+      pkg.moves.frontier_moves.contents.swear_an_oath.name,
+      "Swear a Frontier Oath",
+      "fixture has no move to render on the Rules page"
+    );
+  });
+
   it("builds the site for the configured game system", () => {
     assert.ok(exists("site/Dockerfile"), "site/Dockerfile missing");
     const text = read("site/Dockerfile");

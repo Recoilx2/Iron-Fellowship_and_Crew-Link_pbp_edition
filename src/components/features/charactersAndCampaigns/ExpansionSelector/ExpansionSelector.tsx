@@ -1,6 +1,5 @@
 import { useMemo } from "react";
-import { useGameSystemValue } from "hooks/useGameSystemValue";
-import { GAME_SYSTEMS } from "types/GameSystems.type";
+import { getActiveRulesetId } from "data/activeRuleset";
 import { useStore } from "stores/store";
 import {
   Box,
@@ -21,10 +20,7 @@ export interface ExpansionSelectorProps {
 
 export function ExpansionSelector(props: ExpansionSelectorProps) {
   const { enabledExpansionMap, toggleEnableExpansion } = props;
-  const activeRulesetId = useGameSystemValue({
-    [GAME_SYSTEMS.IRONSWORN]: "classic",
-    [GAME_SYSTEMS.STARFORGED]: "starforged",
-  });
+  const activeRulesetId = getActiveRulesetId();
 
   const homebrewExpansionMap = useStore((store) => store.homebrew.collections);
   const sortedExpansionIds = useStore(

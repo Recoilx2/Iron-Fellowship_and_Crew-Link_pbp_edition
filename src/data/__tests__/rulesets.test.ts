@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import {
   defaultExpansions,
@@ -7,14 +7,43 @@ import {
   loadIncludedRuleset,
   preloadActiveRuleset,
   registerMountedPackages,
+  resetMountedPackagesRegistration,
   thirdPartyExpansions,
 } from "../rulesets";
+import {
+  getActiveRulesetId,
+  resetActiveRulesetId,
+} from "data/activeRuleset";
+import { getAppBranding, resetBranding } from "config/branding.config";
+import { getMechanics, resetMechanics } from "config/mechanics.config";
+
+const fixture = (name: string) =>
+  JSON.parse(
+    readFileSync(
+      new URL(`../../../supabase/site/${name}`, import.meta.url),
+      "utf8",
+    ),
+  );
 
 vi.mock("hooks/useGameSystem", () => ({
   getSystem: () => "ironsworn",
 }));
 
 describe("ruleset lazy loaders", () => {
+  beforeEach(() => {
+    resetMountedPackagesRegistration();
+    resetActiveRulesetId();
+    resetBranding();
+    resetMechanics();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    resetActiveRulesetId();
+    resetBranding();
+    resetMechanics();
+  });
+
   it("loads the active base ruleset on demand", async () => {
     const ruleset = await loadIncludedRuleset();
 
@@ -118,5 +147,32 @@ describe("ruleset lazy loaders", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it("registers a replacing base ruleset and its branding and mechanics", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const path =
+          url === "/config/rulesets/manifest.json"
+            ? "config-replacement/manifest.json"
+            : url.endsWith("/frontier.json")
+              ? "config-replacement/frontier.json"
+              : undefined;
+        return {
+          ok: path !== undefined,
+          status: path === undefined ? 404 : 200,
+          json: async () => (path === undefined ? {} : fixture(path)),
+        };
+      }),
+    );
+
+    await registerMountedPackages();
+
+    expect(getActiveRulesetId()).toBe("frontier");
+    expect((await loadIncludedRuleset())._id).toBe("frontier");
+    expect(getAppBranding().title).toBe("Frontier Fellowship");
+    expect(getMechanics().progressTracks).toEqual(["Oath", "Trail", "Peril"]);
+    expect(getMechanics().actionTotalCap).toBe(12);
   });
 });

@@ -15,10 +15,11 @@ import { HomebrewNonLinearMeterDocument } from "api-calls/homebrew/rules/nonLine
 import {
   defaultExpansions,
   loadIncludedExpansion,
-  loadIncludedRuleset,
-  registerMountedPackages,
   thirdPartyExpansions,
 } from "data/rulesets";
+import { bootstrapRules } from "data/bootstrapRules";
+import { getActiveRulesetId } from "data/activeRuleset";
+import { getBaseRulesDefaults } from "./baseRules";
 import { idMap } from "data/idMap";
 import { logError } from "functions/errorReference";
 
@@ -49,11 +50,27 @@ export const createRulesSlice: CreateSliceType<RulesSlice> = (
     },
 
     loadBaseRuleset: async () => {
-      // Mounted expansions must be in the registries before rules are built;
-      // the base ruleset itself is untouched by this additive slice.
-      await registerMountedPackages();
-      const ruleset = await loadIncludedRuleset();
-      getState().rules.setBaseRuleset(ruleset);
+      // Bootstrap registers mounted packages first: a replacing ruleset
+      // changes the active id, its branding/mechanics and the derived
+      // defaults before the store publishes them to consumers.
+      const ruleset = await bootstrapRules();
+      const defaults = getBaseRulesDefaults();
+      set((store) => {
+        store.rules.activeRulesetId = getActiveRulesetId();
+        store.rules.baseRuleset = ruleset;
+        store.rules.progressTracks = defaults.progressTracks;
+        store.rules.stats = defaults.stats;
+        store.rules.conditionMeters = defaults.conditionMeters;
+        store.rules.specialTracks = defaults.specialTracks;
+        store.rules.impacts = defaults.impacts;
+        store.rules.rootOracleCollectionIds = defaults.rootOracleCollectionIds;
+        store.rules.oracleMaps = defaults.oracleMaps;
+        store.rules.rootMoveCollectionIds = defaults.rootMoveCollectionIds;
+        store.rules.moveMaps = defaults.moveMaps;
+        store.rules.assetMaps = defaults.assetMaps;
+        store.rules.worldTruths = defaults.worldTruths ?? {};
+      });
+      getState().rules.rebuildRules();
     },
 
     loadIncludedExpansions: async (expansionIds) => {
@@ -205,6 +222,10 @@ export const createRulesSlice: CreateSliceType<RulesSlice> = (
         ));
 
         set((store) => {
+          // Progress tracks come from the base ruleset (or its mechanics
+          // override) and were never rebuilt before #218.
+          store.rules.progressTracks = getBaseRulesDefaults().progressTracks;
+          store.rules.activeRulesetId = getActiveRulesetId();
           store.rules.oracleMaps = oracleMaps;
           store.rules.rootOracleCollectionIds = rootOracleCollectionIds;
 

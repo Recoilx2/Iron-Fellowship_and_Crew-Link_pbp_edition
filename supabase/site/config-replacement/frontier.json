@@ -1,0 +1,84 @@
+{
+  "_id": "frontier",
+  "type": "ruleset",
+  "datasworn_version": "0.3.0",
+  "title": "Frontier Ruleset",
+  "description": "An operator-supplied base ruleset used to test replacement.",
+  "url": "https://example.com/frontier-ruleset",
+  "license": "https://creativecommons.org/licenses/by/4.0",
+  "date": "2026-11-27",
+  "authors": [{ "name": "Stack Template" }],
+  "rules": {
+    "stats": {
+      "grit": {
+        "label": "Grit",
+        "description": "Resolve when the trail turns against you."
+      }
+    },
+    "condition_meters": {},
+    "special_tracks": {},
+    "impacts": {},
+    "tags": {}
+  },
+  "oracles": {},
+  "moves": {
+    "frontier_moves": {
+      "_id": "move_category:frontier/frontier_moves",
+      "type": "move_category",
+      "name": "Frontier Moves",
+      "_source": {
+        "title": "Frontier Ruleset",
+        "url": "https://example.com/frontier-ruleset",
+        "license": "https://creativecommons.org/licenses/by/4.0",
+        "date": "2026-11-27",
+        "authors": [{ "name": "Stack Template" }]
+      },
+      "contents": {
+        "swear_an_oath": {
+          "_id": "move:frontier/frontier_moves/swear_an_oath",
+          "type": "move",
+          "roll_type": "no_roll",
+          "name": "Swear a Frontier Oath",
+          "_source": {
+            "title": "Frontier Ruleset",
+            "url": "https://example.com/frontier-ruleset",
+            "license": "https://creativecommons.org/licenses/by/4.0",
+            "date": "2026-11-27",
+            "authors": [{ "name": "Stack Template" }]
+          },
+          "text": "When you swear a frontier oath, write down what you will not yield.",
+          "trigger": {
+            "text": "When you swear a frontier oath",
+            "conditions": []
+          },
+          "allow_momentum_burn": false,
+          "outcomes": null
+        }
+      },
+      "collections": {}
+    }
+  },
+  "assets": {},
+  "x-branding": {
+    "appName": "Frontier Fellowship",
+    "title": "Frontier Fellowship",
+    "description": "A play-by-post game of frontier oaths.",
+    "faviconPath": "/config/rulesets/frontier-favicon.svg",
+    "openGraphPath": "/config/rulesets/frontier-favicon.svg",
+    "theme": "hinterlands"
+  },
+  "x-mechanics": {
+    "progressTracks": ["Oath", "Trail", "Peril"],
+    "actionTotalCap": 12,
+    "momentumBurn": {
+      "min": -4,
+      "max": 8,
+      "startingValue": 1,
+      "liftOnTie": true,
+      "negativeMomentumCancels": false
+    },
+    "oracleThresholds": {
+      "likely": "move:frontier/fate/ask_the_oracle.likely"
+    }
+  }
+}

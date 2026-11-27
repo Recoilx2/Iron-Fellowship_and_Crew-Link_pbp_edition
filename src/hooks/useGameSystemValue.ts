@@ -1,8 +1,11 @@
-import { GameSystemChooser } from "types/GameSystems.type";
-import { useGameSystem } from "./useGameSystem";
+import { getActiveRulesetId } from "data/activeRuleset";
+import { GameSystemChooser, getValueForSystem } from "types/GameSystems.type";
 
+/**
+ * Reads a per-game value for the active base ruleset. Unknown ids fall back
+ * to the Ironsworn entry, so a replacement ruleset inherits Ironsworn's
+ * labels and mechanics ids until its package overrides them.
+ */
 export function useGameSystemValue<T>(values: GameSystemChooser<T>): T {
-  const { gameSystem } = useGameSystem();
-
-  return values[gameSystem];
+  return getValueForSystem(values, getActiveRulesetId());
 }

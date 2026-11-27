@@ -13,10 +13,12 @@ import {
   defaultStats,
   defaultWorldTruths,
 } from "./baseRules";
+import { getActiveRulesetId } from "data/activeRuleset";
 import { RulesSliceData } from "./rules.slice.type";
 
 export const defaultRulesSlice: RulesSliceData = {
   expansionIds: [],
+  activeRulesetId: getActiveRulesetId(),
   baseRuleset: defaultRuleset,
   progressTracks: defaultProgressTracks,
   stats: defaultStats,

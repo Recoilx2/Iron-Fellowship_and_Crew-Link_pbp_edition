@@ -8,11 +8,10 @@ import {
 } from "@mui/material";
 import { DialogTitleWithCloseButton } from "components/shared/DialogTitleWithCloseButton";
 import { convertIdPart } from "functions/dataswornIdEncoder";
-import { useGameSystemValue } from "hooks/useGameSystemValue";
+import { getActiveRulesetId } from "data/activeRuleset";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "stores/store";
-import { GAME_SYSTEMS } from "types/GameSystems.type";
 import { constructHomebrewEditorPath } from "../routes";
 import { PackageTypes } from "api-calls/homebrew/_homebrewCollection.type";
 import { logError } from "functions/errorReference";
@@ -32,10 +31,7 @@ export function CreateExpansionDialog(props: CreateExpansionDialogProps) {
   const [error, setError] = useState<string>();
 
   const uid = useStore((store) => store.auth.uid);
-  const baseRuleset = useGameSystemValue({
-    [GAME_SYSTEMS.IRONSWORN]: "classic",
-    [GAME_SYSTEMS.STARFORGED]: "starforged",
-  });
+  const baseRuleset = getActiveRulesetId();
 
   const createExpansion = useStore((store) => store.homebrew.createExpansion);
 

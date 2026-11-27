@@ -26,6 +26,26 @@ dev workflow, see `SETUP.md` at the repo root; this file is for operators.
 | `mailer/` | Chat-post email worker: outbox to SMTP, with pure preference/rendering tests (see `mailer/README.md`). |
 | `tests/smoke.sh` | Starts both copies side by side and checks every gateway plus both sites (each serving its own system's branding). Also runs in CI on every pull request. |
 
+## Operator rulesets
+
+A copy can mount Datasworn packages at runtime; the site reads
+`/config/rulesets/manifest.json` on boot (no image rebuild). Point
+`RULESETS_CONFIG_DIR` at a directory holding the manifest and its packages.
+`manifest.json` lists `expansions` to add content and may name a `ruleset`
+with `"replacesBase": true` to replace the shipped base ruleset outright.
+A replacing ruleset's package can carry two optional extension fields:
+
+- `"x-branding"`: `appName`, `title`, `description`, `faviconPath`,
+  `openGraphPath` and `theme` (`sunset`, `hinterlands`, `eidolon`, `myriad`).
+  Paths must stay inside `/config/rulesets/` or the site's built-in assets.
+- `"x-mechanics"`: `actionTotalCap`, `momentumBurn` (`enabled`, `min`, `max`,
+  `startingValue`, `liftOnTie`, `negativeMomentumCancels`), `progressTracks`
+  and `oracleThresholds` (odds to oracle ids).
+
+Anything omitted keeps Ironsworn's dice math. `site/config/` holds the
+additive fixture; `site/config-replacement/` holds a complete replacement
+example. Bad packages are logged and skipped, never fatal.
+
 ## Start and stop
 
 Run everything from this directory. One copy:

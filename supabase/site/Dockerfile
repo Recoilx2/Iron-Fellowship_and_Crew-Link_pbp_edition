@@ -24,9 +24,17 @@ RUN npm ci --no-audit --no-fund
 
 COPY . ./
 # Per-system branding (title, favicon, opengraph) plus VITE_GAME_SYSTEM.
-# Unknown GAME_SYSTEM values fail the build here.
-COPY supabase/site/game-${GAME_SYSTEM}.env ./.env.production
+# Any ruleset id is valid: built-ins get their shipped env file, and an
+# operator-supplied id gets a generic fallback whose branding is replaced
+# at runtime by the mounted ruleset package.
+COPY supabase/site/game-*.env ./site-config/
+RUN if [ -f "./site-config/game-${GAME_SYSTEM}.env" ]; then \
+      cp "./site-config/game-${GAME_SYSTEM}.env" ./.env.production; \
+    else \
+      cp ./site-config/game-default.env ./.env.production; \
+    fi
 
+ENV VITE_GAME_SYSTEM=${GAME_SYSTEM}
 ENV VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
 ENV VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
 ENV VITE_CHAT_IMAGE_MAX_MB=${VITE_CHAT_IMAGE_MAX_MB}

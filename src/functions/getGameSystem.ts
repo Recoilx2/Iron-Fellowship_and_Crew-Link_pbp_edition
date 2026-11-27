@@ -21,15 +21,11 @@ const starforgedHostNames = [
 const DEV_HOSTNAME_START_IRONSWORN = "iron-fellowship-dev";
 const DEV_HOSTNAME_START_STARFORGED = "crew-link-dev";
 
-function getConfiguredGameSystem(): GAME_SYSTEMS | undefined {
-  const configured = import.meta.env.VITE_GAME_SYSTEM;
-  if (
-    configured === GAME_SYSTEMS.IRONSWORN ||
-    configured === GAME_SYSTEMS.STARFORGED
-  ) {
-    return configured;
-  }
-  return undefined;
+function getConfiguredGameSystem(): string | undefined {
+  // Any non-empty id is valid: an operator can build a site for an
+  // operator-supplied ruleset instead of one of the two shipped games.
+  const configured = import.meta.env.VITE_GAME_SYSTEM as string | undefined;
+  return configured?.trim() ? configured.trim() : undefined;
 }
 
 /**

@@ -9,7 +9,7 @@ import { createCharacter } from "api-calls/character/createCharacter";
 import { getCharacterPortraitUrl } from "api-calls/character/getCharacterPortrait";
 import { createCurrentCharacterSlice } from "./currentCharacter/currentCharacter.slice";
 import { updateCharacterPortrait } from "api-calls/character/updateCharacterPortrait";
-import { momentumTrack } from "data/defaultTracks";
+import { getActiveMomentumTrack } from "data/defaultTracks";
 
 export const createCharacterSlice: CreateSliceType<CharacterSlice> = (
   ...params
@@ -39,7 +39,7 @@ export const createCharacterSlice: CreateSliceType<CharacterSlice> = (
                     characterDocument.debilities ?? {}
                   ).filter((debility) => debility).length;
 
-                  let momentumResetValue = momentumTrack.startingValue;
+                  let momentumResetValue = getActiveMomentumTrack().startingValue;
 
                   if (numberOfActiveDebilities >= 2) {
                     momentumResetValue = 0;

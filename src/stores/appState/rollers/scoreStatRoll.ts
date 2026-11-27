@@ -1,3 +1,4 @@
+import { getMechanics, MechanicsConfig } from "config/mechanics.config";
 import { ROLL_RESULT } from "types/DieRolls.type";
 
 /**
@@ -7,6 +8,10 @@ import { ROLL_RESULT } from "types/DieRolls.type";
  * challenge dice, with the negative-momentum rule cancelling the action die
  * when it matches a negative momentum. Dice come from the caller, so this
  * stays pure and both rollers pin the same outcomes.
+ *
+ * A replacement ruleset can change the cap or turn off negative-momentum
+ * cancellation through its mechanics config; the argument defaults to the
+ * active ruleset's mechanics, whose defaults are Ironsworn's.
  */
 export interface StatScoreInput {
   action: number;
@@ -23,13 +28,15 @@ export interface StatScore {
   matchedNegativeMomentum: boolean;
 }
 
-const MAX_ACTION_TOTAL = 10;
-
-export function scoreStatRoll(input: StatScoreInput): StatScore {
+export function scoreStatRoll(
+  input: StatScoreInput,
+  mechanics: MechanicsConfig = getMechanics(),
+): StatScore {
   const { action, challenge1, challenge2 } = input;
 
   let matchedNegativeMomentum = false;
   if (
+    mechanics.momentumBurn.negativeMomentumCancels &&
     input.momentum !== undefined &&
     input.momentum < 0 &&
     Math.abs(input.momentum) === action
@@ -38,10 +45,10 @@ export function scoreStatRoll(input: StatScoreInput): StatScore {
   }
 
   const total = Math.min(
-    MAX_ACTION_TOTAL,
+    mechanics.actionTotalCap,
     (matchedNegativeMomentum ? 0 : action) +
       (input.modifier ?? 0) +
-      (input.adds ?? 0)
+      (input.adds ?? 0),
   );
 
   let result: ROLL_RESULT = ROLL_RESULT.WEAK_HIT;

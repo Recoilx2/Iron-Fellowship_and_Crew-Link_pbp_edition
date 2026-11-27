@@ -1,14 +1,18 @@
-import { sharedOracleConfig } from "config/system.config";
-import { useGameSystemValue } from "./useGameSystemValue";
+import { getSystemOracleIds } from "config/mechanics.config";
+import { getActiveRulesetId } from "data/activeRuleset";
 
+/**
+ * Ask-the-oracle odds for the active ruleset. The shipped ids come from the
+ * game-system config; a replacement package can override any threshold.
+ */
 export function useSystemOracles() {
-  return useGameSystemValue(sharedOracleConfig);
+  return { askTheOracle: getSystemOracleIds(getActiveRulesetId()) };
 }
 
 export function useSystemOracle() {
-  const oracles = useSystemOracles();
+  const { askTheOracle } = useSystemOracles();
 
-  return (oracleKey: keyof typeof oracles) => {
-    return oracles[oracleKey];
+  return (oracleKey: keyof typeof askTheOracle) => {
+    return askTheOracle[oracleKey];
   };
 }

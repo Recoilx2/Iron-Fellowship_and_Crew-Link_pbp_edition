@@ -3,6 +3,7 @@ import { HomebrewNonLinearMeterDocument } from "api-calls/homebrew/rules/nonLine
 
 export interface RulesSliceData {
   expansionIds: string[];
+  activeRulesetId: string;
   baseRuleset?: Datasworn.Ruleset;
   mergedRuleset?: Datasworn.Ruleset;
   progressTracks: string[];

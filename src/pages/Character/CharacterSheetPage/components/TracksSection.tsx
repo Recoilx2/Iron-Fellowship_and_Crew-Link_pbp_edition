@@ -1,5 +1,5 @@
 import { Box, ButtonBase, Grid } from "@mui/material";
-import { momentumTrack } from "data/defaultTracks";
+import { getActiveMomentumTrack } from "data/defaultTracks";
 import { Track } from "components/features/Track";
 import ResetIcon from "@mui/icons-material/Replay";
 import { useStore } from "stores/store";
@@ -35,9 +35,10 @@ export function TracksSection() {
     (store) => store.characters.currentCharacter.currentCharacter?.momentum ?? 0
   );
 
-  const maxMomentum = momentumTrack.max - numberOfActiveDebilities;
+  const activeMomentumTrack = getActiveMomentumTrack();
+  const maxMomentum = activeMomentumTrack.max - numberOfActiveDebilities;
 
-  let momentumResetValue = momentumTrack.startingValue;
+  let momentumResetValue = activeMomentumTrack.startingValue;
 
   if (numberOfActiveDebilities >= 2) {
     momentumResetValue = 0;
@@ -118,9 +119,9 @@ export function TracksSection() {
             <MomentumTrackMobile
               value={momentum}
               onChange={(newValue) => updateMomentum(newValue)}
-              min={momentumTrack.min}
-              max={maxMomentum ?? momentumTrack.max}
-              resetValue={momentumResetValue ?? momentumTrack.startingValue}
+              min={activeMomentumTrack.min}
+              max={maxMomentum ?? activeMomentumTrack.max}
+              resetValue={momentumResetValue ?? activeMomentumTrack.startingValue}
             />
           </Box>
         </Grid>
@@ -150,13 +151,13 @@ export function TracksSection() {
             label={"Momentum"}
             value={momentum}
             onChange={(newValue) => updateMomentum(newValue)}
-            min={momentumTrack.min}
-            max={maxMomentum ?? momentumTrack.max}
+            min={activeMomentumTrack.min}
+            max={maxMomentum ?? activeMomentumTrack.max}
             sx={{ flexGrow: 1 }}
           />
           <ButtonBase
             aria-label={`Reset Momentum to ${
-              momentumResetValue ?? momentumTrack.startingValue
+              momentumResetValue ?? activeMomentumTrack.startingValue
             }`}
             sx={(theme) => ({
               backgroundColor: theme.palette.darkGrey.main,
@@ -169,7 +170,7 @@ export function TracksSection() {
               },
             })}
             onClick={() =>
-              updateMomentum(momentumResetValue ?? momentumTrack.startingValue)
+              updateMomentum(momentumResetValue ?? activeMomentumTrack.startingValue)
             }
           >
             <ResetIcon />

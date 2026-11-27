@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "ruleset": {
+    "id": "frontier",
+    "path": "/config/rulesets/frontier.json",
+    "name": "Frontier Ruleset",
+    "type": "ruleset",
+    "replacesBase": true
+  },
+  "expansions": []
+}

@@ -1,4 +1,9 @@
+import { getMechanics, MechanicsConfig } from "config/mechanics.config";
 import { ROLL_RESULT, ROLL_TYPE, type Roll, type StatRoll } from "types/DieRolls.type";
+
+function beats(challenge: number, momentum: number, liftOnTie: boolean) {
+  return liftOnTie ? momentum >= challenge : momentum > challenge;
+}
 
 /**
  * The momentum-burn rule shared by the character sheet and chat (ticket
@@ -8,24 +13,30 @@ import { ROLL_RESULT, ROLL_TYPE, type Roll, type StatRoll } from "types/DieRolls
  * roll burns never again. The sheet's NormalRollActions and chat's composer
  * and posted-roll burn use this one rule, so the same dice burn the same
  * way everywhere.
+ *
+ * The active ruleset's mechanics are read by default; a package can disable
+ * burning or let momentum lift a tie without changing the two shipped games.
  */
 export function isMomentumBurnUseful(
   roll: Roll,
-  momentum: number
+  momentum: number,
+  mechanics: MechanicsConfig = getMechanics(),
 ): boolean {
-  if (roll.type !== ROLL_TYPE.STAT || roll.momentumBurned !== undefined) {
+  const { enabled, liftOnTie } = mechanics.momentumBurn;
+  if (!enabled || roll.type !== ROLL_TYPE.STAT || roll.momentumBurned !== undefined) {
     return false;
   }
   if (
     roll.result === ROLL_RESULT.MISS &&
-    (momentum > roll.challenge1 || momentum > roll.challenge2)
+    (beats(roll.challenge1, momentum, liftOnTie) ||
+      beats(roll.challenge2, momentum, liftOnTie))
   ) {
     return true;
   }
   if (
     roll.result === ROLL_RESULT.WEAK_HIT &&
-    momentum > roll.challenge1 &&
-    momentum > roll.challenge2
+    beats(roll.challenge1, momentum, liftOnTie) &&
+    beats(roll.challenge2, momentum, liftOnTie)
   ) {
     return true;
   }
@@ -40,12 +51,14 @@ export function isMomentumBurnUseful(
  */
 export function burnMomentumResult(
   roll: StatRoll,
-  momentum: number
+  momentum: number,
+  mechanics: MechanicsConfig = getMechanics(),
 ): ROLL_RESULT {
-  if (momentum > roll.challenge1 && momentum > roll.challenge2) {
+  const liftOnTie = mechanics.momentumBurn.liftOnTie;
+  if (beats(roll.challenge1, momentum, liftOnTie) && beats(roll.challenge2, momentum, liftOnTie)) {
     return ROLL_RESULT.HIT;
   }
-  if (momentum > roll.challenge1 || momentum > roll.challenge2) {
+  if (beats(roll.challenge1, momentum, liftOnTie) || beats(roll.challenge2, momentum, liftOnTie)) {
     return ROLL_RESULT.WEAK_HIT;
   }
   return ROLL_RESULT.MISS;
