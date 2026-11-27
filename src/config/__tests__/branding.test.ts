@@ -24,6 +24,7 @@ describe("branding selection", () => {
       faviconPath: "/theme/sunset.svg",
       theme: Themes.Sunset,
     });
+    expect(getAppBranding().mountedFaviconPath).toBeUndefined();
 
     setActiveRulesetId("starforged");
     expect(getAppBranding()).toMatchObject({
@@ -58,6 +59,7 @@ describe("branding selection", () => {
     expect(branding.title).toBe("Frontier Fellowship");
     expect(branding.description).toBe("A game of frontier oaths");
     expect(branding.faviconPath).toBe("/config/rulesets/frontier-favicon.svg");
+    expect(branding.mountedFaviconPath).toBe("/config/rulesets/frontier-favicon.svg");
     expect(branding.theme).toBe(Themes.Hinterlands);
   });
 });

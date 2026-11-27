@@ -71,6 +71,16 @@ test.describe("replaced base ruleset", () => {
     await signInAs(page, config, person, `/characters/${characterId}`);
     await expect(page.getByText("E2E Replaced Character").first()).toBeVisible();
 
+    // Track types and the character's special tracks come from the mounted
+    // ruleset, even though this site image was built for Ironsworn.
+    await page.getByRole("tab", { name: "Tracks" }).click();
+    await expect(page.getByText("Legacy of Oaths")).toBeVisible();
+    await page.getByRole("button", { name: "Add Track" }).click();
+    await expect(page.getByRole("menuitem", { name: "Oath" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Trail" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Peril" })).toBeVisible();
+    await page.keyboard.press("Escape");
+
     // Title and favicon come from the mounted ruleset package, not the
     // branding baked into the site image at build time.
     await expect(page).toHaveTitle(/Frontier Fellowship/);

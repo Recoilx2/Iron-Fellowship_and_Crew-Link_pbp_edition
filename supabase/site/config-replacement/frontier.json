@@ -16,7 +16,14 @@
       }
     },
     "condition_meters": {},
-    "special_tracks": {},
+    "special_tracks": {
+      "legacy_of_oaths": {
+        "label": "Legacy of Oaths",
+        "description": "A lasting record of the oaths you have kept.",
+        "shared": false,
+        "optional": false
+      }
+    },
     "impacts": {},
     "tags": {}
   },

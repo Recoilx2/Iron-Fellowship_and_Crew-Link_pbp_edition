@@ -1,4 +1,5 @@
 import { getAppBranding } from "config/branding.config";
+import { useThemeValue } from "providers/ThemeProvider/useThemeValue";
 import { PropsWithChildren } from "react";
 import { Helmet, HelmetProvider } from "react-helmet-async";
 import { useLocation } from "react-router-dom";
@@ -10,6 +11,10 @@ export function HeadProvider(props: PropsWithChildren) {
   const url = window.location.origin + pathname;
 
   const details = getAppBranding();
+  // Shipped sites keep the icon that follows the selected theme; a mounted
+  // ruleset can still supply its own favicon explicitly.
+  const themedIcon = useThemeValue("iconPath") as string | undefined;
+  const icon = details.mountedFaviconPath ?? themedIcon ?? details.faviconPath;
 
   return (
     <HelmetProvider>
@@ -17,7 +22,7 @@ export function HeadProvider(props: PropsWithChildren) {
         <title>{details.title}</title>
         <meta property="og:site_name" content={details.title} />
         <meta property="og:title" content={details.title} />
-        <link rel="icon" type="image/svg+xml" href={details.faviconPath} />
+        <link rel="icon" type="image/svg+xml" href={icon} />
         <meta property="og:description" content={details.description} />
         <meta property="og:url" content={url} />
         <meta property="og:type" content="website" />

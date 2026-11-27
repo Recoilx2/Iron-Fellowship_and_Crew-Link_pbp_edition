@@ -21,7 +21,10 @@ export interface AppBranding {
   appName: string;
   title: string;
   description: string;
+  /** Theme-derived default icon; used only when no package favicon is set. */
   faviconPath: string;
+  /** Explicit favicon from the active ruleset package, if it supplied one. */
+  mountedFaviconPath?: string;
   openGraphPath: string;
   theme: Themes;
 }
@@ -71,6 +74,9 @@ export function getAppBranding(rulesetId = getActiveRulesetId()): AppBranding {
     title: details.title,
     description: details.description,
     faviconPath: defaultFavicon,
+    ...(mountedBranding?.faviconPath
+      ? { mountedFaviconPath: mountedBranding.faviconPath }
+      : {}),
     openGraphPath: `/assets/${openGraphFolder}/opengraph-default.png`,
     theme,
     ...(mountedBranding ?? {}),

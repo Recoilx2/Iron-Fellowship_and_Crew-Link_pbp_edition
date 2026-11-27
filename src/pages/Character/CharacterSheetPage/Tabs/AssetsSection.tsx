@@ -6,11 +6,10 @@ import { AssetDocument } from "api-calls/assets/_asset.type";
 import { useConfirm } from "material-ui-confirm";
 import { useStore } from "stores/store";
 import { SectionHeading } from "components/shared/SectionHeading";
-import { useGameSystem } from "hooks/useGameSystem";
-import { GAME_SYSTEMS } from "types/GameSystems.type";
+import { isStarforgedRuleset } from "data/activeRuleset";
 
 export function AssetsSection() {
-  const isStarforged = useGameSystem().gameSystem === GAME_SYSTEMS.STARFORGED;
+  const isStarforged = isStarforgedRuleset();
 
   const isInCampaign = useStore(
     (store) => !!store.characters.currentCharacter.currentCharacter?.campaignId

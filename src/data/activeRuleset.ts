@@ -33,3 +33,17 @@ export function setActiveRulesetId(id: string): void {
 export function resetActiveRulesetId(): void {
   replacingRulesetId = undefined;
 }
+
+export function isShippedRuleset(id = getActiveRulesetId()): boolean {
+  return id === SHIPPED_RULESET_IDS[GAME_SYSTEMS.IRONSWORN] ||
+    id === SHIPPED_RULESET_IDS[GAME_SYSTEMS.STARFORGED];
+}
+
+/** Shipped Starforged keeps its legacy/assets/world wording; replacements reuse Ironsworn defaults. */
+export function isStarforgedRuleset(id = getActiveRulesetId()): boolean {
+  return id === GAME_SYSTEMS.STARFORGED;
+}
+
+export function isIronswornRuleset(id = getActiveRulesetId()): boolean {
+  return id === SHIPPED_RULESET_IDS[GAME_SYSTEMS.IRONSWORN];
+}

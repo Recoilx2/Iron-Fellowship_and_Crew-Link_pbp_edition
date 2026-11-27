@@ -10,8 +10,7 @@ import {
 import { World } from "api-calls/world/_world.type";
 import { EmptyState } from "../../shared/EmptyState/EmptyState";
 import { useStore } from "stores/store";
-import { useGameSystem } from "hooks/useGameSystem";
-import { GAME_SYSTEMS } from "types/GameSystems.type";
+import { isStarforgedRuleset } from "data/activeRuleset";
 import { useCampaignType } from "hooks/useCampaignType";
 
 export interface WorldEmptyStateProps {
@@ -57,7 +56,7 @@ export function WorldEmptyState(props: WorldEmptyStateProps) {
       .catch(() => {});
   };
 
-  const isStarforged = useGameSystem().gameSystem === GAME_SYSTEMS.STARFORGED;
+  const isStarforged = isStarforgedRuleset();
 
   return (
     <>

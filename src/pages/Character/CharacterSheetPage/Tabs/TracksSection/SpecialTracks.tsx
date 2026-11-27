@@ -1,11 +1,11 @@
 import { Box, Stack } from "@mui/material";
 import { SectionHeading } from "components/shared/SectionHeading";
-import { useGameSystem } from "hooks/useGameSystem";
+import { getActiveRulesetId, isIronswornRuleset } from "data/activeRuleset";
 import { useStore } from "stores/store";
-import { GAME_SYSTEMS } from "types/GameSystems.type";
 import { ExperienceTrack } from "./ExperienceTrack";
 import { ProgressTrack } from "components/features/ProgressTrack";
 import { LEGACY_TrackTypes, LegacyTrack as ILegacyTrack } from "types/LegacyTrack.type";
+import { usesLegacyTracks } from "./specialTrackStyle";
 import { LegacyTrack } from "./LegacyTrack";
 import { useIsMobile } from "hooks/useIsMobile";
 
@@ -102,18 +102,27 @@ export function SpecialTracks() {
     }
   };
 
-  const isIronsworn = useGameSystem().gameSystem === GAME_SYSTEMS.IRONSWORN;
+  const activeRulesetId = getActiveRulesetId();
+  const useLegacy = usesLegacyTracks(
+    activeRulesetId,
+    specialTracksRules as Record<string, { label: string }>,
+  );
+  const isShipped = activeRulesetId === "classic" || activeRulesetId === "starforged";
 
   const isMobile = useIsMobile();
 
-  if (isIronsworn) {
+  if (!useLegacy) {
     return (
       <>
-        <SectionHeading label={"Experience"} />
-        <Box px={2}>
-          <ExperienceTrack />
-        </Box>
-        <SectionHeading label={"Legacy Tracks"} />
+        {isIronswornRuleset(activeRulesetId) && (
+          <>
+            <SectionHeading label={"Experience"} />
+            <Box px={2}>
+              <ExperienceTrack />
+            </Box>
+          </>
+        )}
+        <SectionHeading label={isShipped ? "Legacy Tracks" : "Special Tracks"} />
         <Stack spacing={2} px={2}>
           {Object.keys(specialTracksRules).map((specialTrackKey) => (
             <ProgressTrack
@@ -132,7 +141,7 @@ export function SpecialTracks() {
   }
   return (
     <>
-      <SectionHeading label={"Legacy Tracks"} />
+      <SectionHeading label={isShipped ? "Legacy Tracks" : "Special Tracks"} />
       <Stack spacing={2} px={2} sx={{ overflowX: "auto", alignItems: isMobile ? "center" : undefined }}>
         {Object.keys(specialTracksRules).map((specialTrackKey) => {
           const specialTrackLabel = specialTracksRules[specialTrackKey].label;

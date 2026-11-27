@@ -74,6 +74,11 @@ describe("site container", () => {
     assert.equal(pkg["x-branding"].appName, "Frontier Fellowship");
     assert.deepEqual(pkg["x-mechanics"].progressTracks, ["Oath", "Trail", "Peril"]);
     assert.equal(pkg["x-mechanics"].actionTotalCap, 12);
+    assert.equal(
+      pkg.rules.special_tracks.legacy_of_oaths.label,
+      "Legacy of Oaths",
+      "fixture has a special track driven by the replacement ruleset"
+    );
     assert.ok(exists(`site/config-replacement/${pkg["x-branding"].faviconPath.split("/").pop()}`), "fixture favicon missing");
     assert.equal(
       pkg.moves.frontier_moves.contents.swear_an_oath.name,
