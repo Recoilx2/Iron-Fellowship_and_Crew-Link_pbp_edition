@@ -25,19 +25,18 @@ test.describe("mounted rulesets", () => {
   test.beforeAll(async () => {
     config = stackConfig();
     person = await createPerson(config, "e2e-mounted-rules");
-    const { data, error } = await person.client
-      .from("characters")
-      .insert({
-        owner_id: person.userId,
-        name: "E2E Mounted Character",
-        expansion_ids: ["mounted_e2e"],
-      })
-      .select("id")
-      .single();
-    if (error || !data) {
-      throw new Error(`e2e: could not create character: ${error?.message}`);
+    // Generate the id locally: INSERT ... RETURNING re-checks the row through
+    // characters' self-referencing SELECT policy and fails RLS (#69).
+    characterId = crypto.randomUUID();
+    const { error } = await person.client.from("characters").insert({
+      id: characterId,
+      owner_id: person.userId,
+      name: "E2E Mounted Character",
+      expansion_ids: ["mounted_e2e"],
+    });
+    if (error) {
+      throw new Error(`e2e: could not create character: ${error.message}`);
     }
-    characterId = data.id as string;
   });
 
   test.afterAll(async () => {
