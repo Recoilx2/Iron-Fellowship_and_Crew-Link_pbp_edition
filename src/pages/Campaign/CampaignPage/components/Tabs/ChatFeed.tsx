@@ -91,22 +91,6 @@ export function ChatFeed(props: { channel: ChannelWithId }) {
     string | undefined
   >();
 
-  // A search jump loads the target's context into the store before setting
-  // focus. Once its row is in the feed, scroll it into view, mark it briefly,
-  // and clear the focus so a later re-render cannot scroll there again.
-  useLayoutEffect(() => {
-    if (!focusedPostId) {
-      return;
-    }
-    const node = document.getElementById(`post-${focusedPostId}`);
-    if (!node) {
-      return;
-    }
-    node.scrollIntoView?.({ block: "center" });
-    setHighlightedPostId(focusedPostId);
-    clearFocusedPost();
-  }, [focusedPostId, posts, clearFocusedPost]);
-
   useEffect(() => {
     if (!highlightedPostId) {
       return;
@@ -163,6 +147,26 @@ export function ChatFeed(props: { channel: ChannelWithId }) {
       scroller.scrollTop = scroller.scrollHeight;
     }
   }, [channel.id]);
+
+  // A search or email jump loads the target's context into the store before
+  // setting focus. This effect must be declared AFTER the sticky-bottom
+  // effects above: layout effects run in declaration order, so running it
+  // first would have the scroll pinned back to the bottom right after the
+  // jump. Clearing stick-to-bottom also stops the next arrival from yanking
+  // the reader away from the post they followed.
+  useLayoutEffect(() => {
+    if (!focusedPostId) {
+      return;
+    }
+    const node = document.getElementById(`post-${focusedPostId}`);
+    if (!node) {
+      return;
+    }
+    stickToBottomRef.current = false;
+    node.scrollIntoView?.({ block: "center" });
+    setHighlightedPostId(focusedPostId);
+    clearFocusedPost();
+  }, [focusedPostId, posts, clearFocusedPost]);
 
   return (
     <Box

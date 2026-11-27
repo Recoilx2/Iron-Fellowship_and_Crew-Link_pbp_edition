@@ -127,10 +127,16 @@ test.describe("chat email notifications", () => {
     });
     await expect(toggle).toBeVisible();
     await expect(toggle).toBeChecked();
-    await toggle.uncheck();
+    // The checkbox is fully controlled by the realtime listener, so a
+    // Playwright check()/uncheck() sees no immediate state change and throws.
+    // Click it, wait for the store round-trip, and assert both the visible
+    // state and the persisted row.
+    await toggle.click();
+    await expect(toggle).not.toBeChecked();
     await expect.poll(() => globalSetting()).toBe(false);
 
-    await toggle.check();
+    await toggle.click();
+    await expect(toggle).toBeChecked();
     await expect.poll(() => globalSetting()).toBe(true);
   });
 
