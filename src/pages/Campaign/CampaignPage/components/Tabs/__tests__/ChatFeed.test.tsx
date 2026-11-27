@@ -393,3 +393,123 @@ describe("ChatFeed edits and deletes", () => {
     expect(deletePost).toHaveBeenCalledWith({ postId: "post-1" });
   });
 });
+
+describe("ChatFeed email deep links", () => {
+  let root: Root | undefined;
+  let container: HTMLDivElement | undefined;
+
+  afterEach(() => {
+    act(() => root?.unmount());
+    container?.remove();
+    root = undefined;
+    container = undefined;
+    state.chat.postsByChannel = { ic: [post()] };
+    state.chat.focusedPostId = undefined;
+  });
+
+  it("uses the shared focus anchor for a linked post", () => {
+    state.chat.postsByChannel = {
+      ic: [post(), post({ id: "post-2", text: "A later post" })],
+    };
+    state.chat.focusedPostId = "post-2";
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <ThemeProvider theme={theme}>
+          <ChatFeed channel={ic} />
+        </ThemeProvider>
+      );
+    });
+
+    // Search and email deep links share the same store-driven anchor; no
+    // second anchor format or highlight path is introduced here.
+    expect(container?.querySelector('[id="post-post-1"]')).not.toBeNull();
+    expect(container?.querySelector('[id="post-post-2"]')).not.toBeNull();
+    expect(
+      container?.querySelector('[id="post-post-2"]')?.getAttribute("data-highlighted")
+    ).toBe("true");
+  });
+
+  it("keeps the jump target in view when the post window changes", () => {
+    // The focus effect is declared after the sticky-bottom effects, so its
+    // scroll survives their pin-to-bottom on mount and on a new arrival.
+    const scrollHeight = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "scrollHeight"
+    );
+    const clientHeight = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "clientHeight"
+    );
+    const intoView = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      "scrollIntoView"
+    );
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+      configurable: true,
+      value: 1000,
+    });
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      configurable: true,
+      value: 400,
+    });
+    const scrollIntoView = vi.fn(function (this: Element) {
+      const scroller = document.querySelector(
+        '[aria-label^="Posts in"]'
+      ) as HTMLElement | null;
+      if (scroller) scroller.scrollTop = 120;
+    });
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      writable: true,
+      value: scrollIntoView,
+    });
+
+    try {
+      state.chat.postsByChannel = { ic: [post()] };
+      state.chat.focusedPostId = "post-1";
+      container = document.createElement("div");
+      document.body.appendChild(container);
+      root = createRoot(container);
+      const render = () =>
+        root?.render(
+          <ThemeProvider theme={theme}>
+            <ChatFeed channel={ic} />
+          </ThemeProvider>
+        );
+      act(() => render());
+
+      // A new post growing the live window must not pin the reader back to
+      // the bottom after the jump.
+      state.chat.postsByChannel = {
+        ic: [post(), post({ id: "post-2", text: "A later post" })],
+      };
+      act(() => render());
+
+      const scroller = container?.querySelector(
+        '[aria-label^="Posts in"]'
+      ) as HTMLElement;
+      expect(scrollIntoView).toHaveBeenCalled();
+      expect(scroller.scrollTop).toBe(120);
+      expect(scroller.scrollTop).not.toBe(scroller.scrollHeight);
+    } finally {
+      if (scrollHeight) {
+        Object.defineProperty(HTMLElement.prototype, "scrollHeight", scrollHeight);
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, "scrollHeight");
+      }
+      if (clientHeight) {
+        Object.defineProperty(HTMLElement.prototype, "clientHeight", clientHeight);
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, "clientHeight");
+      }
+      if (intoView) {
+        Object.defineProperty(Element.prototype, "scrollIntoView", intoView);
+      } else {
+        Reflect.deleteProperty(Element.prototype, "scrollIntoView");
+      }
+    }
+  });
+});

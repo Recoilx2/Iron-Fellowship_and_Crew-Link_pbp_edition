@@ -47,7 +47,10 @@ describe.skipIf(!config)("user settings end to end", () => {
     people.push(owner);
     await signSingletonInAs(owner);
 
-    const seen: Array<{ verboseRollResults?: boolean }> = [];
+    const seen: Array<{
+      verboseRollResults?: boolean;
+      emailNotificationsEnabled?: boolean;
+    }> = [];
     unsubscribes.push(
       listenToAccessibilitySettings(owner.userId, (settings) =>
         seen.push(settings)
@@ -66,7 +69,12 @@ describe.skipIf(!config)("user settings end to end", () => {
         ? seen
         : null
     );
-    expect(updated.at(-1)).toEqual({ verboseRollResults: true });
+    // The new email column has a default, so the saved row carries the
+    // global opt-in alongside the accessibility change (#203).
+    expect(updated.at(-1)).toEqual({
+      verboseRollResults: true,
+      emailNotificationsEnabled: true,
+    });
   });
 
   it("pins and unpins oracle sections live", { timeout: 60000 }, async () => {

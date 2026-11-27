@@ -23,6 +23,7 @@ dev workflow, see `SETUP.md` at the repo root; this file is for operators.
 | `site/` | The site container: builds the site for the copy's `GAME_SYSTEM` (branding and theme baked in) and serves it. |
 | `functions/` | Server functions for the Edge Runtime. Placeholder 404 until later tickets add real functions. |
 | `studio.docker-compose.yml` | Optional add-on: the admin dashboard + its metadata service, started temporarily (see Admin). |
+| `mailer/` | Chat-post email worker: outbox to SMTP, with pure preference/rendering tests (see `mailer/README.md`). |
 | `tests/smoke.sh` | Starts both copies side by side and checks every gateway plus both sites (each serving its own system's branding). Also runs in CI on every pull request. |
 
 ## Start and stop
@@ -99,6 +100,19 @@ restarts. Connections carry the person's Supabase access token and are
 checked against that note; unsharing (or deleting) a note closes the
 connections of everyone who just lost access. See `hocuspocus/README.md`.
 Memory is capped with `HOCUSPOCUS_MEMORY_LIMIT` (default 256m).
+
+## Chat email notifications
+
+Members opt in per channel (in the channel header) and can turn email off
+entirely in User Settings. A new post queues one outbox row per eligible
+reader; a small `mailer/` container drains it through the same `SMTP_*`
+settings magic links use and links straight to the post. No preference row
+means no email, the global switch wins over a channel opt-in, the author is
+never mailed, and the database's access helpers keep private channels, DMs
+and GM-only posts out of other readers' inboxes. The worker is off until
+`EMAIL_NOTIFICATIONS_ENABLED=true`; see `mailer/README.md` for its settings.
+The delivery path is exercised in CI against a fake SMTP server on the host
+(`LIVE_SMTP_CAPTURE_PORT=2525` in the `live` job).
 
 ## GM assistant model proxy
 

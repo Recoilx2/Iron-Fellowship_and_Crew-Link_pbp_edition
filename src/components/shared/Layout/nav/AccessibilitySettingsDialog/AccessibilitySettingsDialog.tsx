@@ -6,11 +6,13 @@ import {
   DialogActions,
   DialogContent,
   FormControlLabel,
+  Typography,
 } from "@mui/material";
 import { DialogTitleWithCloseButton } from "components/shared/DialogTitleWithCloseButton";
 import { useStore } from "stores/store";
 import { useHide3dDice } from "hooks/useHide3dDice";
 import { AUTH_STATE } from "stores/auth/auth.slice.type";
+import EmailIcon from "@mui/icons-material/Email";
 
 export interface AccessibilitySettingsDialogProps {
   open?: boolean;
@@ -68,6 +70,32 @@ export function AccessibilitySettingsDialog(
               label={"Show animated 3D dice when rolling?"}
               sx={{ textTransform: "capitalize", marginRight: 3 }}
             />
+          )}
+          {isLoggedIn && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  icon={<EmailIcon />}
+                  checkedIcon={<EmailIcon color={"primary"} />}
+                  checked={
+                    accessibilitySettings.emailNotificationsEnabled ?? true
+                  }
+                  onChange={(evt, value) =>
+                    updateSettings({ emailNotificationsEnabled: value }).catch(
+                      () => {}
+                    )
+                  }
+                />
+              }
+              label={"Email me about new posts?"}
+              sx={{ textTransform: "capitalize", marginRight: 3 }}
+            />
+          )}
+          {isLoggedIn && (
+            <Typography variant={"caption"} color={"text.secondary"}>
+              Turn this off to silence every channel. Otherwise choose the
+              channels you want in each channel&apos;s header.
+            </Typography>
           )}
         </Box>
       </DialogContent>

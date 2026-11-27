@@ -35,7 +35,7 @@ export const listenToAccessibilitySettings = (
       const { data, error } = await client
         .from(USER_SETTINGS_TABLE)
         .select(
-          "user_id, verbose_roll_results, pinned_oracle_sections, updated_at"
+          "user_id, verbose_roll_results, email_notifications_enabled, pinned_oracle_sections, updated_at"
         )
         .eq("user_id", uid);
       if (error) {
@@ -48,9 +48,19 @@ export const listenToAccessibilitySettings = (
     getUpdatedAt: (row) => row.updated_at,
     onRows: (rows) => {
       const row = rows[0];
-      onSettings(
-        row ? { verboseRollResults: row.verbose_roll_results } : {}
-      );
+      if (!row) {
+        onSettings({});
+        return;
+      }
+      const settings: AccessibilitySettingsDocument = {
+        verboseRollResults: row.verbose_roll_results,
+      };
+      // Only carry the flag when the column is present: older rows and the
+      // unit-test fake must still map to the same accessibility shape.
+      if (typeof row.email_notifications_enabled === "boolean") {
+        settings.emailNotificationsEnabled = row.email_notifications_enabled;
+      }
+      onSettings(settings);
     },
   });
 };

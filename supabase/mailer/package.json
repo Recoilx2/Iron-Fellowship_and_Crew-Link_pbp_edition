@@ -1,0 +1,18 @@
+{
+  "name": "chat-post-email-mailer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Outbox worker that delivers opt-in chat-post emails through the stack's SMTP settings.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node worker.js",
+    "test": "node --test render.test.mjs"
+  },
+  "dependencies": {
+    "nodemailer": "^7.0.11",
+    "pg": "^8.16.3"
+  }
+}

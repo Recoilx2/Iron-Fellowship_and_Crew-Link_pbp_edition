@@ -35,6 +35,28 @@ function compare(a: PostWithId, b: PostWithId): number {
 }
 
 /**
+ * Resolves the keyset anchor for a post id alone. Email deep links carry
+ * only the channel and post ids (no timestamp), so the store's jumpToPost
+ * needs this row before it can fetch the post's context. Returns null when
+ * the reader cannot see the post: RLS applies to this one-off read too.
+ */
+export async function fetchPostAnchor(postId: string): Promise<PostAnchor | null> {
+  if (!postId) return null;
+  const { data, error } = await getSupabaseClient()
+    .from(CHAT_POSTS_TABLE)
+    .select("id, channel_id, created_at")
+    .eq("id", postId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    id: data.id,
+    channelId: data.channel_id,
+    createdAt: data.created_at,
+  };
+}
+
+/**
  * Reads the context in three one-off queries, all against chat_posts with
  * the signed-in member's access: the RLS policies decide which of the
  * surrounding posts arrive, exactly as they do for the live feed. The

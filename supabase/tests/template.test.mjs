@@ -31,6 +31,13 @@ describe("supabase compose template", () => {
       "site/nginx.conf",
       "site/game-ironsworn.env",
       "site/game-starforged.env",
+      "mailer/Dockerfile",
+      "mailer/package.json",
+      "mailer/package-lock.json",
+      "mailer/render.js",
+      "mailer/worker.js",
+      "mailer/README.md",
+      "mailer/render.test.mjs",
     ]) {
       assert.ok(exists(f), `missing ${f}`);
     }
@@ -44,7 +51,7 @@ describe("supabase compose template", () => {
 
   it("keeps exactly the trimmed service set", () => {
     const text = compose();
-    for (const s of ["db", "auth", "rest", "realtime", "storage", "api-gw", "functions", "hocuspocus", "migrate", "site"]) {
+    for (const s of ["db", "auth", "rest", "realtime", "storage", "api-gw", "functions", "hocuspocus", "mailer", "migrate", "site"]) {
       serviceBlock(text, s);
     };
     for (const s of ["studio", "meta", "imgproxy", "supavisor", "analytics", "vector", "pooler", "kong"]) {
@@ -65,6 +72,52 @@ describe("supabase compose template", () => {
     assert.ok(!/JWT_SECRET/.test(block), "hocuspocus still gets a symmetric token secret");
     assert.ok(/POSTGRES_PASSWORD/.test(block), "hocuspocus does not get the database password");
     assert.ok(!/ports\s*:/.test(block), "hocuspocus publishes a host port instead of hiding behind the gateway");
+  });
+
+  it("runs a capped mailer with no published ports", () => {
+    const text = code(compose());
+    const m = text.match(/^  mailer:\s*$/m);
+    assert.ok(m, "service mailer missing");
+    const after = text.slice(m.index + m[0].length);
+    const next = after.search(/^  [a-z][a-z-]*:\s*$/m);
+    const block = next === -1 ? after : after.slice(0, next);
+    assert.ok(block.includes("./mailer"), "mailer is not built from supabase/mailer");
+    assert.ok(/mem_limit\s*:\s*\S+/.test(block), "mailer has no memory cap");
+    assert.ok(!/ports\s*:/.test(block), "mailer publishes a host port");
+    assert.ok(block.includes("host-gateway"), "mailer cannot reach host-bound test SMTP");
+    for (const v of [
+      "DATABASE_URL",
+      "SITE_URL",
+      "EMAIL_NOTIFICATIONS_ENABLED",
+      "MAILER_POLL_SECONDS",
+      "SMTP_HOST",
+      "SMTP_PORT",
+      "SMTP_USER",
+      "SMTP_PASS",
+      "SMTP_ADMIN_EMAIL",
+    ]) {
+      assert.ok(block.includes(v), `mailer is not configured with ${v}`);
+    }
+    const example = read(".env.example");
+    for (const v of ["EMAIL_NOTIFICATIONS_ENABLED", "MAILER_POLL_SECONDS", "MAILER_MEMORY_LIMIT"]) {
+      assert.ok(new RegExp(`^${v}=`, "m").test(example), `${v} not documented in .env.example`);
+    }
+    assert.ok(
+      /^EMAIL_NOTIFICATIONS_ENABLED=false$/m.test(example),
+      "email notifications must be opt-in at the operator level too"
+    );
+  });
+
+  it("runs the pure mailer tests and the email live test in CI", () => {
+    const workflow = read("../.github/workflows/supabase-smoke.yml");
+    assert.ok(
+      workflow.includes('"supabase/mailer/render.test.mjs"'),
+      "static job does not run the mailer render test"
+    );
+    assert.ok(
+      /LIVE_SMTP_CAPTURE_PORT=2525 ENV_FILE=\.env\.live tests\/live\.sh/.test(workflow),
+      "live job does not enable the email delivery test's fake SMTP server"
+    );
   });
 
   it("has no fixed container names and no fixed project name", () => {

@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getSupabaseClient } from "config/supabase.config";
 import type { PostRow } from "api-calls/chat/_postRef";
-import { fetchPostsAround } from "api-calls/chat/fetchPostsAround";
+import {
+  fetchPostAnchor,
+  fetchPostsAround,
+} from "api-calls/chat/fetchPostsAround";
 
 vi.mock("config/supabase.config");
 
@@ -195,5 +198,32 @@ describe("posts around a jumped-to post", () => {
         createdAt: row(1).created_at,
       })
     ).rejects.toEqual({ message: "no" });
+  });
+});
+
+describe("email deep-link anchor", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("resolves a post id to the keyset anchor the store jump needs", async () => {
+    const target = row(4);
+    const queries = setUpClient([], [], target);
+
+    await expect(fetchPostAnchor(target.id)).resolves.toEqual({
+      id: target.id,
+      channelId: target.channel_id,
+      createdAt: target.created_at,
+    });
+    expect(queries).toHaveLength(1);
+    expect(queries[0].table).toBe("chat_posts");
+    expect(queries[0].maybeSingle).toBe(true);
+    expect(queries[0].eq).toEqual([{ column: "id", value: target.id }]);
+  });
+
+  it("returns null when the reader cannot see the post", async () => {
+    setUpClient([], [], null);
+    await expect(fetchPostAnchor("missing")).resolves.toBeNull();
+    await expect(fetchPostAnchor("")).resolves.toBeNull();
   });
 });

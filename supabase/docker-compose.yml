@@ -449,6 +449,38 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 
+  # Chat-post email worker: drains the outbox written by the migrations and
+  # delivers through the operator's SMTP settings. No host port: it talks
+  # only to the internal database and mail server. Off by default until the
+  # operator sets EMAIL_NOTIFICATIONS_ENABLED=true and fills in SMTP_*.
+  mailer:
+    build:
+      context: ./mailer
+    restart: unless-stopped
+    mem_limit: ${MAILER_MEMORY_LIMIT:-128m}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+      SITE_URL: ${SITE_URL}
+      EMAIL_NOTIFICATIONS_ENABLED: ${EMAIL_NOTIFICATIONS_ENABLED:-false}
+      MAILER_POLL_SECONDS: ${MAILER_POLL_SECONDS:-30}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL}
+      SMTP_SENDER_NAME: ${SMTP_SENDER_NAME:-Iron Fellowship}
+    # Lets the worker reach a host-bound fake SMTP server in stack tests,
+    # the same bridge the functions service uses for its model test double.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
   # Site: serves the built site for this copy's game system. Built from the
   # repo with the copy's GAME_SYSTEM (branding and theme baked in) and the
   # gateway URL and anon key the browser uses. One copy serves one system.

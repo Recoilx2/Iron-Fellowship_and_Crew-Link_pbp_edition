@@ -14,7 +14,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: node --test "supabase/tests/*.test.mjs"
+      # The mailer's preference/rendering tests are pure Node (no deps), so
+      # they run here beside the template tests without a stack.
+      - run: node --test "supabase/tests/*.test.mjs" "supabase/mailer/render.test.mjs"
 
   smoke:
     runs-on: ubuntu-latest
@@ -71,6 +73,23 @@ jobs:
       - name: Generate the copy env file
         working-directory: supabase
         run: python3 bin/gen-env.py --copy ironsworn --port 8000 --out .env.live
+
+      # The email delivery test runs a fake SMTP server on the host, so the
+      # mailer container must target it through the Docker host gateway and
+      # poll fast enough for the test's wait window. These are test-only
+      # values in the generated (git-ignored) env file, not template defaults.
+      - name: Point the mailer at the live test SMTP server
+        working-directory: supabase
+        run: |
+          sed -i \
+            -e 's/^EMAIL_NOTIFICATIONS_ENABLED=.*/EMAIL_NOTIFICATIONS_ENABLED=true/' \
+            -e 's/^MAILER_POLL_SECONDS=.*/MAILER_POLL_SECONDS=1/' \
+            -e 's/^SMTP_HOST=.*/SMTP_HOST=host.docker.internal/' \
+            -e 's/^SMTP_PORT=.*/SMTP_PORT=2525/' \
+            -e 's/^SMTP_ADMIN_EMAIL=.*/SMTP_ADMIN_EMAIL=notifications@example.com/' \
+            -e 's/^SMTP_USER=.*/SMTP_USER=/' \
+            -e 's/^SMTP_PASS=.*/SMTP_PASS=/' \
+            .env.live
 
       - name: Mask generated keys in logs
         working-directory: supabase
@@ -186,7 +205,9 @@ jobs:
 
       - name: Run the stack tests (zero skips allowed)
         working-directory: supabase
-        run: ENV_FILE=.env.live tests/live.sh
+        # LIVE_SMTP_CAPTURE_PORT gates the fake server in the email test:
+        # without it that one test skips, and live.sh fails on any skip.
+        run: LIVE_SMTP_CAPTURE_PORT=2525 ENV_FILE=.env.live tests/live.sh
 
       - name: Dump service logs on failure
         if: failure()

@@ -9,6 +9,7 @@ export const USER_SETTINGS_TABLE = "user_settings";
 export interface UserSettingsRow {
   user_id: string;
   verbose_roll_results: boolean;
+  email_notifications_enabled?: boolean;
   pinned_oracle_sections: Record<string, boolean>;
   updated_at: string;
 }

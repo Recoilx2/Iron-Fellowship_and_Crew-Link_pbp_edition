@@ -5,6 +5,8 @@ import { createRoot, Root } from "react-dom/client";
 import { ThemeProvider, createTheme } from "@mui/material";
 
 const setOpenChannelId = vi.fn();
+const jumpToPost = vi.fn();
+const fetchPostAnchor = vi.fn();
 
 const state = {
   chat: {
@@ -58,6 +60,7 @@ const state = {
     loading: false,
     error: undefined,
     setOpenChannelId,
+    jumpToPost,
   },
   campaigns: {
     currentCampaign: {
@@ -69,6 +72,7 @@ const state = {
     },
   },
   auth: { uid: "gm-1" },
+  accessibilitySettings: { settings: { emailNotificationsEnabled: true } },
   users: {
     userMap: {
       "gm-1": { doc: { displayName: "Gus" } },
@@ -109,6 +113,13 @@ vi.mock("api-calls/chat/getOrCreateDirectChannel", () => ({
 }));
 vi.mock("api-calls/chat/setChannelMembers", () => ({
   setChannelMembers: vi.fn(),
+}));
+vi.mock("api-calls/chat/emailPrefs", () => ({
+  getChannelEmailPreference: () => Promise.resolve(true),
+  setChannelEmailPreference: () => Promise.resolve(),
+}));
+vi.mock("api-calls/chat/fetchPostsAround", () => ({
+  fetchPostAnchor: (...args: unknown[]) => fetchPostAnchor(...args),
 }));
 vi.mock("api-calls/chat/renameChannel", () => ({
   renameChannel: vi.fn(),
@@ -540,4 +551,31 @@ describe("ChatTab channels", () => {
     });
     expect(view.textContent).toContain("My notes pane");
   });
+
+  it("loads a deep-linked post's context through the store jump", async () => {
+    const anchor = {
+      id: "post-9",
+      channelId: "quest",
+      createdAt: "2026-11-27T12:00:00.000Z",
+    };
+    fetchPostAnchor.mockResolvedValue(anchor);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        <ThemeProvider theme={theme}>
+          <ChatTab
+            openInviteDialog={() => {}}
+            linkedChannelId="quest"
+            linkedPostId="post-9"
+          />
+        </ThemeProvider>
+      );
+    });
+
+    expect(jumpToPost).toHaveBeenCalledWith(anchor);
+    expect(setOpenChannelId).toHaveBeenCalledWith("quest");
+  });
+
 });

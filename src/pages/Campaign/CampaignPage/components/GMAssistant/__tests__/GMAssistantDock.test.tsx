@@ -21,6 +21,7 @@ const state = {
     loading: false,
     error: undefined,
     setOpenChannelId: vi.fn(),
+    jumpToPost: vi.fn(),
   },
   campaigns: {
     currentCampaign: {

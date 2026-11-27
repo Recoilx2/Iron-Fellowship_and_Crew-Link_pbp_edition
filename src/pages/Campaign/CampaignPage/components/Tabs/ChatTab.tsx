@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   AvatarGroup,
@@ -46,12 +46,14 @@ import { createChannel } from "api-calls/chat/createChannel";
 import { createPrivateChannel } from "api-calls/chat/createPrivateChannel";
 import { getOrCreateDirectChannel } from "api-calls/chat/getOrCreateDirectChannel";
 import { setChannelMembers } from "api-calls/chat/setChannelMembers";
+import { fetchPostAnchor } from "api-calls/chat/fetchPostsAround";
 import { renameChannel } from "api-calls/chat/renameChannel";
 import { archiveChannel } from "api-calls/chat/archiveChannel";
 import type { ChannelKind } from "api-calls/chat/_chat.type";
 import type { ChannelWithId } from "api-calls/chat/listenToCampaignChannels";
 import { UserAvatar } from "components/shared/UserAvatar";
 import { ChatFeed } from "./ChatFeed";
+import { ChannelEmailToggle } from "./ChannelEmailToggle";
 import { ChatComposer } from "./ChatComposer";
 import { CharacterTab } from "./CharacterTab";
 import { TracksTab } from "./TracksTab";
@@ -109,8 +111,14 @@ function sortChannels(channels: ChannelWithId[]): ChannelWithId[] {
  * beside them, named for the other person; anyone opens one from the People
  * list, and nobody else -- not even the GMs -- ever sees it.
  */
-export function ChatTab(props: { openInviteDialog: () => void }) {
-  const { openInviteDialog } = props;
+export function ChatTab(props: {
+  openInviteDialog: () => void;
+  /** Deep link from an email or a shared URL: open this channel once. */
+  linkedChannelId?: string;
+  /** The post an email linked to; the store loads its context and focuses it. */
+  linkedPostId?: string;
+}) {
+  const { openInviteDialog, linkedChannelId, linkedPostId } = props;
   useListenToChatChannels();
   useListenToChannelPosts();
   const theme = useTheme();
@@ -133,6 +141,7 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
   );
   const openChannelId = useStore((store) => store.chat.openChannelId);
   const setOpenChannelId = useStore((store) => store.chat.setOpenChannelId);
+  const jumpToPost = useStore((store) => store.chat.jumpToPost);
   const campaignId = useStore(
     (store) => store.campaigns.currentCampaign.currentCampaignId
   );
@@ -193,6 +202,45 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
   const pick = (id: string) => {
     setOpenChannelId(id);
   };
+
+  // An email link arrives before channels have loaded, so wait for the
+  // channel row and apply the link once. Later clicks stay the reader's own:
+  // a ref (not a dependency on openChannelId) keeps this from re-picking the
+  // linked channel after every live channel update.
+  const appliedChannelLink = useRef<string | null>(null);
+  useEffect(() => {
+    if (!linkedChannelId || appliedChannelLink.current === linkedChannelId) {
+      return;
+    }
+    if (channels.some((channel) => channel.id === linkedChannelId)) {
+      appliedChannelLink.current = linkedChannelId;
+      setOpenChannelId(linkedChannelId);
+    }
+  }, [linkedChannelId, channels, setOpenChannelId]);
+
+  // An email link carries only a post id. Fetch its keyset anchor and use
+  // the search branch's jumpToPost: it loads the surrounding window even
+  // when the post is outside the live page, then sets the store's focus so
+  // ChatFeed's existing scroll/highlight handles the landing. No duplicate
+  // anchor or highlight logic lives in this ticket's code.
+  const appliedPostLink = useRef<string | null>(null);
+  useEffect(() => {
+    if (!linkedPostId || appliedPostLink.current === linkedPostId) {
+      return;
+    }
+    appliedPostLink.current = linkedPostId;
+    let active = true;
+    fetchPostAnchor(linkedPostId)
+      .then((anchor) => {
+        if (!active || !anchor) return;
+        if (linkedChannelId && anchor.channelId !== linkedChannelId) return;
+        return jumpToPost(anchor);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [linkedPostId, linkedChannelId, jumpToPost]);
 
   const openDirectChannel = (otherId: string) => {
     if (!campaignId || otherId === uid) {
@@ -284,6 +332,7 @@ export function ChatTab(props: { openInviteDialog: () => void }) {
               directName={openChannel ? directName(openChannel.id) : undefined}
               userMap={userMap}
               isGM={isGM}
+              uid={uid}
               onRename={() => setRenaming(true)}
               onMembers={() => setManagingMembers(true)}
               onArchive={(archived) =>
@@ -583,11 +632,12 @@ function ChannelHeader(props: {
   directName?: string;
   userMap: Record<string, { doc?: { displayName: string } } | undefined>;
   isGM: boolean;
+  uid?: string;
   onRename: () => void;
   onMembers: () => void;
   onArchive: (archived: boolean) => void;
 }) {
-  const { channel, members, directName, userMap, isGM, onRename, onMembers, onArchive } =
+  const { channel, members, directName, userMap, isGM, uid, onRename, onMembers, onArchive } =
     props;
   if (!channel) {
     return null;
@@ -616,6 +666,12 @@ function ChannelHeader(props: {
           {kindLabel(channel)}
         </Typography>
       </Typography>
+      {uid && (
+        <ChannelEmailToggle
+          channelId={channel.id}
+          channelName={channelLabel(channel, directName)}
+        />
+      )}
       {channel.visibility === "private" && members.length > 0 && (
         <AvatarGroup max={4}>
           {members.map((id) => (

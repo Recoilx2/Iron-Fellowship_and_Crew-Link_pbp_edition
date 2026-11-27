@@ -28,6 +28,8 @@ describe("assistant proposal state migration (#148)", () => {
     // Migrations that build on this table are allowed to sort after it
     // (the branch pattern, see campaign-outline.test.mjs).
     const landedLater = new Set([
+      "20261128000000_chat_email_prefs.sql",
+      "20261128000001_chat_post_email_outbox.sql",
       "20261121000008_assistant_messages_applied_version_index.sql",
       "20261127000000_chat_post_search.sql",
     ]);

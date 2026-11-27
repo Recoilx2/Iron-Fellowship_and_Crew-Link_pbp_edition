@@ -33,6 +33,8 @@ describe("removed campaign members keep no private access migration (#117)", () 
     // #128 assistant tables, 20261121000004, and the #131 campaign outline, 20261121000005) sort later by design, so they
     // are excluded here.
     const landedLater = new Set([
+      "20261128000000_chat_email_prefs.sql",
+      "20261128000001_chat_post_email_outbox.sql",
       "20261114000000_chat_image_access.sql",
       "20261115000000_chat_roll_cleanup.sql",
       "20261116000000_chat_momentum_burn.sql",
