@@ -29,6 +29,9 @@ CREATE POLICY "realtime app channels writable by signed-in listeners"
       'campaign-channels%',
       'campaign-channel-members%',
       'channel-posts%',
+      'assistant-conversations%',
+      'assistant-messages%',
+      'assistant-outline-versions%',
       'homebrew%'
     ])
   );
