@@ -10,6 +10,20 @@ const createPost = vi.fn();
 const uploadChatImage = vi.fn();
 const removeChatImage: Mock = vi.fn(() => Promise.resolve());
 
+// Typing presence is exercised by channelTyping.test.ts and the browser
+// test; the composer only needs to know its three controls.
+const typing = vi.hoisted(() => ({
+  notifyTyping: vi.fn(),
+  stopTyping: vi.fn(),
+}));
+vi.mock("hooks/useChannelTyping", () => ({
+  useChannelTyping: () => ({
+    typingNames: [],
+    notifyTyping: typing.notifyTyping,
+    stopTyping: typing.stopTyping,
+  }),
+}));
+
 // Fixed dice for the composer's rolls: challenge 3 and 8, action 4.
 vi.mock("stores/appState/rollers/rollDice", () => ({
   rollDice: () => Promise.resolve([3, 8, 4]),
@@ -1027,5 +1041,41 @@ describe("ChatComposer", () => {
       (candidate) => candidate.textContent?.startsWith("Roll +")
     );
     expect(rollButtons).toHaveLength(0);
+  });
+
+  describe("typing presence", () => {
+    it("announces typing on each keystroke and clears it on blur", () => {
+      const view = render(ic);
+      const box = textBox(view);
+
+      typeText(box, "a");
+      typeText(box, "an");
+      expect(typing.notifyTyping).toHaveBeenCalledTimes(2);
+      expect(typing.stopTyping).not.toHaveBeenCalled();
+
+      act(() => {
+        box.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+      });
+      expect(typing.stopTyping).toHaveBeenCalledTimes(1);
+    });
+
+    it("clears typing presence when a post is sent", async () => {
+      createPost.mockResolvedValue("post-1");
+      const view = render(ic);
+      typeText(textBox(view), "we push on");
+      render(ic);
+
+      const send = view.querySelector(
+        'button[aria-label="Send"]'
+      ) as HTMLButtonElement | null;
+      if (!send) {
+        throw new Error("no send button");
+      }
+      await act(async () => {
+        send.click();
+      });
+
+      expect(typing.stopTyping).toHaveBeenCalledTimes(1);
+    });
   });
 });
