@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { getSupabaseClient } from "config/supabase.config";
 import { constructChannelPostsChannelName } from "./_postRef";
 
@@ -52,6 +54,20 @@ export interface ChannelTypingParams {
 const PRESENCE_TOPIC_SALT = "typing-v1";
 const PRESENCE_TOPIC_COUNTER = 1;
 
+interface PresenceChannel {
+  channel: ReturnType<SupabaseClient["channel"]>;
+  listeners: Set<() => void>;
+  errors: Set<(error: Error) => void>;
+}
+
+/**
+ * supabase-js returns the same channel object by topic until removeChannel
+ * resolves. Register the presence handler and the join callback once, then
+ * fan state/errors out to every active subscription on that object, so a
+ * remount can never add a second handler to an already-subscribed channel.
+ */
+const presenceChannels = new WeakMap<object, PresenceChannel>();
+
 export function constructChannelTypingTopic(channelId: string): string {
   return `${constructChannelPostsChannelName(
     channelId
@@ -74,11 +90,34 @@ export function subscribeToChannelTyping({
   let lastTrackAt = 0;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const reportError = (error: Error) => {
-    if (!removed) onError?.(error);
-  };
+  let entry = presenceChannels.get(channel);
+  if (!entry) {
+    entry = { channel, listeners: new Set(), errors: new Set() };
+    presenceChannels.set(channel, entry);
+    const record = entry;
+    // Registered before subscribe(): never add a handler afterwards.
+    channel.on("presence", { event: "sync" }, () => {
+      for (const listener of [...record.listeners]) listener();
+    });
+    channel.subscribe((status, subscribeError) => {
+      // SUBSCRIBED is the only success signal. Everything else means no
+      // presence state will arrive, so let the caller decide how to surface
+      // it (the hook stays silent).
+      if (
+        status === "CHANNEL_ERROR" ||
+        status === "TIMED_OUT" ||
+        status === "CLOSED"
+      ) {
+        const error = new Error(`presence subscribe ${status}`, {
+          cause: subscribeError,
+        });
+        for (const report of [...record.errors]) report(error);
+      }
+    });
+  }
+  const presence = entry;
 
-  channel.on("presence", { event: "sync" }, () => {
+  const listener = () => {
     if (removed) return;
     // Presence keys are uids, and each key can hold more than one state
     // while a stale state is leaving. Read the uid from each state, falling
@@ -90,31 +129,22 @@ export function subscribeToChannelTyping({
     >;
     const uids: string[] = [];
     for (const [key, entries] of Object.entries(state)) {
-      for (const entry of entries) {
-        const candidate = typeof entry?.uid === "string" ? entry.uid : key;
+      for (const item of entries) {
+        const candidate = typeof item?.uid === "string" ? item.uid : key;
         if (candidate && !uids.includes(candidate)) {
           uids.push(candidate);
         }
       }
     }
     onTyping(uids);
-  });
+  };
+  presence.listeners.add(listener);
 
-  channel.subscribe((status, subscribeError) => {
-    if (removed) return;
-    // SUBSCRIBED is the only success signal. Everything else means no
-    // presence state will arrive, so let the caller decide how to surface
-    // it (the hook stays silent).
-    if (
-      status === "CHANNEL_ERROR" ||
-      status === "TIMED_OUT" ||
-      status === "CLOSED"
-    ) {
-      reportError(
-        new Error(`presence subscribe ${status}`, { cause: subscribeError })
-      );
-    }
-  });
+  const onSubscribedError = (error: Error) => {
+    if (!removed) onError?.(error);
+  };
+  if (onError) presence.errors.add(onSubscribedError);
+  const reportError = onSubscribedError;
 
   const clearIdle = () => {
     if (idleTimer !== undefined) {
@@ -190,7 +220,13 @@ export function subscribeToChannelTyping({
     } catch {
       // A dead socket cannot carry an untrack; leaving still stops writes.
     }
+    presence.listeners.delete(listener);
+    presence.errors.delete(onSubscribedError);
+    if (presence.listeners.size > 0) return;
+    // Keep the registry entry until teardown resolves: a remount in the
+    // same tick must reuse the handler instead of adding a second one.
     await client.removeChannel(channel);
+    presenceChannels.delete(channel);
   };
 
   return { notifyTyping, stopTyping, unsubscribe };

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useCurrentUserIsGm } from "hooks/useCurrentUserIsGm";
 
 import { getOrCreateCampaignOutline } from "api-calls/notes/campaignOutline";
 import { listenToNoteContent } from "api-calls/notes/listenToNoteContent";
@@ -26,6 +27,7 @@ export function useOutlineDocument(campaignId: string) {
   // for it. Always an object, so that reference sticks to it.
   const [error, setError] = useState<object | null>(null);
   const [reloads, setReloads] = useState(0);
+  const isGM = useCurrentUserIsGm();
 
   useEffect(() => {
     let cancelled = false;
@@ -62,9 +64,11 @@ export function useOutlineDocument(campaignId: string) {
       (caught: unknown) => {
         setError(asObject(caught));
         setFailed(true);
-      }
+      },
+      // The outline lives in the GM-only campaign notes family.
+      isGM
     );
-  }, [campaignId, outlineId, reloads]);
+  }, [campaignId, outlineId, isGM, reloads]);
 
   return {
     outlineId,

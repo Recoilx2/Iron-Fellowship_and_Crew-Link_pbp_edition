@@ -47,6 +47,16 @@ function setUpClient(): StubState {
     select: () => ({
       eq: (column: string, value: string) => {
         state.seenEq.push({ column, value });
+        // Messages resolve their campaign topic through the conversation
+        // row; return a thenable for that one-column lookup.
+        if (table === "assistant_conversations" && column === "id") {
+          return Promise.resolve({
+            data: state.conversationRows.map((row) => ({
+              campaign_id: row.campaign_id,
+            })),
+            error: null,
+          }) as never;
+        }
         return {
           eq: (column2: string, value2: string) => {
             state.seenEq.push({ column: column2, value: value2 });
@@ -176,6 +186,11 @@ describe("assistant listeners", () => {
       () => {}
     );
 
+    // The broadcast topic needs a one-row campaign lookup first; wait for
+    // the channel before announcing SUBSCRIBED.
+    await vi.waitFor(() => {
+      expect(client.subscribeCbs.length).toBeGreaterThan(0);
+    });
     fireSubscribed(client);
     await vi.waitFor(() => {
       expect(onMessages).toHaveBeenCalled();

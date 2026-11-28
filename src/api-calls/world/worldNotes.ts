@@ -1,6 +1,14 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { Unsubscribe as PlainUnsubscribe } from "api-calls/helpers.type";
-import { listenToRows } from "api-calls/realtime/listenToRows";
+import {
+  broadcastRefreshBinding,
+  broadcastRowsBinding,
+  listenToRowsDeferred,
+} from "api-calls/realtime/listenToRows";
+import {
+  campaignBroadcastBindings,
+  campaignIdsForWorldNote,
+} from "api-calls/realtime/sharedTopics";
 import type {
   PostgresChangePayload,
   RowChange,
@@ -24,6 +32,33 @@ const kindToColumn: Record<WorldNoteItemKind, string> = {
   lore: "lore_id",
   npc: "npc_id",
 };
+
+/** Campaigns whose broadcast topics carry this world item's note rows. */
+async function campaignIdsForItem(
+  client: ReturnType<typeof getSupabaseClient>,
+  kind: WorldNoteItemKind,
+  itemId: string
+): Promise<string[]> {
+  const { data, error } = await client
+    .from(WORLD_NOTES_TABLE)
+    .select("world_id")
+    .eq(kindToColumn[kind], itemId);
+  if (error) throw error;
+  const worldIds = ((data ?? []) as Array<{ world_id: string }>).map(
+    (row) => row.world_id
+  );
+  const ids = await Promise.all(
+    [...new Set(worldIds)].map(async (worldId) => {
+      const { data: campaigns, error: campaignError } = await client
+        .from("campaigns")
+        .select("id")
+        .eq("world_id", worldId);
+      if (campaignError) throw campaignError;
+      return ((campaigns ?? []) as Array<{ id: string }>).map((row) => row.id);
+    })
+  );
+  return [...new Set(ids.flat())];
+}
 
 export interface WorldNoteRow {
   id: string;
@@ -218,46 +253,55 @@ export function listenToWorldNoteContent(
   noteId: string,
   onContent: (content?: Uint8Array) => void,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onError: (error: any) => void
+  onError: (error: any) => void,
+  isGM = false
 ): PlainUnsubscribe {
   const client = getSupabaseClient();
-  return listenToRows<WorldNoteContentRow>({
-    client,
-    channelName: constructWorldNoteContentChannelName(noteId),
-    bindings: [
-      {
-        type: "postgres_changes",
-        table: WORLD_NOTE_CONTENTS_TABLE,
-        filter: constructWorldNoteContentFilter(noteId),
-        toChange: worldNoteContentPayloadToChange,
-      },
-    ],
-    fetchRows: async () => {
-      const { data, error } = await client
-        .from(WORLD_NOTE_CONTENTS_TABLE)
-        .select("*")
-        .eq("note_id", noteId);
-      if (error) {
-        throw error;
-      }
-      return (data ?? []) as unknown as WorldNoteContentRow[];
-    },
-    getKey: (row) => row.note_id,
-    getUpdatedAt: (row) => row.updated_at,
-    onRows: (rows) => {
-      const content = rows[0]?.content;
-      if (content) {
-        try {
-          onContent(decodeNoteContent(content));
-        } catch (error) {
-          onError(error);
+  return listenToRowsDeferred<WorldNoteContentRow>(
+    async () => ({
+      client,
+      channelName: constructWorldNoteContentChannelName(noteId),
+      bindings: [
+        // Large Yjs bytes are refresh-only: the trigger publishes no row.
+        ...(
+          await campaignIdsForWorldNote(client, noteId)
+        ).flatMap((campaignId) =>
+          campaignBroadcastBindings<WorldNoteContentRow>(
+            campaignId,
+            "world",
+            () => broadcastRefreshBinding({ topic: "" }),
+            isGM
+          )
+        ),
+      ],
+      fetchRows: async () => {
+        const { data, error } = await client
+          .from(WORLD_NOTE_CONTENTS_TABLE)
+          .select("*")
+          .eq("note_id", noteId);
+        if (error) {
+          throw error;
         }
-      } else {
-        onContent(undefined);
-      }
-    },
-    onError,
-  });
+        return (data ?? []) as unknown as WorldNoteContentRow[];
+      },
+      getKey: (row: WorldNoteContentRow) => row.note_id,
+      getUpdatedAt: (row: WorldNoteContentRow) => row.updated_at,
+      onRows: (rows: WorldNoteContentRow[]) => {
+        const content = rows[0]?.content;
+        if (content) {
+          try {
+            onContent(decodeNoteContent(content));
+          } catch (error) {
+            onError(error);
+          }
+        } else {
+          onContent(undefined);
+        }
+      },
+      onError,
+    }),
+    onError
+  );
 }
 
 /**
@@ -271,55 +315,65 @@ export function listenToWorldItemNotes(
   gmOnly: boolean,
   onNotes: (notes: Uint8Array | undefined) => void,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onError: (error: any) => void
+  onError: (error: any) => void,
+  isGM = false
 ): PlainUnsubscribe {
   const client = getSupabaseClient();
   let contentUnsubscribe: PlainUnsubscribe | undefined;
   let currentNoteId: string | undefined;
 
-  const rowsUnsubscribe = listenToRows<WorldNoteRow>({
-    client,
-    channelName: constructWorldNoteRowChannelName(kind, itemId, gmOnly),
-    bindings: [
-      {
-        type: "postgres_changes",
-        table: WORLD_NOTES_TABLE,
-        filter: constructWorldNoteRowFilter(kind, itemId),
-        toChange: worldNotePayloadToChange,
+  const rowsUnsubscribe = listenToRowsDeferred<WorldNoteRow>(
+    async () => ({
+      client,
+      channelName: constructWorldNoteRowChannelName(kind, itemId, gmOnly),
+      bindings: [
+        ...(
+          await campaignIdsForItem(client, kind, itemId)
+        ).flatMap((campaignId) =>
+          campaignBroadcastBindings<WorldNoteRow>(campaignId, "world", () =>
+            broadcastRowsBinding<WorldNoteRow>({
+              table: WORLD_NOTES_TABLE,
+              getKey: (row) => row.id,
+            }),
+            isGM
+          )
+        ),
+      ],
+      fetchRows: async () => {
+        const { data, error } = await client
+          .from(WORLD_NOTES_TABLE)
+          .select("*")
+          .eq(kindToColumn[kind], itemId);
+        if (error) {
+          throw error;
+        }
+        return (data ?? []) as unknown as WorldNoteRow[];
       },
-    ],
-    fetchRows: async () => {
-      const { data, error } = await client
-        .from(WORLD_NOTES_TABLE)
-        .select("*")
-        .eq(kindToColumn[kind], itemId);
-      if (error) {
-        throw error;
-      }
-      return (data ?? []) as unknown as WorldNoteRow[];
-    },
-    getKey: (row) => row.id,
-    getUpdatedAt: (row) => row.updated_at,
-    onRows: (rows) => {
-      const note = rows.find((row) => row.gm_only === gmOnly);
-      if (note?.id === currentNoteId) {
-        return;
-      }
-      contentUnsubscribe?.();
-      contentUnsubscribe = undefined;
-      currentNoteId = note?.id;
-      if (!currentNoteId) {
-        onNotes(undefined);
-        return;
-      }
-      contentUnsubscribe = listenToWorldNoteContent(
-        currentNoteId,
-        onNotes,
-        onError
-      );
-    },
-    onError,
-  });
+      getKey: (row: WorldNoteRow) => row.id,
+      getUpdatedAt: (row: WorldNoteRow) => row.updated_at,
+      onRows: (rows: WorldNoteRow[]) => {
+        const note = rows.find((row) => row.gm_only === gmOnly);
+        if (note?.id === currentNoteId) {
+          return;
+        }
+        contentUnsubscribe?.();
+        contentUnsubscribe = undefined;
+        currentNoteId = note?.id;
+        if (!currentNoteId) {
+          onNotes(undefined);
+          return;
+        }
+        contentUnsubscribe = listenToWorldNoteContent(
+          currentNoteId,
+          onNotes,
+          onError,
+          isGM
+        );
+      },
+      onError,
+    }),
+    onError
+  );
 
   return () => {
     rowsUnsubscribe();

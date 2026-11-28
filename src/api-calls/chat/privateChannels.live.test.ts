@@ -287,7 +287,9 @@ describe.skipIf(!config)("chat private channels and direct messages end to end",
     expect(postsSeen.at(-1)).toHaveLength(1);
 
     // The GM removes the player: the open list drops the channel and the
-    // open feed empties without re-subscribing.
+    // open feed empties without re-subscribing. The roster trigger's
+    // channel-shared refresh must converge well inside the 10 s tick.
+    const started = Date.now();
     const { error: removeError } = await gm.client.rpc("set_channel_members", {
       chid: channelId,
       member_ids: [],
@@ -299,24 +301,28 @@ describe.skipIf(!config)("chat private channels and direct messages end to end",
         postsSeen.at(-1)?.length === 0
           ? true
           : null,
-      60000
+      8000
     );
+    expect(Date.now() - started).toBeLessThan(10_000);
     expect(await readChannelsAs(player, campaignId)).toHaveLength(2);
     expect(await readPostsAs(player, channelId)).toEqual([]);
 
-    // New posts stop at the access rules: nothing arrives live either.
+    // New posts stop at the access rules: no window emitted after removal
+    // may contain a post created after removal.
+    const laterId = crypto.randomUUID();
     const { error: laterError } = await gm.client
       .from(CHAT_POSTS_TABLE)
       .insert({
-        id: crypto.randomUUID(),
+        id: laterId,
         channel_id: channelId,
         author_id: gm.userId,
         text: "You will never read this.",
       });
     expect(laterError).toBeNull();
-    const count = postsSeen.length;
     await new Promise((resolve) => setTimeout(resolve, 12000));
-    expect(postsSeen.length).toBe(count);
+    expect(
+      postsSeen.some((window) => window.some((post) => post.id === laterId))
+    ).toBe(false);
     expect(postsSeen.at(-1)).toEqual([]);
   });
 
@@ -504,11 +510,14 @@ describe.skipIf(!config)("chat private channels and direct messages end to end",
       (await readRosterAs(gm, channelId)).map((row) => row.user_id)
     ).not.toContain(player.userId);
 
-    // New posts stop at the access rules: nothing arrives live either.
+    // New posts stop at the access rules: no window emitted after removal
+    // may contain a post created after removal.
+    const laterPrivateId = crypto.randomUUID();
+    const laterDmId = crypto.randomUUID();
     const { error: laterPrivateError } = await gm.client
       .from(CHAT_POSTS_TABLE)
       .insert({
-        id: crypto.randomUUID(),
+        id: laterPrivateId,
         channel_id: channelId,
         author_id: gm.userId,
         text: "You will never read this.",
@@ -517,15 +526,20 @@ describe.skipIf(!config)("chat private channels and direct messages end to end",
     const { error: laterDmError } = await other.client
       .from(CHAT_POSTS_TABLE)
       .insert({
-        id: crypto.randomUUID(),
+        id: laterDmId,
         channel_id: dmId,
         author_id: other.userId,
         text: "Nor this.",
       });
     expect(laterDmError).toBeNull();
-    const count = postsSeen.length;
     await new Promise((resolve) => setTimeout(resolve, 12000));
-    expect(postsSeen.length).toBe(count);
+    expect(
+      postsSeen.some((window) =>
+        window.some(
+          (post) => post.id === laterPrivateId || post.id === laterDmId
+        )
+      )
+    ).toBe(false);
     expect(postsSeen.at(-1)).toEqual([]);
     expect(await readPostsAs(player, channelId)).toEqual([]);
     expect(await readPostsAs(player, dmId)).toEqual([]);

@@ -111,7 +111,8 @@ describe("chat slice posts", () => {
       "channel-1",
       CHAT_POST_PAGE_SIZE,
       expect.anything(),
-      expect.anything()
+      expect.anything(),
+      { isGM: false }
     );
 
     captured?.onHasOlder(true);
@@ -125,6 +126,26 @@ describe("chat slice posts", () => {
       "post-2",
     ]);
     expect(draft().hasOlderByChannel["channel-1"]).toBe(true);
+  });
+
+  it("passes the campaign GM's status to the post listener", () => {
+    const chat: ChatSliceData = { ...defaultChatSlice, postsByChannel: {} };
+    const get = () =>
+      ({
+        chat,
+        campaigns: {
+          currentCampaign: { currentCampaign: { gmIds: ["gm-1"] } },
+        },
+        auth: { uid: "gm-1" },
+      }) as unknown as IStore;
+    const slice = createChatSlice(
+      (() => {}) as never,
+      get as never,
+      undefined as never
+    ) as ChatSlice;
+
+    slice.subscribeToPosts("channel-1");
+    expect(mockedListen.mock.calls[0][4]).toEqual({ isGM: true });
   });
 
   it("pages older posts back without growing the live window", async () => {

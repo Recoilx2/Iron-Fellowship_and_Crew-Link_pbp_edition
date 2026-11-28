@@ -22,6 +22,7 @@ type StatusCallback = (status: string, error?: unknown) => void;
 // own tests.
 function setUpClient() {
   const filters: unknown[] = [];
+  const topics: string[] = [];
   const bindings: Array<{ type: string; cb: (payload: unknown) => void }> =
     [];
   const subscribeCbs: StatusCallback[] = [];
@@ -40,12 +41,20 @@ function setUpClient() {
     },
   };
   mockedClient.mockReturnValue({
-    channel: () => channel,
+    channel: (topic: string) => {
+      topics.push(topic);
+      return channel;
+    },
     from: (table: string) => ({
       select: () => ({
-        eq: () =>
+        eq: (column: string) =>
           Promise.resolve({
-            data: table === CHAT_CHANNEL_MEMBERS_TABLE ? rows : [],
+            data:
+              table === CHAT_CHANNEL_MEMBERS_TABLE
+                ? rows
+                : table === CHAT_CHANNELS_TABLE && column === "campaign_id"
+                  ? [{ id: "channel-1" }]
+                  : [],
             error: null,
           }),
       }),
@@ -54,6 +63,8 @@ function setUpClient() {
   } as never);
   return {
     filters,
+    topics,
+    bindings,
     fireChannelBump: () => {
       for (const binding of bindings) {
         if (binding.type === "postgres_changes") {
@@ -62,7 +73,25 @@ function setUpClient() {
             new: { id: "channel-1" },
             old: {},
           });
+        } else {
+          binding.cb({
+            event: "INSERT",
+            payload: {
+              operation: "INSERT",
+              table: CHAT_CHANNEL_MEMBERS_TABLE,
+              record: {
+                channel_id: "channel-1",
+                user_id: "player-2",
+                created_at: "2026-11-12T00:00:02Z",
+              },
+            },
+          });
         }
+      }
+    },
+    waitForChannels: async () => {
+      for (let i = 0; i < 6 && subscribeCbs.length === 0; i += 1) {
+        await flush();
       }
     },
     fireSubscribed: () => {
@@ -101,23 +130,25 @@ describe("chat channel roster listener", () => {
     return { onError };
   }
 
-  it("binds the campaign's channels, not the unpublished roster table", () => {
+  it("binds per-channel and campaign broadcast topics, not postgres_changes", async () => {
     const client = setUpClient();
     subscribe(() => {});
+    await client.waitForChannels();
     client.fireSubscribed();
 
-    const tables = client.filters.map(
-      (filter) => (filter as { table?: unknown }).table
+    expect(client.topics).toContain("channel-shared:channel-1");
+    expect(client.topics).toContain("campaign-shared:campaign-1:chat");
+    expect(client.topics.some((topic) => topic.includes(":sub-"))).toBe(false);
+    expect(client.bindings.map((binding) => binding.type)).not.toContain(
+      "postgres_changes"
     );
-    expect(tables.length).toBeGreaterThan(0);
-    expect(tables).toContain(CHAT_CHANNELS_TABLE);
-    expect(tables).not.toContain(CHAT_CHANNEL_MEMBERS_TABLE);
   });
 
   it("re-fetches the roster when a channel bumps", async () => {
     const client = setUpClient();
     const seen: ChannelMemberRow[][] = [];
     const { onError } = subscribe((rows) => seen.push(rows));
+    await client.waitForChannels();
     client.fireSubscribed();
     await flush();
     await flush();

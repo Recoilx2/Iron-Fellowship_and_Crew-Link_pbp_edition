@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
+import { getSupabaseClient } from "config/supabase.config";
+import { listenToNotes } from "api-calls/notes/listenToNotes";
 import {
   createPerson,
   deletePerson,
@@ -8,11 +10,20 @@ import {
   liveStackConfig,
   personClient,
   randomCampaignId,
+  waitFor,
   type LivePerson,
   type LiveStackConfig,
 } from "api-calls/testing/liveHarness";
 
 const config = liveStackConfig();
+
+async function signInAs(person: LivePerson): Promise<void> {
+  const { error } = await getSupabaseClient().auth.signInWithPassword({
+    email: person.email,
+    password: person.password,
+  });
+  if (error) throw error;
+}
 
 async function rosterAs(person: LivePerson, campaignId: string) {
   return person.client
@@ -30,6 +41,7 @@ describe.skipIf(!config)("campaign membership access rules", () => {
   let outsider: LivePerson;
 
   afterEach(async () => {
+    await getSupabaseClient().auth.signOut().catch(() => {});
     await Promise.all(
       people.map((person) => deletePerson(cfg, person.userId).catch(() => {}))
     );
@@ -131,5 +143,43 @@ describe.skipIf(!config)("campaign membership access rules", () => {
       .eq("campaign_id", campaignId)
       .eq("user_id", newcomer.userId);
     expect(removed.error).toBeNull();
+  });
+
+  it("empties a player's open notes listener within seconds of roster removal", { timeout: 90000 }, async () => {
+    await setUpRoster();
+    const noteId = randomCampaignId();
+    const note = await gm.client.from("campaign_notes").insert({
+      id: noteId,
+      campaign_id: campaignId,
+      title: "Visible to members",
+      shared: true,
+    });
+    expect(note.error).toBeNull();
+
+    await signInAs(player);
+    const seen: Array<string[]> = [];
+    const stop = listenToNotes(
+      campaignId,
+      undefined,
+      (_source, notes) => seen.push(notes.map((item) => item.noteId)),
+      () => {}
+    );
+    try {
+      await waitFor(() => (seen.at(-1)?.includes(noteId) ? seen : null));
+      const started = Date.now();
+      const removed = await gm.client
+        .from("campaign_members")
+        .delete()
+        .eq("campaign_id", campaignId)
+        .eq("user_id", player.userId);
+      expect(removed.error).toBeNull();
+
+      // The membership-delete trigger publishes refresh on the campaign
+      // topic, so the listener re-fetches (and RLS empties it) in seconds.
+      await waitFor(() => (seen.at(-1)?.length === 0 ? seen : null), 6000);
+      expect(Date.now() - started).toBeLessThan(10_000);
+    } finally {
+      stop();
+    }
   });
 });

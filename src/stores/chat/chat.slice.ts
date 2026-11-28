@@ -55,6 +55,11 @@ function startPosts(channelId: string, set: ChatSet, get: ChatGet): void {
     store.chat.postsError = undefined;
   });
   activePostsChannelId = channelId;
+  const state = get();
+  const isGM =
+    state.campaigns?.currentCampaign?.currentCampaign?.gmIds?.includes(
+      state.auth?.uid ?? ""
+    ) ?? false;
   stopActivePosts = listenToChannelPosts(
     channelId,
     CHAT_POST_PAGE_SIZE,
@@ -138,7 +143,8 @@ function startPosts(channelId: string, set: ChatSet, get: ChatGet): void {
         store.chat.postsLoading = false;
         store.chat.postsError = "Failed to load posts.";
       });
-    }
+    },
+    { isGM }
   );
 }
 

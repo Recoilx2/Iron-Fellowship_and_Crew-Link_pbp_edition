@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  channelPostBroadcastChange,
   listenToChannelPosts,
 } from "api-calls/chat/listenToChannelPosts";
-import { RECONCILE_INTERVAL_MS } from "api-calls/realtime/listenToRows";
+import {
+  broadcastRowsBinding,
+  RECONCILE_INTERVAL_MS,
+} from "api-calls/realtime/listenToRows";
 import type { PostRow } from "api-calls/chat/_postRef";
 import { getSupabaseClient } from "config/supabase.config";
 
@@ -44,6 +48,7 @@ type StatusCallback = (status: string, error?: unknown) => void;
 function setUpClient() {
   const subscribeCbs: StatusCallback[] = [];
   const seenLimits: number[] = [];
+  const broadcastCbs: Array<(payload: unknown) => void> = [];
   let rows: PostRow[] = [];
   const terminal = {
     limit: (n: number) => {
@@ -57,7 +62,10 @@ function setUpClient() {
     }),
   };
   const channel = {
-    on: () => channel,
+    on: (type: string, _filter: unknown, cb: (payload: unknown) => void) => {
+      if (type === "broadcast") broadcastCbs.push(cb);
+      return channel;
+    },
     subscribe: (cb: StatusCallback) => {
       subscribeCbs.push(cb);
       return channel;
@@ -77,6 +85,9 @@ function setUpClient() {
       for (const cb of subscribeCbs.splice(0)) {
         cb("SUBSCRIBED");
       }
+    },
+    fireBroadcast: (event: string, payload: unknown) => {
+      for (const cb of broadcastCbs) cb({ event, payload });
     },
   };
 }
@@ -143,5 +154,131 @@ describe("chat post window", () => {
 
     stopPage2();
     expect(onError).not.toHaveBeenCalled();
+  });
+});
+
+describe("GM-only post broadcasts", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  const secretPost = (): PostRow => ({
+    ...newestFirst(1)[0],
+    id: "secret-1",
+    gms_only: true,
+  });
+
+  it("drops GM-only upserts and delete keys for players, not GMs", () => {
+    const row = secretPost();
+    expect(
+      channelPostBroadcastChange(false, {
+        event: "INSERT",
+        payload: { operation: "INSERT", table: "chat_posts", record: row },
+      })
+    ).toBeNull();
+    expect(
+      channelPostBroadcastChange(false, {
+        event: "DELETE",
+        payload: {
+          operation: "DELETE",
+          table: "chat_posts",
+          old_record: row,
+        },
+      })
+    ).toBeNull();
+    // A key-only delete with just the flag must not leak the id either.
+    expect(
+      channelPostBroadcastChange(false, {
+        event: "DELETE",
+        payload: {
+          operation: "DELETE",
+          table: "chat_posts",
+          id: "secret-1",
+          gms_only: true,
+        },
+      })
+    ).toBeNull();
+    expect(
+      channelPostBroadcastChange(true, {
+        event: "INSERT",
+        payload: { operation: "INSERT", table: "chat_posts", record: row },
+      })
+    ).toEqual({ kind: "upsert", row });
+    expect(
+      channelPostBroadcastChange(true, {
+        event: "DELETE",
+        payload: {
+          operation: "DELETE",
+          table: "chat_posts",
+          old_record: row,
+        },
+      })
+    ).toEqual({ kind: "remove", key: "secret-1" });
+    expect(
+      channelPostBroadcastChange(false, {
+        event: "INSERT",
+        payload: {
+          operation: "INSERT",
+          table: "chat_posts",
+          record: { ...row, gms_only: false },
+        },
+      })
+    ).toEqual({ kind: "upsert", row: { ...row, gms_only: false } });
+  });
+
+  it("turns accepted broadcast rows into refreshes, dropping GM-only ones", () => {
+    const message = {
+      event: "INSERT",
+      payload: {
+        operation: "INSERT",
+        table: "chat_posts",
+        record: secretPost(),
+      },
+    };
+    const binding = (isGM: boolean) =>
+      broadcastRowsBinding<PostRow>({
+        topic: "channel-shared:channel-1",
+        refreshOnly: true,
+        getKey: (row) => row.id,
+        toChange: (received) => channelPostBroadcastChange(isGM, received),
+      });
+    expect(binding(true).toChange(message)).toEqual({ kind: "refresh" });
+    expect(binding(false).toChange(message)).toBeNull();
+  });
+
+  it("never applies a broadcast row to the feed", async () => {
+    for (const isGM of [false, true]) {
+      const client = setUpClient();
+      const onPosts = vi.fn();
+      const onError = vi.fn();
+      const stop = listenToChannelPosts(
+        "channel-1",
+        30,
+        { onPosts, onHasOlder: vi.fn(), onLoaded: vi.fn() },
+        onError,
+        { isGM }
+      );
+      client.fireSubscribed();
+      await vi.advanceTimersByTimeAsync(0);
+      const fetchesBefore = client.seenLimits.length;
+      onPosts.mockClear();
+
+      client.fireBroadcast("INSERT", {
+        operation: "INSERT",
+        table: "chat_posts",
+        record: secretPost(),
+      });
+      // A GM's accepted broadcast queues an RLS-filtered re-fetch; a
+      // player's GM-only broadcast is dropped before that. Neither path
+      // inserts raw broadcast row data into the feed.
+      expect(client.seenLimits.length).toBe(fetchesBefore + (isGM ? 1 : 0));
+      expect(onPosts).not.toHaveBeenCalled();
+      expect(onError).not.toHaveBeenCalled();
+      stop();
+    }
   });
 });

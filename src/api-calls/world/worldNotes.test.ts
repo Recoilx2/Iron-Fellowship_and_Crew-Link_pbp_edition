@@ -179,6 +179,14 @@ function makeTopicReusingClient(noteRows: Array<{
         select: () => ({
           eq: async (column: string, value: string) => {
             if (table === "world_notes") {
+              // Item lookup (location_id=...) and note-content lookup
+              // (id=...) both resolve to this item's world in the stub.
+              if (column === "id") {
+                return {
+                  data: noteRows.map(() => ({ world_id: "world-1" })),
+                  error: null,
+                };
+              }
               expect(column).toBe("location_id");
               expect(value).toBe("location-1");
               return {
@@ -193,6 +201,12 @@ function makeTopicReusingClient(noteRows: Array<{
                 })),
                 error: null,
               };
+            }
+            if (table === "campaigns") {
+              // No linked campaign: the broadcast topics are skipped and
+              // the reconcile backstop keeps this listener current.
+              expect(column).toBe("world_id");
+              return { data: [], error: null };
             }
             if (table === "world_note_contents") {
               expect(column).toBe("note_id");
@@ -281,8 +295,11 @@ describe("world note channel topics per side (#83)", () => {
       );
     }).not.toThrow();
 
-    await flush();
-    await flush();
+    // Topic discovery is asynchronous (world -> campaigns), so the
+    // listeners open after a few microtask turns.
+    for (let i = 0; i < 6; i += 1) {
+      await flush();
+    }
 
     expect(channels.size).toBeGreaterThanOrEqual(2);
     expect(errors).toEqual([]);

@@ -1,15 +1,17 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { Unsubscribe as PlainUnsubscribe } from "api-calls/helpers.type";
-import { listenToRows } from "api-calls/realtime/listenToRows";
+import {
+  broadcastRefreshBinding,
+  listenToRows,
+} from "api-calls/realtime/listenToRows";
+import { campaignBroadcastBindings } from "api-calls/realtime/sharedTopics";
 import {
   CHARACTER_NOTE_CONTENTS_TABLE,
   CAMPAIGN_NOTE_CONTENTS_TABLE,
   characterNoteContentPayloadToChange,
-  campaignNoteContentPayloadToChange,
   constructCharacterNoteContentChannelName,
   constructCharacterNoteContentFilter,
   constructCampaignNoteContentChannelName,
-  constructCampaignNoteContentFilter,
   type CharacterNoteContentRow,
   type CampaignNoteContentRow,
 } from "./_getRef";
@@ -21,7 +23,8 @@ export function listenToNoteContent(
   noteId: string,
   onContent: (content?: Uint8Array) => void,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onError: (error: any) => void
+  onError: (error: any) => void,
+  isGM = false
 ): PlainUnsubscribe {
   if (!characterId && !campaignId) {
     onError("Either campaign or character ID is required.");
@@ -68,16 +71,22 @@ export function listenToNoteContent(
       onError,
     });
   }
+  if (!campaignId) {
+    onError("Either campaign or character ID is required.");
+    return () => {};
+  }
   return listenToRows<CampaignNoteContentRow>({
     client,
     channelName: constructCampaignNoteContentChannelName(noteId),
     bindings: [
-      {
-        type: "postgres_changes",
-        table: CAMPAIGN_NOTE_CONTENTS_TABLE,
-        filter: constructCampaignNoteContentFilter(noteId),
-        toChange: campaignNoteContentPayloadToChange,
-      },
+      // Yjs bytes are opaque and large: the trigger publishes a refresh
+      // signal and this listener reads the content through fetchRows.
+      ...campaignBroadcastBindings<CampaignNoteContentRow>(
+        campaignId,
+        "notes",
+        () => broadcastRefreshBinding({ topic: "" }),
+        isGM
+      ),
     ],
     fetchRows: async () => {
       const { data, error } = await client

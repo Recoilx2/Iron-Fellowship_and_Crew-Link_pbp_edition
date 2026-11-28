@@ -1,12 +1,17 @@
 import { getSupabaseClient } from "config/supabase.config";
 import type { Unsubscribe } from "api-calls/helpers.type";
-import { listenToRows } from "api-calls/realtime/listenToRows";
+import {
+  broadcastRowsBinding,
+  listenToRowsDeferred,
+} from "api-calls/realtime/listenToRows";
+import {
+  campaignGmTopic,
+  campaignIdsForConversation,
+} from "api-calls/realtime/sharedTopics";
 import type { AssistantMessageWithId } from "./_assistant.type";
 import {
   ASSISTANT_MESSAGES_TABLE,
-  assistantMessagePayloadToChange,
   constructAssistantMessagesChannelName,
-  constructAssistantMessagesFilter,
   messageRowToDocument,
   type AssistantMessageRow,
 } from "./_getRef";
@@ -33,43 +38,51 @@ export function listenToMessages(
   const client = getSupabaseClient();
   let loaded = false;
 
-  return listenToRows<AssistantMessageRow>({
-    client,
-    channelName: constructAssistantMessagesChannelName(conversationId),
-    bindings: [
-      {
-        type: "postgres_changes",
-        table: ASSISTANT_MESSAGES_TABLE,
-        filter: constructAssistantMessagesFilter(conversationId),
-        toChange: assistantMessagePayloadToChange,
+  return listenToRowsDeferred<AssistantMessageRow>(
+    async () => ({
+      client,
+      channelName: constructAssistantMessagesChannelName(conversationId),
+      bindings: [
+        // Messages are GM-only: the campaign comes from the conversation
+        // row, and the trigger publishes on campaign-gm:assistant.
+        ...(await campaignIdsForConversation(client, conversationId)).map(
+          (campaignId) =>
+            broadcastRowsBinding<AssistantMessageRow>({
+              topic: campaignGmTopic(campaignId, "assistant"),
+              optional: true,
+              table: ASSISTANT_MESSAGES_TABLE,
+              getKey: (row) => row.id,
+            })
+        ),
+      ],
+      fetchRows: async () => {
+        const { data, error } = await client
+          .from(ASSISTANT_MESSAGES_TABLE)
+          .select("*")
+          .eq("conversation_id", conversationId)
+          .order("created_at", { ascending: true });
+        if (error) {
+          throw error;
+        }
+        return (data ?? []) as unknown as AssistantMessageRow[];
       },
-    ],
-    fetchRows: async () => {
-      const { data, error } = await client
-        .from(ASSISTANT_MESSAGES_TABLE)
-        .select("*")
-        .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: true });
-      if (error) {
-        throw error;
-      }
-      return (data ?? []) as unknown as AssistantMessageRow[];
-    },
-    getKey: (row) => row.id,
-    getUpdatedAt: (row) => row.updated_at,
-    onRows: (rows) => {
-      onMessages(
-        rows.map((row) => ({
-          id: row.id,
-          conversationId: row.conversation_id,
-          ...messageRowToDocument(row),
-        }))
-      );
-      if (!loaded) {
-        loaded = true;
-        onLoaded();
-      }
-    },
-    onError,
-  });
+      getKey: (row: AssistantMessageRow) => row.id,
+      getUpdatedAt: (row: AssistantMessageRow) => row.updated_at,
+      onRows: (rows: AssistantMessageRow[]) => {
+        onMessages(
+          rows.map((row) => ({
+            id: row.id,
+            conversationId: row.conversation_id,
+            ...messageRowToDocument(row),
+          }))
+        );
+        if (!loaded) {
+          loaded = true;
+          onLoaded();
+        }
+      },
+      onError,
+    }),
+    onError
+  );
 }

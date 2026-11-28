@@ -15,6 +15,8 @@ type PresenceCallback = () => void;
 interface FakeChannel {
   topic: string;
   options: unknown;
+  subscribed: boolean;
+  closed: boolean;
   statusCallbacks: StatusCallback[];
   presenceCallbacks: PresenceCallback[];
   presenceState: () => Record<string, Array<Record<string, unknown>>>;
@@ -28,19 +30,43 @@ interface FakeRealtime {
   channels: FakeChannel[];
   removeChannel: ReturnType<typeof vi.fn>;
   state: Record<string, Array<Record<string, unknown>>>;
+  settleRemovals: () => void;
+  deferRemovals: (value: boolean) => void;
 }
 
 function setUpClient(): FakeRealtime {
+  const open = new Map<string, FakeChannel>();
+  const pendingRemovals: Array<() => void> = [];
+  let deferRemovals = false;
   const fake: FakeRealtime = {
     channels: [],
-    removeChannel: vi.fn().mockResolvedValue("ok"),
+    removeChannel: vi.fn(
+      (channel: FakeChannel) =>
+        new Promise<string>((resolve) => {
+          const finish = () => {
+            channel.closed = true;
+            if (open.get(channel.topic) === channel) open.delete(channel.topic);
+            resolve("ok");
+          };
+          if (deferRemovals) pendingRemovals.push(finish);
+          else queueMicrotask(finish);
+        })
+    ),
     state: {},
+    settleRemovals: () => {},
+    deferRemovals: (value: boolean) => {
+      deferRemovals = value;
+    },
   };
   vi.mocked(getSupabaseClient).mockReturnValue({
     channel: (topic: string, options: unknown) => {
+      const existing = open.get(topic);
+      if (existing) return existing;
       const channel: FakeChannel = {
         topic,
         options,
+        subscribed: false,
+        closed: false,
         statusCallbacks: [],
         presenceCallbacks: [],
         presenceState: () => fake.state,
@@ -53,21 +79,35 @@ function setUpClient(): FakeRealtime {
           return "ok";
         }),
         on(type: string, filter: unknown, cb: PresenceCallback) {
+          if (channel.subscribed) {
+            throw new Error(
+              `cannot add '${type}' callbacks for realtime:${topic} after subscribe()`
+            );
+          }
           if (type === "presence" && filter) {
             channel.presenceCallbacks.push(cb);
           }
           return channel;
         },
         subscribe(cb: StatusCallback) {
-          channel.statusCallbacks.push(cb);
+          // A closed channel cannot be re-joined; an open one is only
+          // joined once.
+          if (!channel.closed && !channel.subscribed) {
+            channel.subscribed = true;
+            channel.statusCallbacks.push(cb);
+          }
           return channel;
         },
       };
+      open.set(topic, channel);
       fake.channels.push(channel);
       return channel;
     },
     removeChannel: fake.removeChannel,
   } as never);
+  fake.settleRemovals = () => {
+    for (const finish of pendingRemovals.splice(0)) finish();
+  };
   return fake;
 }
 
@@ -272,5 +312,27 @@ describe("subscribeToChannelTyping", () => {
 
     await vi.advanceTimersByTimeAsync(TYPING_IDLE_MS + 1);
     expect(channel.untrack).toHaveBeenCalledTimes(1);
+  });
+
+  it("resubscribes over a reused channel without a second presence handler", async () => {
+    const client = setUpClient();
+    client.deferRemovals(true);
+    const first = subscribe({ uid: "player-1" });
+    expect(client.channels).toHaveLength(1);
+    expect(client.channels[0].presenceCallbacks).toHaveLength(1);
+
+    const firstStop = first.unsubscribe();
+    await flush();
+    // Teardown is still pending, so channel() returns the same object.
+    // Adding another presence handler here is the crash seen on remount.
+    const second = subscribe({ uid: "player-2" });
+    expect(client.channels).toHaveLength(1);
+    expect(client.channels[0].presenceCallbacks).toHaveLength(1);
+    expect(() => sync(client.channels[0])).not.toThrow();
+
+    const secondStop = second.unsubscribe();
+    await flush();
+    client.settleRemovals();
+    await Promise.all([firstStop, secondStop]);
   });
 });

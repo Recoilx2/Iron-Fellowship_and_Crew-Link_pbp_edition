@@ -1,15 +1,17 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { Unsubscribe as PlainUnsubscribe } from "api-calls/helpers.type";
-import { listenToRows } from "api-calls/realtime/listenToRows";
+import {
+  broadcastRowsBinding,
+  listenToRows,
+} from "api-calls/realtime/listenToRows";
+import { campaignBroadcastBindings } from "api-calls/realtime/sharedTopics";
 import {
   CHARACTER_NOTES_TABLE,
   CAMPAIGN_NOTES_TABLE,
   characterNotePayloadToChange,
-  campaignNotePayloadToChange,
   constructCharacterNotesChannelName,
   constructCharacterNotesFilter,
   constructCampaignNotesChannelName,
-  constructCampaignNotesFilter,
   type CharacterNoteRow,
   type CampaignNoteRow,
 } from "./_getRef";
@@ -21,7 +23,8 @@ export function listenToNotes(
   characterId: string | undefined,
   onNotes: (source: NoteSource, notes: Note[]) => void,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onError: (error: any) => void
+  onError: (error: any) => void,
+  isGM = false
 ): PlainUnsubscribe {
   if (!campaignId && !characterId) {
     onError("Either character or campaign ID must be defined.");
@@ -39,12 +42,16 @@ export function listenToNotes(
         client,
         channelName: constructCampaignNotesChannelName(campaignId),
         bindings: [
-          {
-            type: "postgres_changes",
-            table: CAMPAIGN_NOTES_TABLE,
-            filter: constructCampaignNotesFilter(campaignId),
-            toChange: campaignNotePayloadToChange,
-          },
+          ...campaignBroadcastBindings<CampaignNoteRow>(
+            campaignId,
+            "notes",
+            () =>
+              broadcastRowsBinding<CampaignNoteRow>({
+                table: CAMPAIGN_NOTES_TABLE,
+                getKey: (row) => row.id,
+              }),
+            isGM
+          ),
         ],
         fetchRows: async () => {
           const { data, error } = await client

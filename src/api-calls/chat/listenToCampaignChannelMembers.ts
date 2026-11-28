@@ -1,11 +1,18 @@
 import { getSupabaseClient } from "config/supabase.config";
 import type { Unsubscribe } from "api-calls/helpers.type";
-import { listenToRows } from "api-calls/realtime/listenToRows";
 import {
-  CHAT_CHANNELS_TABLE,
+  broadcastRefreshBinding,
+  broadcastRowsBinding,
+  listenToRowsDeferred,
+} from "api-calls/realtime/listenToRows";
+import {
+  campaignSharedTopic,
+  channelIdsForCampaign,
+  channelSharedTopic,
+} from "api-calls/realtime/sharedTopics";
+import {
   CHAT_CHANNEL_MEMBERS_TABLE,
   constructCampaignChannelMembersChannelName,
-  constructCampaignChannelsFilter,
   type ChannelMemberRow,
 } from "./_getRef";
 
@@ -42,45 +49,65 @@ export function listenToCampaignChannelMembers(
   const client = getSupabaseClient();
   let loaded = false;
 
-  return listenToRows<ChannelMemberRow>({
-    client,
-    channelName: constructCampaignChannelMembersChannelName(campaignId),
-    bindings: [
-      {
-        type: "postgres_changes",
-        table: CHAT_CHANNELS_TABLE,
-        filter: constructCampaignChannelsFilter(campaignId),
-        toChange: () => ({ kind: "refresh" }),
-      },
-    ],
-    fetchRows: async () => {
-      // The join carries the campaign filter the roster table itself lacks;
-      // the channel access rules on the joined table quietly drop every
-      // channel the reader may not see, DMs first.
-      const { data, error } = await client
-        .from(CHAT_CHANNEL_MEMBERS_TABLE)
-        .select("channel_id, user_id, created_at, chat_channels!inner(campaign_id)")
-        .eq("chat_channels.campaign_id", campaignId);
-      if (error) {
-        throw error;
-      }
-      const rows = (data ?? []) as Array<
-        ChannelMemberRow & { chat_channels?: unknown }
-      >;
-      return rows.map(({ channel_id, user_id, created_at }) => ({
-        channel_id,
-        user_id,
-        created_at,
-      }));
+  return listenToRowsDeferred<ChannelMemberRow>(
+    async () => {
+      const channelIds = await channelIdsForCampaign(client, campaignId);
+      return {
+        client,
+        channelName: constructCampaignChannelMembersChannelName(campaignId),
+        bindings: [
+          // The roster's own trigger now publishes on channel-shared:*
+          // instead of the parent-channel bump this listener used to watch.
+          ...channelIds.map((id) =>
+            broadcastRowsBinding<ChannelMemberRow>({
+              topic: channelSharedTopic(id),
+              table: CHAT_CHANNEL_MEMBERS_TABLE,
+              // Project to the three columns fetchRows selects.
+              project: (row) => ({
+                channel_id: String(row.channel_id),
+                user_id: String(row.user_id),
+                created_at: String(row.created_at),
+              }),
+              getKey: (row) => `${row.channel_id}:${row.user_id}`,
+            })
+          ),
+          broadcastRefreshBinding({
+            topic: campaignSharedTopic(campaignId, "chat"),
+          }),
+        ],
+        fetchRows: async () => {
+          // The join carries the campaign filter the roster table itself
+          // lacks; the channel access rules on the joined table quietly
+          // drop every channel the reader may not see, DMs first.
+          const { data, error } = await client
+            .from(CHAT_CHANNEL_MEMBERS_TABLE)
+            .select(
+              "channel_id, user_id, created_at, chat_channels!inner(campaign_id)"
+            )
+            .eq("chat_channels.campaign_id", campaignId);
+          if (error) {
+            throw error;
+          }
+          const rows = (data ?? []) as Array<
+            ChannelMemberRow & { chat_channels?: unknown }
+          >;
+          return rows.map(({ channel_id, user_id, created_at }) => ({
+            channel_id,
+            user_id,
+            created_at,
+          }));
+        },
+        getKey: (row: ChannelMemberRow) => `${row.channel_id}:${row.user_id}`,
+        onRows: (rows: ChannelMemberRow[]) => {
+          onMembers(rows);
+          if (!loaded) {
+            loaded = true;
+            onLoaded();
+          }
+        },
+        onError,
+      };
     },
-    getKey: (row) => `${row.channel_id}:${row.user_id}`,
-    onRows: (rows) => {
-      onMembers(rows);
-      if (!loaded) {
-        loaded = true;
-        onLoaded();
-      }
-    },
-    onError,
-  });
+    onError
+  );
 }

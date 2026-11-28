@@ -25,6 +25,22 @@ export interface ChannelTypingState {
 
 const EMPTY_IDS: string[] = [];
 
+/**
+ * supabase-js reuses a channel by topic until removeChannel resolves, and a
+ * remount creates a fresh hook instance (so useRef cannot serialize across
+ * it). Keep the pending teardown keyed by topic at module scope instead.
+ */
+const pendingTeardowns = new Map<string, Promise<void>>();
+
+function leaveWhenSettled(channelId: string, done: Promise<void>): void {
+  pendingTeardowns.set(channelId, done);
+  void done.then(() => {
+    if (pendingTeardowns.get(channelId) === done) {
+      pendingTeardowns.delete(channelId);
+    }
+  });
+}
+
 export function useChannelTyping(channelId: string): ChannelTypingState {
   const uid = useStore((store) => store.auth?.uid ?? "");
   const displayName = useStore(
@@ -59,33 +75,50 @@ export function useChannelTyping(channelId: string): ChannelTypingState {
       setTypingUids([]);
       return;
     }
-    // No onError: presence is a nicety. A refused join or write leaves the
-    // composer working and the indicator empty.
-    const subscription = subscribeToChannelTyping({
-      channelId,
-      uid,
-      displayName,
-      onTyping: setTypingUids,
-    });
-    controlsRef.current = subscription;
-
-    const onPageHide = () => subscription.stopTyping();
+    let cancelled = false;
+    let subscription: ChannelTypingSubscription | undefined;
+    const onPageHide = () => subscription?.stopTyping();
     const onVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
-        subscription.stopTyping();
+        subscription?.stopTyping();
       }
     };
-    window.addEventListener("pagehide", onPageHide);
-    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    // No onError: presence is a nicety. A refused join or write leaves the
+    // composer working and the indicator empty.
+    const previous = pendingTeardowns.get(channelId);
+    const setup = async () => {
+      // First mount has nothing to wait for: keep setup synchronous.
+      if (previous) await previous;
+      if (cancelled) return;
+      const created = subscribeToChannelTyping({
+        channelId,
+        uid,
+        displayName,
+        onTyping: setTypingUids,
+      });
+      if (cancelled) {
+        leaveWhenSettled(channelId, created.unsubscribe().catch(() => {}));
+        return;
+      }
+      subscription = created;
+      controlsRef.current = created;
+      window.addEventListener("pagehide", onPageHide);
+      document.addEventListener("visibilitychange", onVisibilityChange);
+    };
+    void setup();
 
     return () => {
+      cancelled = true;
       window.removeEventListener("pagehide", onPageHide);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       isTypingRef.current = false;
       if (controlsRef.current === subscription) {
         controlsRef.current = null;
       }
-      void subscription.unsubscribe();
+      if (subscription) {
+        leaveWhenSettled(channelId, subscription.unsubscribe().catch(() => {}));
+      }
     };
   }, [channelId, uid, displayName]);
 

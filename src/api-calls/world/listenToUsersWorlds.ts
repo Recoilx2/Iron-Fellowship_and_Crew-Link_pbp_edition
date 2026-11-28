@@ -1,11 +1,17 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { Unsubscribe } from "api-calls/helpers.type";
-import { listenToRows } from "api-calls/realtime/listenToRows";
+import {
+  broadcastRowsBinding,
+  listenToRowsDeferred,
+} from "api-calls/realtime/listenToRows";
+import {
+  campaignBroadcastBindings,
+  visibleCampaignIds,
+} from "api-calls/realtime/sharedTopics";
 import { World } from "api-calls/world/_world.type";
 import {
   WORLDS_TABLE,
   constructUserWorldsChannelName,
-  worldPayloadToChange,
   worldRowToDocument,
   type WorldRow,
 } from "./_getRef";
@@ -22,45 +28,58 @@ export function listenToUsersWorlds(
     onDocRemove: (id: string) => void;
     onLoaded: () => void;
   },
-  onError: (error: unknown) => void
+  onError: (error: unknown) => void,
+  isGM = false
 ): Unsubscribe | undefined {
   if (!uid) {
     return undefined;
   }
   const client = getSupabaseClient();
   let previousIds = new Set<string>();
-  return listenToRows<WorldRow>({
-    client,
-    channelName: constructUserWorldsChannelName(uid),
-    bindings: [
-      {
-        type: "postgres_changes",
-        table: WORLDS_TABLE,
-        toChange: worldPayloadToChange,
-      },
-    ],
-    fetchRows: async () => {
-      const { data, error } = await client.from(WORLDS_TABLE).select("*");
-      if (error) {
-        throw error;
-      }
-      return (data ?? []) as unknown as WorldRow[];
+  return listenToRowsDeferred<WorldRow>(
+    async () => {
+      const campaignIds = await visibleCampaignIds(client);
+      return {
+        client,
+        channelName: constructUserWorldsChannelName(uid),
+        bindings: [
+          // Every campaign the reader belongs to publishes world rows on
+          // its shared and GM topics; no postgres_changes fallback remains.
+          ...campaignIds.flatMap((campaignId) =>
+            campaignBroadcastBindings<WorldRow>(campaignId, "world", () =>
+              broadcastRowsBinding<WorldRow>({
+                table: WORLDS_TABLE,
+                getKey: (row) => row.id,
+              }),
+              isGM
+            )
+          ),
+        ],
+        fetchRows: async () => {
+          const { data, error } = await client.from(WORLDS_TABLE).select("*");
+          if (error) {
+            throw error;
+          }
+          return (data ?? []) as unknown as WorldRow[];
+        },
+        getKey: (row: WorldRow) => row.id,
+        getUpdatedAt: (row: WorldRow) => row.updated_at,
+        onRows: (rows: WorldRow[]) => {
+          const seen = new Set(rows.map((row) => row.id));
+          for (const row of rows) {
+            dataHandler.onDocChange(row.id, worldRowToDocument(row));
+          }
+          for (const id of previousIds) {
+            if (!seen.has(id)) {
+              dataHandler.onDocRemove(id);
+            }
+          }
+          previousIds = seen;
+          dataHandler.onLoaded();
+        },
+        onError,
+      };
     },
-    getKey: (row) => row.id,
-    getUpdatedAt: (row) => row.updated_at,
-    onRows: (rows) => {
-      const seen = new Set(rows.map((row) => row.id));
-      for (const row of rows) {
-        dataHandler.onDocChange(row.id, worldRowToDocument(row));
-      }
-      for (const id of previousIds) {
-        if (!seen.has(id)) {
-          dataHandler.onDocRemove(id);
-        }
-      }
-      previousIds = seen;
-      dataHandler.onLoaded();
-    },
-    onError,
-  });
+    onError
+  );
 }

@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  broadcastRowChange,
+  broadcastRowsBinding,
   listenToRows,
+  listenToRowsDeferred,
   RECONCILE_INTERVAL_MS,
 } from "api-calls/realtime/listenToRows";
 import type { PostgresChangePayload } from "api-calls/realtime/listenToRows";
@@ -86,6 +89,18 @@ function emitPostgres(
 ) {
   for (const binding of channels[0].bindings) {
     if (binding.type === "postgres_changes") binding.cb(payload as never);
+  }
+}
+
+function emitBroadcast(
+  channel: ReturnType<typeof makeFakeRealtime>["channels"][number],
+  event: string,
+  payload: unknown
+) {
+  for (const binding of channel.bindings) {
+    if (binding.type === "broadcast") {
+      binding.cb({ event, payload } as never);
+    }
   }
 }
 
@@ -354,7 +369,9 @@ describe("listenToRows", () => {
     expect(onError).toHaveBeenCalledTimes(1);
     const reported = onError.mock.calls[0][0] as Error;
     expect(String(reported?.message ?? reported)).toContain("CHANNEL_ERROR");
-    expect(onRows).not.toHaveBeenCalled();
+    // The error is reported, but the REST snapshot still loads so a denied
+    // reader gets its empty list instead of an indefinite spinner.
+    expect(onRows).toHaveBeenCalledWith([]);
   });
 
   it("surfaces timed-out and closed channels to onError", async () => {
@@ -379,7 +396,7 @@ describe("listenToRows", () => {
       expect(onError).toHaveBeenCalledTimes(1);
       const reported = onError.mock.calls[0][0] as Error;
       expect(String(reported?.message ?? reported)).toContain(status);
-      expect(onRows).not.toHaveBeenCalled();
+      expect(onRows).toHaveBeenCalledWith([]);
     }
   });
 
@@ -1116,6 +1133,550 @@ describe("listenToRows", () => {
       for (const cb of survivor.postgresCbs) cb({ new: fresh, old: null });
       expect(completedSeen.at(-1)).toEqual([fresh]);
       expect(activeSeen).toEqual([[activeRow]]);
+    });
+  });
+
+  describe("shared broadcast topics (spec #205)", () => {
+    it("joins the exact canonical topic with no subscription suffix", async () => {
+      const { client, channels } = makeFakeRealtime();
+      listenToRows<Row>({
+        client: client as never,
+        channelName: "campaign-notes:legacy",
+        bindings: [
+          broadcastRowsBinding<Row>({
+            topic: "campaign-shared:abc:notes",
+            getKey: keyOf,
+          }),
+        ],
+        fetchRows: () => Promise.resolve([]),
+        getKey: keyOf,
+        onRows: () => {},
+      });
+
+      expect(channels).toHaveLength(1);
+      // The SQL publisher sends to the exact canonical topic; a :sub- suffix
+      // would make every row event and refresh signal unroutable.
+      expect(channels[0].name).toBe("campaign-shared:abc:notes");
+      expect(channels[0].name).not.toContain(":sub-");
+      expect(channels[0].options).toMatchObject({ config: { private: true } });
+    });
+
+    it("reuses one channel for two listeners on the same canonical topic", async () => {
+      const { client, channels, removeChannel } = makeFakeRealtime();
+      const firstSeen: Row[][] = [];
+      const secondSeen: Row[][] = [];
+      const make = (onRows: (rows: Row[]) => void) =>
+        listenToRows<Row>({
+          client: client as never,
+          channelName: "campaign:1",
+          bindings: [
+            broadcastRowsBinding<Row>({
+              topic: "campaign-shared:1:notes",
+              table: "campaign_notes",
+              getKey: keyOf,
+            }),
+          ],
+          fetchRows: () => Promise.resolve([]),
+          getKey: keyOf,
+          onRows,
+        });
+      const stopFirst = make((rows) => firstSeen.push(rows));
+      const stopSecond = make((rows) => secondSeen.push(rows));
+
+      expect(channels).toHaveLength(1);
+      expect(channels[0].bindings.filter((b) => b.type === "broadcast")).toHaveLength(1);
+      for (const cb of channels[0].subscribeCbs) cb("SUBSCRIBED");
+      await flush();
+
+      emitBroadcast(channels[0], "INSERT", {
+        operation: "INSERT",
+        table: "campaign_notes",
+        record: { id: "a", value: "shared", updated_at: "2026-11-12T00:00:01Z" },
+      });
+      expect(firstSeen.at(-1)?.[0].id).toBe("a");
+      expect(secondSeen.at(-1)?.[0].id).toBe("a");
+
+      // Ref-counted: leaving one listener must not drop the channel for the
+      // other, and the survivor still receives messages.
+      stopFirst();
+      await flush();
+      expect(removeChannel).not.toHaveBeenCalled();
+      emitBroadcast(channels[0], "INSERT", {
+        operation: "INSERT",
+        table: "campaign_notes",
+        record: { id: "b", value: "shared", updated_at: "2026-11-12T00:00:02Z" },
+      });
+      expect(secondSeen.at(-1)?.map((row) => row.id)).toEqual(["a", "b"]);
+      stopSecond();
+      await flush();
+    });
+
+    it("tells a late subscriber it is SUBSCRIBED so it fetches on its own", async () => {
+      const { client, channels } = makeFakeRealtime();
+      const make = (fetchRows: () => Promise<Row[]>) =>
+        listenToRows<Row>({
+          client: client as never,
+          channelName: "campaign:1",
+          bindings: [
+            broadcastRowsBinding<Row>({
+              topic: "campaign-shared:1:notes",
+              getKey: keyOf,
+            }),
+          ],
+          fetchRows,
+          getKey: keyOf,
+          onRows: () => {},
+        });
+      const firstFetch = vi.fn(() => Promise.resolve([]));
+      const stopFirst = make(firstFetch);
+      for (const cb of channels[0].subscribeCbs) cb("SUBSCRIBED");
+      await flush();
+      expect(firstFetch).toHaveBeenCalledTimes(1);
+
+      const secondFetch = vi.fn(() => Promise.resolve([]));
+      const stopSecond = make(secondFetch);
+      expect(secondFetch).not.toHaveBeenCalled();
+      // The shared channel is already joined; the new subscriber gets the
+      // recorded status on the next microtask rather than waiting forever.
+      await flush();
+      expect(secondFetch).toHaveBeenCalledTimes(1);
+      expect(channels).toHaveLength(1);
+      stopFirst();
+      stopSecond();
+    });
+
+    it("keeps postgres_changes bindings on the primary topic", async () => {
+      const { client, channels } = makeFakeRealtime();
+      listenToRows<Row>({
+        client: client as never,
+        channelName: "character-notes:c1",
+        bindings: [
+          postgresChanges<Row>("character_notes", () => null),
+          broadcastRowsBinding<Row>({
+            topic: "campaign-shared:abc:notes",
+            getKey: keyOf,
+          }),
+        ],
+        fetchRows: () => Promise.resolve([]),
+        getKey: keyOf,
+        onRows: () => {},
+      });
+
+      expect(channels).toHaveLength(2);
+      const pg = channels.find((c) =>
+        c.bindings.some((b) => b.type === "postgres_changes")
+      );
+      expect(pg?.name.startsWith("character-notes:c1:sub-")).toBe(true);
+      const broadcast = channels.find(
+        (c) => c.name === "campaign-shared:abc:notes"
+      );
+      expect(broadcast).toBeTruthy();
+      expect(broadcast?.name).not.toContain(":sub-");
+    });
+
+    it("merges rows from two topics and re-fetches on either SUBSCRIBED", async () => {
+      const { client, channels } = makeFakeRealtime();
+      const fetchRows = vi.fn(async (): Promise<Row[]> => []);
+      const seen: Row[][] = [];
+      listenToRows<Row>({
+        client: client as never,
+        channelName: "campaign:1",
+        bindings: [
+          broadcastRowsBinding<Row>({
+            topic: "campaign-shared:1:notes",
+            getKey: keyOf,
+          }),
+          broadcastRowsBinding<Row>({
+            topic: "campaign-gm:1:notes",
+            optional: true,
+            getKey: keyOf,
+          }),
+        ],
+        fetchRows,
+        getKey: keyOf,
+        onRows: (rows) => seen.push(rows),
+      });
+      expect(channels).toHaveLength(2);
+      // Only the first fetch runs; the second SUBSCRIBED coalesces into it.
+      for (const channel of channels) {
+        for (const cb of channel.subscribeCbs) cb("SUBSCRIBED");
+      }
+      await flush();
+      expect(fetchRows).toHaveBeenCalledTimes(1);
+      expect(seen).toEqual([[]]);
+
+      const shared = channels.find((c) =>
+        c.name.startsWith("campaign-shared")
+      )!;
+      const gm = channels.find((c) => c.name.startsWith("campaign-gm"))!;
+      emitBroadcast(shared, "INSERT", {
+        operation: "INSERT",
+        table: "campaign_notes",
+        record: { id: "a", value: "public", updated_at: "2026-11-12T00:00:01Z" },
+      });
+      emitBroadcast(gm, "INSERT", {
+        operation: "INSERT",
+        table: "campaign_notes",
+        record: { id: "b", value: "hidden", updated_at: "2026-11-12T00:00:02Z" },
+      });
+      expect(seen.at(-1)?.map((row) => row.id)).toEqual(["a", "b"]);
+    });
+
+    it("routes a broadcast refresh through the queue without a second fetch when settled", async () => {
+      const { client, channels } = makeFakeRealtime();
+      const fetchRows = vi.fn(async (): Promise<Row[]> => []);
+      listenToRows<Row>({
+        client: client as never,
+        channelName: "campaign:1",
+        bindings: [
+          broadcastRowsBinding<Row>({
+            topic: "campaign-shared:1:notes",
+            getKey: keyOf,
+          }),
+        ],
+        fetchRows,
+        getKey: keyOf,
+        onRows: () => {},
+      });
+      for (const cb of channels[0].subscribeCbs) cb("SUBSCRIBED");
+      await flush();
+      expect(fetchRows).toHaveBeenCalledTimes(1);
+
+      emitBroadcast(channels[0], "refresh", { kind: "refresh" });
+      await flush();
+      expect(fetchRows).toHaveBeenCalledTimes(2);
+    });
+
+    it("silences an optional topic's join error but reports a required one", async () => {
+      for (const optional of [true, false]) {
+        const { client, channels } = makeFakeRealtime();
+        const onError = vi.fn();
+        listenToRows<Row>({
+          client: client as never,
+          channelName: "campaign:1",
+          bindings: [
+            broadcastRowsBinding<Row>({
+              topic: "campaign-gm:1:notes",
+              optional,
+              getKey: keyOf,
+            }),
+          ],
+          fetchRows: () => Promise.resolve([]),
+          getKey: keyOf,
+          onRows: () => {},
+          onError,
+        });
+        for (const cb of channels[0].subscribeCbs) {
+          cb("CHANNEL_ERROR", new Error("denied"));
+        }
+        expect(onError).toHaveBeenCalledTimes(optional ? 0 : 1);
+      }
+    });
+
+    it("still fetches when an optional GM topic's join fails", async () => {
+      const { client, channels } = makeFakeRealtime();
+      const onRows = vi.fn();
+      const onError = vi.fn();
+      const row: Row = {
+        id: "a",
+        value: "from REST",
+        updated_at: "2026-11-12T00:00:01Z",
+      };
+      const fetchRows = vi.fn(() => Promise.resolve([row]));
+
+      listenToRows<Row>({
+        client: client as never,
+        channelName: "assistant-conversations:1",
+        bindings: [
+          broadcastRowsBinding<Row>({
+            topic: "campaign-gm:1:assistant",
+            optional: true,
+            getKey: keyOf,
+          }),
+        ],
+        fetchRows,
+        getKey: keyOf,
+        onRows,
+        onError,
+      });
+      for (const cb of channels[0].subscribeCbs) {
+        cb("CHANNEL_ERROR", new Error("join failed"));
+      }
+      await flush();
+
+      expect(onError).not.toHaveBeenCalled();
+      expect(fetchRows).toHaveBeenCalledTimes(1);
+      expect(onRows).toHaveBeenCalledWith([row]);
+    });
+
+    it("heals a cached failed topic so a late subscriber fetches", async () => {
+      vi.useFakeTimers();
+      try {
+        const { client, channels } = makeFakeRealtime();
+        const make = (fetchRows: () => Promise<Row[]>) =>
+          listenToRows<Row>({
+            client: client as never,
+            channelName: "campaign:1",
+            bindings: [
+              broadcastRowsBinding<Row>({
+                topic: "campaign-shared:1:chat",
+                getKey: keyOf,
+              }),
+            ],
+            fetchRows,
+            getKey: keyOf,
+            onRows: () => {},
+          });
+        const firstFetch = vi.fn(() => Promise.resolve([]));
+        const stopFirst = make(firstFetch);
+        for (const cb of channels[0].subscribeCbs) cb("TIMED_OUT");
+        await vi.advanceTimersByTimeAsync(0);
+        expect(firstFetch).toHaveBeenCalledTimes(1);
+
+        const secondFetch = vi.fn(() => Promise.resolve([]));
+        const stopSecond = make(secondFetch);
+        // The late listener joins the existing bounded retry rather than
+        // opening its own channel, and waits for the result before fetching.
+        expect(channels).toHaveLength(1);
+        await vi.advanceTimersByTimeAsync(0);
+        // The replayed failure makes it fetch once; the healed SUBSCRIBED
+        // below must make it fetch again.
+        expect(secondFetch).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1300);
+        expect(channels).toHaveLength(2);
+        for (const cb of channels[1].subscribeCbs) cb("SUBSCRIBED");
+        await vi.advanceTimersByTimeAsync(0);
+        expect(secondFetch).toHaveBeenCalledTimes(2);
+        stopFirst();
+        stopSecond();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("removes every channel on unsubscribe", () => {
+      const { client, channels, removeChannel } = makeFakeRealtime();
+      const unsubscribe = listenToRows<Row>({
+        client: client as never,
+        channelName: "campaign:1",
+        bindings: [
+          broadcastRowsBinding<Row>({
+            topic: "campaign-shared:1:notes",
+            getKey: keyOf,
+          }),
+          broadcastRowsBinding<Row>({
+            topic: "campaign-gm:1:notes",
+            optional: true,
+            getKey: keyOf,
+          }),
+        ],
+        fetchRows: () => Promise.resolve([]),
+        getKey: keyOf,
+        onRows: () => {},
+      });
+      expect(channels).toHaveLength(2);
+      unsubscribe();
+      expect(removeChannel).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("broadcast payload mapping", () => {
+    const getKey = (row: Row) => row.id;
+
+    it("maps INSERT/UPDATE/DELETE and ignores other tables", () => {
+      const insert = broadcastRowChange<Row>(
+        {
+          event: "INSERT",
+          payload: {
+            operation: "INSERT",
+            table: "campaign_notes",
+            record: { id: "a", value: "new", updated_at: "1" },
+          },
+        },
+        { getKey, table: "campaign_notes" }
+      );
+      expect(insert).toEqual({
+        kind: "upsert",
+        row: { id: "a", value: "new", updated_at: "1" },
+      });
+
+      const remove = broadcastRowChange<Row>(
+        {
+          event: "DELETE",
+          payload: {
+            operation: "DELETE",
+            table: "campaign_notes",
+            old_record: { id: "a", value: "gone", updated_at: "1" },
+          },
+        },
+        { getKey, table: "campaign_notes" }
+      );
+      expect(remove).toEqual({ kind: "remove", key: "a" });
+
+      expect(
+        broadcastRowChange<Row>(
+          {
+            event: "INSERT",
+            payload: { operation: "INSERT", table: "world_notes", record: { id: "x" } },
+          },
+          { getKey, table: "campaign_notes" }
+        )
+      ).toBeNull();
+    });
+
+    it("removes a GM-only key with no row data", () => {
+      expect(
+        broadcastRowChange<Row>(
+          {
+            event: "DELETE",
+            payload: {
+              operation: "DELETE",
+              key: "id",
+              id: "hidden-id",
+              table: "assistant_conversations",
+            },
+          },
+          { getKey }
+        )
+      ).toEqual({ kind: "remove", key: "hidden-id" });
+    });
+
+    it("maps refresh from the event or the payload kind", () => {
+      const binding = broadcastRowsBinding<Row>({ getKey });
+      expect(
+        binding.toChange({ event: "refresh", payload: { kind: "refresh", id: "a" } })
+      ).toEqual({ kind: "refresh" });
+      expect(
+        binding.toChange({ event: "refresh", payload: { kind: "refresh" } })
+      ).toEqual({ kind: "refresh" });
+    });
+
+    it("turns accepted rows into refreshes when refreshOnly is set", () => {
+      const binding = broadcastRowsBinding<Row>({
+        topic: "channel-shared:1",
+        refreshOnly: true,
+        getKey,
+        // A caller-side filter (GM-only rows) runs before the conversion.
+        toChange: (message) => {
+          const payload =
+            typeof message.payload === "object" && message.payload !== null
+              ? (message.payload as Record<string, unknown>)
+              : null;
+          const record = payload?.record as Record<string, unknown> | null;
+          return record?.hidden === true
+            ? null
+            : broadcastRowChange<Row>(message, { getKey });
+        },
+      });
+      expect(
+        binding.toChange({
+          event: "INSERT",
+          payload: {
+            operation: "INSERT",
+            table: "posts",
+            record: { id: "a", value: "v", updated_at: "1" },
+          },
+        })
+      ).toEqual({ kind: "refresh" });
+      expect(
+        binding.toChange({
+          event: "DELETE",
+          payload: {
+            operation: "DELETE",
+            table: "posts",
+            old_record: { id: "a", value: "v", updated_at: "1" },
+          },
+        })
+      ).toEqual({ kind: "refresh" });
+      expect(
+        binding.toChange({ event: "refresh", payload: { kind: "refresh" } })
+      ).toEqual({ kind: "refresh" });
+      expect(
+        binding.toChange({
+          event: "INSERT",
+          payload: { operation: "INSERT", record: { id: "b", hidden: true } },
+        })
+      ).toBeNull();
+    });
+
+    it("projects broadcast rows to the fetchRows columns", () => {
+      const change = broadcastRowChange<Row>(
+        {
+          event: "UPDATE",
+          payload: {
+            operation: "UPDATE",
+            record: { id: "a", value: "v", updated_at: "1", secret: "do-not-keep" },
+          },
+        },
+        {
+          getKey,
+          project: (row) => ({
+            id: String(row.id),
+            value: String(row.value),
+            updated_at: String(row.updated_at),
+          }),
+        }
+      );
+      expect(change).toEqual({
+        kind: "upsert",
+        row: { id: "a", value: "v", updated_at: "1" },
+      });
+    });
+  });
+
+  describe("deferred topic resolution", () => {
+    it("opens the listener after its topics resolve", async () => {
+      const { client, channels } = makeFakeRealtime();
+      const unsubscribe = listenToRowsDeferred<Row>(async () => ({
+        client: client as never,
+        channelName: "campaign:1",
+        bindings: [
+          broadcastRowsBinding<Row>({
+            topic: "campaign-shared:1:notes",
+            getKey: keyOf,
+          }),
+        ],
+        fetchRows: () => Promise.resolve([]),
+        getKey: keyOf,
+        onRows: () => {},
+      }));
+      expect(channels).toHaveLength(0);
+      await flush();
+      expect(channels).toHaveLength(1);
+      expect(channels[0].name.startsWith("campaign-shared:1:notes")).toBe(true);
+      unsubscribe();
+    });
+
+    it("never opens a listener unsubscribed before resolution", async () => {
+      const { client, channels, removeChannel } = makeFakeRealtime();
+      let release!: () => void;
+      const unsubscribe = listenToRowsDeferred<Row>(
+        () =>
+          new Promise((resolve) => {
+            release = () =>
+              resolve({
+                client: client as never,
+                channelName: "campaign:1",
+                bindings: [],
+                fetchRows: () => Promise.resolve([]),
+                getKey: keyOf,
+                onRows: () => {},
+              });
+          })
+      );
+      unsubscribe();
+      release();
+      await flush();
+      expect(channels).toHaveLength(0);
+      expect(removeChannel).not.toHaveBeenCalled();
+    });
+
+    it("surfaces a failed topic lookup to onError", async () => {
+      const onError = vi.fn();
+      const failure = new Error("lookup failed");
+      listenToRowsDeferred<Row>(() => Promise.reject(failure), onError);
+      await flush();
+      expect(onError).toHaveBeenCalledWith(failure);
     });
   });
 });

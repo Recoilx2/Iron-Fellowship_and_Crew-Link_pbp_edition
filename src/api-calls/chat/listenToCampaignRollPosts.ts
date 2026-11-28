@@ -2,7 +2,17 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getSupabaseClient } from "config/supabase.config";
 import type { Unsubscribe } from "api-calls/helpers.type";
-import { listenToRows } from "api-calls/realtime/listenToRows";
+import {
+  broadcastRefreshBinding,
+  broadcastRowChange,
+  listenToRowsDeferred,
+  type BroadcastMessage,
+} from "api-calls/realtime/listenToRows";
+import {
+  campaignSharedTopic,
+  channelIdsForCampaign,
+  channelSharedTopic,
+} from "api-calls/realtime/sharedTopics";
 import type {
   PostgresChangePayload,
   RowChange,
@@ -61,6 +71,45 @@ export function rollPostPayloadToChange(
     return null;
   }
   return { kind: "upsert", row: row as PostRow };
+}
+
+/**
+ * Broadcast counterpart of rollPostPayloadToChange. In addition to the
+ * existing roll/channel filters it drops GM-only rows for non-GMs before
+ * the generic mapper can turn them into a row or a delete key.
+ */
+export function rollPostBroadcastChange(
+  knownChannelIds: KnownRollChannels,
+  isGM: boolean,
+  message: BroadcastMessage
+): RowChange<PostRow> | null {
+  const payload =
+    typeof message.payload === "object" && message.payload !== null
+      ? (message.payload as Record<string, unknown>)
+      : null;
+  const record = payload
+    ? ((payload.record ?? payload.old_record) as Record<string, unknown> | null)
+    : null;
+  if (record?.gms_only === true && !isGM) {
+    return null;
+  }
+  const change = broadcastRowChange<PostRow>(message, {
+    getKey: (row) => row.id,
+  });
+  if (!change || change.kind !== "upsert") {
+    return change;
+  }
+  const row = change.row;
+  if (
+    !row.channel_id ||
+    !knownChannelIds.has(row.channel_id) ||
+    row.deleted_at != null ||
+    row.roll == null ||
+    (!isGM && row.gms_only)
+  ) {
+    return null;
+  }
+  return change;
 }
 
 export function constructCampaignRollPostsChannelName(
@@ -130,53 +179,68 @@ export function listenToCampaignRollPosts(params: {
   // after subscribing.
   let knownChannelIds: KnownRollChannels = new Set();
   let previousIds = new Set<string>();
-  return listenToRows<PostRow>({
-    client,
-    channelName: constructCampaignRollPostsChannelName(campaignId),
-    bindings: [
-      {
-        type: "postgres_changes",
-        table: CHAT_POSTS_TABLE,
-        toChange: (payload) =>
-          rollPostPayloadToChange(knownChannelIds, payload),
-      },
-    ],
-    fetchRows: async () => {
-      const { channelIds, posts } = await fetchCampaignRollPosts(client, campaignId, {
-        limit: totalLogsToLoad,
-        isGM,
-      });
-      knownChannelIds = channelIds;
-      return posts;
+  return listenToRowsDeferred<PostRow>(
+    async () => {
+      const channelIds = await channelIdsForCampaign(client, campaignId);
+      return {
+        client,
+        channelName: constructCampaignRollPostsChannelName(campaignId),
+        bindings: [
+          ...channelIds.map((id) => ({
+            type: "broadcast" as const,
+            event: "*",
+            topic: channelSharedTopic(id),
+            toChange: (message: BroadcastMessage) =>
+              rollPostBroadcastChange(knownChannelIds, isGM, message),
+          })),
+          broadcastRefreshBinding({
+            topic: campaignSharedTopic(campaignId, "chat"),
+          }),
+        ],
+        fetchRows: async () => {
+          const { channelIds: fetched, posts } = await fetchCampaignRollPosts(
+            client,
+            campaignId,
+            { limit: totalLogsToLoad, isGM }
+          );
+          knownChannelIds = fetched;
+          return posts;
+        },
+        getKey: (row: PostRow) => row.id,
+        getUpdatedAt: (row: PostRow) => row.updated_at,
+        onRows: (rows: PostRow[]) => {
+          const seen = new Set<string>();
+          for (const row of rows) {
+            if (!isGM && row.gms_only) {
+              continue;
+            }
+            // The fetch and the live filter only let roll posts through;
+            // the guard keeps the type honest if a row ever arrives
+            // without one. The roller reads from the post's columns, never
+            // the roll JSON.
+            const roll = postRowToLogRoll(row);
+            if (!roll) {
+              continue;
+            }
+            seen.add(row.id);
+            updateLog(row.id, roll);
+          }
+          for (const id of previousIds) {
+            if (!seen.has(id)) {
+              removeLog(id);
+            }
+          }
+          previousIds = seen;
+        },
+        onError: (error: unknown) => {
+          logError("listenToCampaignRollPosts", error);
+          onError("Error getting new logs.");
+        },
+      };
     },
-    getKey: (row) => row.id,
-    getUpdatedAt: (row) => row.updated_at,
-    onRows: (rows) => {
-      const seen = new Set<string>();
-      for (const row of rows) {
-        if (!isGM && row.gms_only) {
-          continue;
-        }
-        // The fetch and the live filter only let roll posts through; the
-        // guard keeps the type honest if a row ever arrives without one.
-        // The roller reads from the post's columns, never the roll JSON.
-        const roll = postRowToLogRoll(row);
-        if (!roll) {
-          continue;
-        }
-        seen.add(row.id);
-        updateLog(row.id, roll);
-      }
-      for (const id of previousIds) {
-        if (!seen.has(id)) {
-          removeLog(id);
-        }
-      }
-      previousIds = seen;
-    },
-    onError: (error) => {
+    (error: unknown) => {
       logError("listenToCampaignRollPosts", error);
       onError("Error getting new logs.");
-    },
-  });
+    }
+  );
 }

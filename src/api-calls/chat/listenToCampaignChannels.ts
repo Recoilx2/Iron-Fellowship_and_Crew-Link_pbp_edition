@@ -1,13 +1,20 @@
 import { getSupabaseClient } from "config/supabase.config";
 import type { Unsubscribe } from "api-calls/helpers.type";
-import { listenToRows } from "api-calls/realtime/listenToRows";
+import {
+  broadcastRefreshBinding,
+  broadcastRowsBinding,
+  listenToRowsDeferred,
+} from "api-calls/realtime/listenToRows";
+import {
+  campaignSharedTopic,
+  channelIdsForCampaign,
+  channelSharedTopic,
+} from "api-calls/realtime/sharedTopics";
 import type { ChannelDocument } from "api-calls/chat/_chat.type";
 import {
   CHAT_CHANNELS_TABLE,
-  channelPayloadToChange,
   channelRowToDocument,
   constructCampaignChannelsChannelName,
-  constructCampaignChannelsFilter,
   type ChannelRow,
 } from "./_getRef";
 
@@ -37,38 +44,53 @@ export function listenToCampaignChannels(
   const client = getSupabaseClient();
   let loaded = false;
 
-  return listenToRows<ChannelRow>({
-    client,
-    channelName: constructCampaignChannelsChannelName(campaignId),
-    bindings: [
-      {
-        type: "postgres_changes",
-        table: CHAT_CHANNELS_TABLE,
-        filter: constructCampaignChannelsFilter(campaignId),
-        toChange: channelPayloadToChange,
-      },
-    ],
-    fetchRows: async () => {
-      const { data, error } = await client
-        .from(CHAT_CHANNELS_TABLE)
-        .select("*")
-        .eq("campaign_id", campaignId);
-      if (error) {
-        throw error;
-      }
-      return (data ?? []) as unknown as ChannelRow[];
+  return listenToRowsDeferred<ChannelRow>(
+    async () => {
+      const channelIds = await channelIdsForCampaign(client, campaignId);
+      return {
+        client,
+        channelName: constructCampaignChannelsChannelName(campaignId),
+        bindings: [
+          // Channel rows stream on their own per-channel topic; a new
+          // channel is picked up by the reconcile fetch until the topics
+          // are rebuilt on the next listener mount.
+          ...channelIds.map((id) =>
+            broadcastRowsBinding<ChannelRow>({
+              topic: channelSharedTopic(id),
+              table: CHAT_CHANNELS_TABLE,
+              getKey: (row) => row.id,
+            })
+          ),
+          // Membership loss publishes a refresh on the campaign topic, so
+          // a removed member's list empties without waiting for the tick.
+          broadcastRefreshBinding({
+            topic: campaignSharedTopic(campaignId, "chat"),
+          }),
+        ],
+        fetchRows: async () => {
+          const { data, error } = await client
+            .from(CHAT_CHANNELS_TABLE)
+            .select("*")
+            .eq("campaign_id", campaignId);
+          if (error) {
+            throw error;
+          }
+          return (data ?? []) as unknown as ChannelRow[];
+        },
+        getKey: (row: ChannelRow) => row.id,
+        getUpdatedAt: (row: ChannelRow) => row.updated_at,
+        onRows: (rows: ChannelRow[]) => {
+          onChannels(
+            rows.map((row) => ({ id: row.id, ...channelRowToDocument(row) }))
+          );
+          if (!loaded) {
+            loaded = true;
+            onLoaded();
+          }
+        },
+        onError,
+      };
     },
-    getKey: (row) => row.id,
-    getUpdatedAt: (row) => row.updated_at,
-    onRows: (rows) => {
-      onChannels(
-        rows.map((row) => ({ id: row.id, ...channelRowToDocument(row) }))
-      );
-      if (!loaded) {
-        loaded = true;
-        onLoaded();
-      }
-    },
-    onError,
-  });
+    onError
+  );
 }

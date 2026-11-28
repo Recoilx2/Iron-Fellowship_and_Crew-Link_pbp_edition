@@ -9,6 +9,7 @@ import { updateNoteOrder } from "api-calls/notes/updateNoteOrder";
 import { removeNote } from "api-calls/notes/removeNote";
 import { updateNoteShared } from "api-calls/notes/updateNoteShared";
 import { logError } from "functions/errorReference";
+import { currentUserIsGm } from "stores/currentUserIsGm";
 
 export const createNotesSlice: CreateSliceType<NotesSlice> = (
   set,
@@ -40,7 +41,8 @@ export const createNotesSlice: CreateSliceType<NotesSlice> = (
           store.notes.loading = false;
           store.notes.error = "Failed to load notes.";
         });
-      }
+      },
+      currentUserIsGm(getState())
     );
   },
 
@@ -70,7 +72,8 @@ export const createNotesSlice: CreateSliceType<NotesSlice> = (
       },
       (error) => {
         logError("notes.slice", error);
-      }
+      },
+      currentUserIsGm(state)
     );
   },
 

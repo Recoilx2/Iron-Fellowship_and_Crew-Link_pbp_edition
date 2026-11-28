@@ -1,12 +1,17 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { Unsubscribe } from "api-calls/helpers.type";
-import { listenToRows } from "api-calls/realtime/listenToRows";
+import {
+  broadcastRowsBinding,
+  listenToRowsDeferred,
+} from "api-calls/realtime/listenToRows";
+import {
+  campaignGmTopic,
+  campaignIdsForWorld,
+} from "api-calls/realtime/sharedTopics";
 import { GMNPC } from "types/NPCs.type";
 import {
   WORLD_NPC_GM_DETAILS_TABLE,
   constructNPCChannelName,
-  constructNPCIdFilter,
-  npcGMDetailsPayloadToChange,
   npcGMDetailsRowToDocument,
   type NPCGMDetailsRow,
 } from "./_getRef";
@@ -24,33 +29,38 @@ export function listenToNPCGMProperties(
 ): Unsubscribe {
   const client = getSupabaseClient();
 
-  return listenToRows<NPCGMDetailsRow>({
-    client,
-    channelName: constructNPCChannelName(npcId),
-    bindings: [
-      {
-        type: "postgres_changes",
-        table: WORLD_NPC_GM_DETAILS_TABLE,
-        filter: constructNPCIdFilter(npcId),
-        toChange: npcGMDetailsPayloadToChange,
+  return listenToRowsDeferred<NPCGMDetailsRow>(
+    async () => ({
+      client,
+      channelName: constructNPCChannelName(npcId),
+      bindings: [
+        ...(await campaignIdsForWorld(client, worldId)).map((campaignId) =>
+          broadcastRowsBinding<NPCGMDetailsRow>({
+            topic: campaignGmTopic(campaignId, "world"),
+            optional: true,
+            table: WORLD_NPC_GM_DETAILS_TABLE,
+            getKey: (row) => row.npc_id,
+          })
+        ),
+      ],
+      fetchRows: async () => {
+        const { data, error } = await client
+          .from(WORLD_NPC_GM_DETAILS_TABLE)
+          .select("*")
+          .eq("npc_id", npcId);
+        if (error) {
+          throw error;
+        }
+        return (data ?? []) as unknown as NPCGMDetailsRow[];
       },
-    ],
-    fetchRows: async () => {
-      const { data, error } = await client
-        .from(WORLD_NPC_GM_DETAILS_TABLE)
-        .select("*")
-        .eq("npc_id", npcId);
-      if (error) {
-        throw error;
-      }
-      return (data ?? []) as unknown as NPCGMDetailsRow[];
-    },
-    getKey: (row) => row.npc_id,
-    getUpdatedAt: (row) => row.updated_at,
-    onRows: (rows) => {
-      const row = rows.find((candidate) => candidate.npc_id === npcId);
-      updateGMProperties(row ? npcGMDetailsRowToDocument(row) : undefined);
-    },
-    onError,
-  });
+      getKey: (row: NPCGMDetailsRow) => row.npc_id,
+      getUpdatedAt: (row: NPCGMDetailsRow) => row.updated_at,
+      onRows: (rows: NPCGMDetailsRow[]) => {
+        const row = rows.find((candidate) => candidate.npc_id === npcId);
+        updateGMProperties(row ? npcGMDetailsRowToDocument(row) : undefined);
+      },
+      onError,
+    }),
+    onError
+  );
 }

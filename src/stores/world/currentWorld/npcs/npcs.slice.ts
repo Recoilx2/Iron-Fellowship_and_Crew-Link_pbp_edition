@@ -23,6 +23,7 @@ import {
 } from "api-calls/world/worldNotes";
 import type { GMNPC } from "types/NPCs.type";
 import { logError } from "functions/errorReference";
+import { currentUserIsGm } from "stores/currentUserIsGm";
 
 /**
  * Merges streamed GM notes bytes into the structured GM details, keeping
@@ -97,7 +98,8 @@ export const createNPCsSlice: CreateSliceType<NPCsSlice> = (set, getState) => ({
           store.worlds.currentWorld.currentWorldNPCs.error =
             error instanceof Error ? error.message : String(error);
         });
-      }
+      },
+      currentUserIsGm(getState())
     );
   },
   setOpenNPCId: (npcId) => {
@@ -273,7 +275,8 @@ export const createNPCsSlice: CreateSliceType<NPCsSlice> = (set, getState) => ({
       },
       (error) => {
         logError("npcs.slice", error);
-      }
+      },
+      currentUserIsGm(getState())
     );
 
     // GM rows are always subscribed: the database filters them, so players
@@ -310,7 +313,8 @@ export const createNPCsSlice: CreateSliceType<NPCsSlice> = (set, getState) => ({
       },
       (error) => {
         logError("npcs.slice", error);
-      }
+      },
+      currentUserIsGm(getState())
     );
 
     return () => {

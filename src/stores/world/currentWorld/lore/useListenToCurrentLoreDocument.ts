@@ -1,8 +1,10 @@
 import { useEffect } from "react";
 import { useStore } from "stores/store";
+import { useCurrentUserIsGm } from "hooks/useCurrentUserIsGm";
 
 export function useListenToCurrentLoreDocument(loreId: string) {
   const worldId = useStore((store) => store.worlds.currentWorld.currentWorldId);
+  const isGM = useCurrentUserIsGm();
   const listenToCurrentLoreDocument = useStore(
     (store) => store.worlds.currentWorld.currentWorldLore.subscribeToOpenLore
   );
@@ -13,5 +15,5 @@ export function useListenToCurrentLoreDocument(loreId: string) {
     return () => {
       unsubscribe();
     };
-  }, [worldId, listenToCurrentLoreDocument, loreId]);
+  }, [worldId, isGM, listenToCurrentLoreDocument, loreId]);
 }

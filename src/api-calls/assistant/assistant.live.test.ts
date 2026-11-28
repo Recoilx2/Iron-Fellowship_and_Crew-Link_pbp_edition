@@ -24,6 +24,7 @@ import { listenToMessages } from "api-calls/assistant/listenToMessages";
 import type { AssistantConversationWithId } from "api-calls/assistant/_assistant.type";
 import type { AssistantMessageWithId } from "api-calls/assistant/_assistant.type";
 import {
+  adminClient,
   createPerson,
   deletePerson,
   liveStackConfig,
@@ -408,6 +409,7 @@ describe.skipIf(!config)("gm assistant data layer end to end", () => {
     expect(seen.at(-1)?.some((c) => c.id === conversationId)).toBe(false);
 
     const heard: AssistantMessageWithId[][] = [];
+    const denied: unknown[] = [];
     let messagesLoaded = false;
     unsubscribes.push(
       listenToMessages(
@@ -419,7 +421,9 @@ describe.skipIf(!config)("gm assistant data layer end to end", () => {
           },
         },
         (error) => {
-          throw error;
+          // A non-GM's GM-topic join is denied by policy; collect rather
+          // than throw from inside the callback.
+          denied.push(error);
         }
       )
     );
@@ -442,7 +446,7 @@ describe.skipIf(!config)("gm assistant data layer end to end", () => {
           },
         },
         (error) => {
-          throw error;
+          denied.push(error);
         }
       )
     );
@@ -632,6 +636,60 @@ describe.skipIf(!config)("gm assistant data layer end to end", () => {
       proposal_state: "applied",
       applied_version_id: null,
     });
+    await signOut();
+  });
+
+  it("keeps GM-only conversation ids from players and converges on demotion", { timeout: 120000 }, async () => {
+    const { gm, player, campaignId } = await setUpCampaign();
+    const gmSeen: Array<Array<{ id: string }>> = [];
+    const playerSeen: Array<Array<{ id: string }>> = [];
+    const listen = (seen: Array<Array<{ id: string }>>) =>
+      listenToConversations(
+        campaignId,
+        {
+          onConversations: (rows) =>
+            seen.push(rows.map((row) => ({ id: row.id }))),
+          onLoaded: () => {},
+        },
+        () => {}
+      );
+
+    await signInAs(gm);
+    const conversationId = await createConversation({
+      campaignId,
+      title: "Private planning",
+    });
+    unsubscribes.push(listen(gmSeen));
+    await waitFor(() =>
+      gmSeen.at(-1)?.some((row) => row.id === conversationId) ? gmSeen : null
+    );
+    await signOut();
+
+    // A player's REST read is empty and their join to campaign-gm:assistant
+    // is denied, so not even the conversation id reaches them live.
+    await signInAs(player);
+    unsubscribes.push(listen(playerSeen));
+    await waitFor(() => (playerSeen.length > 0 ? playerSeen : null));
+    expect(playerSeen.at(-1)).toEqual([]);
+    expect(
+      playerSeen.some((snapshot) =>
+        snapshot.some((row) => row.id === conversationId)
+      )
+    ).toBe(false);
+    await signOut();
+
+    // Losing the GM role publishes a refresh on campaign-gm:assistant;
+    // the open listener re-reads through RLS well before the 10 s tick.
+    await signInAs(gm);
+    const started = Date.now();
+    const demoted = await adminClient(cfg)
+      .from("campaign_members")
+      .update({ role: "player" })
+      .eq("campaign_id", campaignId)
+      .eq("user_id", gm.userId);
+    expect(demoted.error).toBeNull();
+    await waitFor(() => (gmSeen.at(-1)?.length === 0 ? gmSeen : null), 6000);
+    expect(Date.now() - started).toBeLessThan(10_000);
     await signOut();
   });
 });

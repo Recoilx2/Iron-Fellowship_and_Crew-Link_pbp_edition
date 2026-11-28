@@ -1,13 +1,18 @@
 import { getSupabaseClient } from "config/supabase.config";
 import { Unsubscribe } from "api-calls/helpers.type";
-import { listenToRows } from "api-calls/realtime/listenToRows";
+import {
+  broadcastRowsBinding,
+  listenToRowsDeferred,
+} from "api-calls/realtime/listenToRows";
+import {
+  campaignBroadcastBindings,
+  campaignIdsForWorld,
+} from "api-calls/realtime/sharedTopics";
 import { Lore } from "types/Lore.type";
 import { getWorldImageUrl } from "api-calls/world/worldImageStorage";
 import {
   WORLD_LORE_TABLE,
   constructWorldLoreChannelName,
-  constructWorldLoreFilter,
-  lorePayloadToChange,
   loreRowToDocument,
   type LoreRow,
 } from "./_getRef";
@@ -22,55 +27,62 @@ export function listenToLoreDocuments(
   updateLore: (loreId: string, lore: Lore) => void,
   updateLoreImage: (loreId: string, imageUrl: string) => void,
   removeLore: (loreId: string) => void,
-  onError: (error: unknown) => void
+  onError: (error: unknown) => void,
+  isGM = false
 ): Unsubscribe {
   const client = getSupabaseClient();
   let previousIds = new Set<string>();
 
-  return listenToRows<LoreRow>({
-    client,
-    channelName: constructWorldLoreChannelName(worldId),
-    bindings: [
-      {
-        type: "postgres_changes",
-        table: WORLD_LORE_TABLE,
-        filter: constructWorldLoreFilter(worldId),
-        toChange: lorePayloadToChange,
+  return listenToRowsDeferred<LoreRow>(
+    async () => ({
+      client,
+      channelName: constructWorldLoreChannelName(worldId),
+      bindings: [
+        ...(await campaignIdsForWorld(client, worldId)).flatMap((campaignId) =>
+          campaignBroadcastBindings<LoreRow>(campaignId, "lore", () =>
+            broadcastRowsBinding<LoreRow>({
+              table: WORLD_LORE_TABLE,
+              getKey: (row) => row.id,
+            }),
+            isGM
+          )
+        ),
+      ],
+      fetchRows: async () => {
+        const { data, error } = await client
+          .from(WORLD_LORE_TABLE)
+          .select("*")
+          .eq("world_id", worldId);
+        if (error) {
+          throw error;
+        }
+        return (data ?? []) as unknown as LoreRow[];
       },
-    ],
-    fetchRows: async () => {
-      const { data, error } = await client
-        .from(WORLD_LORE_TABLE)
-        .select("*")
-        .eq("world_id", worldId);
-      if (error) {
-        throw error;
-      }
-      return (data ?? []) as unknown as LoreRow[];
-    },
-    getKey: (row) => row.id,
-    getUpdatedAt: (row) => row.updated_at,
-    onRows: (rows) => {
-      const seen = new Set<string>();
-      for (const row of rows) {
-        seen.add(row.id);
-        updateLore(row.id, loreRowToDocument(row));
-        if (
-          Array.isArray(row.image_filenames) &&
-          row.image_filenames.length > 0
-        ) {
-          getWorldImageUrl(worldId, row.id, row.image_filenames[0])
-            .then((url) => updateLoreImage(row.id, url))
-            .catch(() => {});
+      getKey: (row: LoreRow) => row.id,
+      getUpdatedAt: (row: LoreRow) => row.updated_at,
+      onRows: (rows: LoreRow[]) => {
+        const seen = new Set<string>();
+        for (const row of rows) {
+          seen.add(row.id);
+          updateLore(row.id, loreRowToDocument(row));
+          if (
+            Array.isArray(row.image_filenames) &&
+            row.image_filenames.length > 0
+          ) {
+            getWorldImageUrl(worldId, row.id, row.image_filenames[0])
+              .then((url) => updateLoreImage(row.id, url))
+              .catch(() => {});
+          }
         }
-      }
-      for (const id of previousIds) {
-        if (!seen.has(id)) {
-          removeLore(id);
+        for (const id of previousIds) {
+          if (!seen.has(id)) {
+            removeLore(id);
+          }
         }
-      }
-      previousIds = seen;
-    },
-    onError,
-  });
+        previousIds = seen;
+      },
+      onError,
+    }),
+    onError
+  );
 }

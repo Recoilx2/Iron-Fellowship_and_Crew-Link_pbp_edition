@@ -10,9 +10,10 @@ import { updateWorldGuide } from "api-calls/world/updateWorldGuide";
 import { getSystem } from "hooks/useGameSystem";
 import { GAME_SYSTEMS } from "types/GameSystems.type";
 import { logError } from "functions/errorReference";
+import { currentUserIsGm } from "stores/currentUserIsGm";
 
 export const createWorldSlice: CreateSliceType<WorldSlice> = (...params) => {
-  const [set] = params;
+  const [set, getState] = params;
   return {
     ...defaultWorldSlice,
     currentWorld: createCurrentWorldSlice(...params),
@@ -79,7 +80,8 @@ export const createWorldSlice: CreateSliceType<WorldSlice> = (...params) => {
           },
           (error) => {
             logError("world.slice", error);
-          }
+          },
+          currentUserIsGm(getState())
         )
       );
 
