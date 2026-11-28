@@ -1,10 +1,12 @@
 import { Unsubscribe } from "api-calls/helpers.type";
 import { useEffect } from "react";
 import { useStore } from "stores/store";
+import { useCurrentUserIsGm } from "hooks/useCurrentUserIsGm";
 import { shallow } from "zustand/shallow";
 
 export function useListenToWorlds() {
   const uid = useStore((store) => store.auth.user?.uid);
+  const isGM = useCurrentUserIsGm();
   const subscribeToOwnedWorlds = useStore(
     (store) => store.worlds.subscribeToOwnedWorlds
   );
@@ -35,7 +37,7 @@ export function useListenToWorlds() {
     return () => {
       unsubscribe && unsubscribe();
     };
-  }, [uid, subscribeToOwnedWorlds]);
+  }, [uid, isGM, subscribeToOwnedWorlds]);
 
   useEffect(() => {
     let unsubscribe: Unsubscribe | undefined;
@@ -52,5 +54,6 @@ export function useListenToWorlds() {
     campaignWorldIds,
     campaignsLoading,
     subscribeToNonOwnedWorlds,
+    isGM,
   ]);
 }

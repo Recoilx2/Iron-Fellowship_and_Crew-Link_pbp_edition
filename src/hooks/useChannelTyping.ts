@@ -25,6 +25,22 @@ export interface ChannelTypingState {
 
 const EMPTY_IDS: string[] = [];
 
+/**
+ * supabase-js reuses a channel by topic until removeChannel resolves, and a
+ * remount creates a fresh hook instance (so useRef cannot serialize across
+ * it). Keep the pending teardown keyed by topic at module scope instead.
+ */
+const pendingTeardowns = new Map<string, Promise<void>>();
+
+function leaveWhenSettled(channelId: string, done: Promise<void>): void {
+  pendingTeardowns.set(channelId, done);
+  void done.then(() => {
+    if (pendingTeardowns.get(channelId) === done) {
+      pendingTeardowns.delete(channelId);
+    }
+  });
+}
+
 export function useChannelTyping(channelId: string): ChannelTypingState {
   const uid = useStore((store) => store.auth?.uid ?? "");
   const displayName = useStore(
@@ -48,11 +64,6 @@ export function useChannelTyping(channelId: string): ChannelTypingState {
 
   const [typingUids, setTypingUids] = useState<string[]>([]);
   const controlsRef = useRef<ChannelTypingSubscription | null>(null);
-  // supabase-js reuses a channel by topic until removeChannel resolves. A
-  // remount must not call .on("presence") on the old, still-joined object:
-  // serialize every setup behind the previous teardown instead.
-  const teardownRef = useRef<Promise<void>>(Promise.resolve());
-  const teardownPendingRef = useRef(false);
   // Only stop a presence write when one is outstanding: a fresh subscription
   // starts with no presence state, and an unconditional stop on the first
   // render would ask an unsubscribed channel to untrack.
@@ -75,14 +86,10 @@ export function useChannelTyping(channelId: string): ChannelTypingState {
 
     // No onError: presence is a nicety. A refused join or write leaves the
     // composer working and the indicator empty.
+    const previous = pendingTeardowns.get(channelId);
     const setup = async () => {
-      // First mount has nothing to wait for: keep the subscription setup
-      // synchronous so presence is live as soon as the effect runs.
-      if (teardownPendingRef.current) {
-        const previous = teardownRef.current;
-        teardownPendingRef.current = false;
-        await previous;
-      }
+      // First mount has nothing to wait for: keep setup synchronous.
+      if (previous) await previous;
       if (cancelled) return;
       const created = subscribeToChannelTyping({
         channelId,
@@ -91,8 +98,7 @@ export function useChannelTyping(channelId: string): ChannelTypingState {
         onTyping: setTypingUids,
       });
       if (cancelled) {
-        teardownRef.current = created.unsubscribe().catch(() => {});
-        teardownPendingRef.current = true;
+        leaveWhenSettled(channelId, created.unsubscribe().catch(() => {}));
         return;
       }
       subscription = created;
@@ -111,8 +117,7 @@ export function useChannelTyping(channelId: string): ChannelTypingState {
         controlsRef.current = null;
       }
       if (subscription) {
-        teardownRef.current = subscription.unsubscribe().catch(() => {});
-        teardownPendingRef.current = true;
+        leaveWhenSettled(channelId, subscription.unsubscribe().catch(() => {}));
       }
     };
   }, [channelId, uid, displayName]);

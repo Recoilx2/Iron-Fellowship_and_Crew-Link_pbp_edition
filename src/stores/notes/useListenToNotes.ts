@@ -1,6 +1,7 @@
 import { Unsubscribe } from "api-calls/helpers.type";
 import { useEffect } from "react";
 import { useStore } from "stores/store";
+import { useCurrentUserIsGm } from "hooks/useCurrentUserIsGm";
 import { ROLL_LOG_ID } from "./notes.slice.type";
 
 export function useListenToNotes() {
@@ -12,6 +13,7 @@ export function useListenToNotes() {
   );
 
   const openNote = useStore((store) => store.notes.openNote);
+  const isGM = useCurrentUserIsGm();
 
   const subscribe = useStore((store) => store.notes.subscribe);
   const subscribeToNoteContent = useStore(
@@ -24,7 +26,7 @@ export function useListenToNotes() {
     return () => {
       unsubscribe && unsubscribe();
     };
-  }, [campaignId, characterId, subscribe]);
+  }, [campaignId, characterId, isGM, subscribe]);
 
   useEffect(() => {
     let unsubscribe: Unsubscribe;
@@ -36,5 +38,5 @@ export function useListenToNotes() {
     return () => {
       unsubscribe && unsubscribe();
     };
-  }, [openNote, subscribeToNoteContent]);
+  }, [openNote, isGM, subscribeToNoteContent]);
 }
